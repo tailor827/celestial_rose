@@ -352,3 +352,33 @@ python run_tests.py
 - **`tests/test_services.py`** (14 tests): Intraday lifecycle, 10 PM cutoff, cold boot after midnight reset, queue rotation on skipped dependencies, process suppression on shutdown, rapid restart protection.
 - **`tests/test_settings.py`** (7 tests): Configuration persistence, secret masking, hot-reloading of time windows and clock speeds, deadlock-free simulation mode toggling, validation error enforcement.
 - **`tests/test_storage.py`** (5 tests): Atomic read/write operations, concurrent mutate transaction safety, log parsing, automations and intraday serialization.
+
+---
+
+## 12. The Report Receipt Contract (Type A Pipelines)
+
+To eliminate silent closures, regulatory non-compliance, and unverified batch completions in financial and operational environments, Paradiso enforces a **strict receipt contract** for all scheduled reports.
+
+### The 3 Sovereign Report States
+Every pipeline script emits one of three definitive states:
+1. **`Completed`**: The workload extracted, transformed, and published its deliverables successfully.
+2. **`Retrial`**: An upstream dependency (e.g. database table, core feed, external file) is not ready. Paradiso rotates the report to the back of the intraday queue **without consuming retry counts**.
+3. **`Failed`**: A critical error or unhandled exception occurred. Paradiso increments error retries up to `max_retries` (default: 3) before marking terminal failure.
+
+### The Receipt File (`paradiso/logs/{name}.json`)
+Before exiting, every report script must persist a structured JSON receipt to `paradiso/logs/{name}.json` (or dated `{name}_YYYYMMDD.json`):
+
+```json
+{
+  "name": "agency_perf.py",
+  "status": "Completed",
+  "last_run": "2026-09-23 08:30:15",
+  "duration": "4.2s",
+  "last_output": "1,540 agency transactions processed successfully",
+  "reason": "All upstream validations passed"
+}
+```
+
+### Contract Violation Policy
+- If a script terminates without producing a valid, non-empty receipt in `paradiso/logs/`, Paradiso rejects the execution as a **Contract Violation** (`status="Failed"`).
+- The defective script consumes error retry attempts and is terminally expelled from the queue after exceeding `max_retries`, ensuring broken or un-templated scripts never spin indefinitely or falsely report success.

@@ -30,6 +30,14 @@ def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
         except (ValueError, TypeError):
             return False, "scheduler.job_interval_seconds must be numeric."
 
+    if "rotation_cooldown_seconds" in sched:
+        try:
+            val = float(sched["rotation_cooldown_seconds"])
+            if val < 0:
+                return False, "scheduler.rotation_cooldown_seconds must be a non-negative number."
+        except (ValueError, TypeError):
+            return False, "scheduler.rotation_cooldown_seconds must be numeric."
+
     time_regex = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
     start_time = sched.get("intraday_start_time")
     idle_time = sched.get("intraday_idle_time")
@@ -61,6 +69,27 @@ def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
                 return False, "simulation.speed_multiplier must be a positive number."
         except (ValueError, TypeError):
             return False, "simulation.speed_multiplier must be numeric."
+
+    exec_cfg = cfg.get("executables", {})
+    if "python_path" in exec_cfg and exec_cfg["python_path"]:
+        p_val = str(exec_cfg["python_path"]).strip()
+        if p_val:
+            p = Path(p_val)
+            if not p.is_file():
+                return False, f"executables.python_path '{p_val}' does not exist or is not a valid file."
+            py_pattern = re.compile(r"^python(?:w)?(?:\d+(?:\.\d+)?)?(?:\.exe)?$", re.IGNORECASE)
+            if not py_pattern.match(p.name):
+                return False, f"executables.python_path '{p.name}' is not an authorized Python executable (must be python.exe, python3, etc.)."
+
+    if "rscript_path" in exec_cfg and exec_cfg["rscript_path"]:
+        r_val = str(exec_cfg["rscript_path"]).strip()
+        if r_val:
+            p = Path(r_val)
+            if not p.is_file():
+                return False, f"executables.rscript_path '{r_val}' does not exist or is not a valid file."
+            r_pattern = re.compile(r"^rscript(?:\.exe)?$", re.IGNORECASE)
+            if not r_pattern.match(p.name):
+                return False, f"executables.rscript_path '{p.name}' is not an authorized Rscript executable (must be Rscript.exe or Rscript)."
 
     return True, None
 

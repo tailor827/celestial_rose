@@ -1,6 +1,7 @@
+import time
 import threading
 from collections import deque
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from models.intraday import Intraday, IntradayDay, ReportRun, TimelineEvent
 from models.report_log import ReportLog
 from services.automation_service import AutomationService
@@ -28,6 +29,16 @@ class IntradayService:
         self.is_active: bool = False
         self.force_open: bool = False
 
+        # Queue pass tracking and starvation cooldown (F-005)
+        self._cycle_pass_reports: Set[str] = set()
+        self._cycle_seen_in_pass: Set[str] = set()
+        self._cycle_completions_in_pass: int = 0
+        self._cycle_skips_in_pass: int = 0
+        self._cycle_errors_in_pass: int = 0
+        self._rotation_cooldown_until: float = 0.0
+        self._last_rotation_logged: Dict[str, float] = {}
+        self.rotation_cooldown_seconds: float = float(CONFIG.get("scheduler", {}).get("rotation_cooldown_seconds", 30.0))
+
     def reload_config(self, cfg: Optional[dict] = None) -> None:
         """Dynamically reloads time window thresholds from configuration."""
         c = cfg or CONFIG
@@ -37,6 +48,35 @@ class IntradayService:
             self.idle_time = sched.get("intraday_idle_time", self.idle_time)
             self.close_time = sched.get("intraday_close_time", self.close_time)
             self.max_retries = int(sched.get("max_retries", self.max_retries))
+            self.rotation_cooldown_seconds = float(sched.get("rotation_cooldown_seconds", self.rotation_cooldown_seconds))
+
+    def get_rotation_cooldown(self) -> float:
+        """Returns cooldown delay in seconds. Respects testing overrides and simulation scaling."""
+        if hasattr(self, "_override_cooldown") and self._override_cooldown is not None:
+            return self._override_cooldown
+        if CLOCK.simulation_mode:
+            return 5.0
+        return self.rotation_cooldown_seconds
+
+    def _evaluate_pass_completion(self, date: str):
+        """Checks if a full pass over all waiting reports has completed, engaging cooldown if all were skipped."""
+        if self._cycle_pass_reports and self._cycle_pass_reports.issubset(self._cycle_seen_in_pass):
+            # Starvation: Every item in the pass was skipped due to unready dependencies
+            if self._cycle_skips_in_pass > 0 and self._cycle_completions_in_pass == 0 and self._cycle_errors_in_pass == 0 and len(self.waitlist) > 0:
+                cooldown = self.get_rotation_cooldown()
+                self._rotation_cooldown_until = time.time() + cooldown
+                self.intraday_repo.add_timeline_event(
+                    date=date,
+                    title="Queue Cooldown",
+                    description=f"All {len(self._cycle_seen_in_pass)} pending report(s) waiting on dependencies. Queue paused for {int(cooldown)}s.",
+                    event_type="system"
+                )
+            # Reset pass tracking for the next pass
+            self._cycle_pass_reports = set(self.waitlist)
+            self._cycle_seen_in_pass.clear()
+            self._cycle_completions_in_pass = 0
+            self._cycle_skips_in_pass = 0
+            self._cycle_errors_in_pass = 0
 
     def _reconcile_past_days(self, current_date: str) -> None:
         """Scans intraday history and marks unfinalized past days as CLOSED."""
@@ -123,6 +163,11 @@ class IntradayService:
 
             self.waitlist = deque(queue_items)
             self.day_closed = False
+            self._rotation_cooldown_until = 0.0
+            self._cycle_pass_reports = set(self.waitlist)
+            self._cycle_seen_in_pass.clear()
+            self._cycle_completions_in_pass = 0
+            self._last_rotation_logged.clear()
             self.intraday_repo.add_timeline_event(
                 date=today_date,
                 title="Scheduler started",
@@ -136,6 +181,11 @@ class IntradayService:
             self.is_active = False
             self.force_open = False
             self.waitlist.clear()
+            self._rotation_cooldown_until = 0.0
+            self._cycle_pass_reports.clear()
+            self._cycle_seen_in_pass.clear()
+            self._cycle_completions_in_pass = 0
+            self._last_rotation_logged.clear()
 
             # Terminate active running subprocesses & reset their statuses in automation service
             self.execution_service.runner.kill_all()
@@ -163,6 +213,11 @@ class IntradayService:
             self.force_open = False
             self.waitlist.clear()
             self.retry_counts.clear()
+            self._rotation_cooldown_until = 0.0
+            self._cycle_pass_reports.clear()
+            self._cycle_seen_in_pass.clear()
+            self._cycle_completions_in_pass = 0
+            self._last_rotation_logged.clear()
 
             # Kill any active processes and clear current_runs
             self.execution_service.runner.kill_all()
@@ -241,6 +296,8 @@ class IntradayService:
 
             # OPEN window (07:00 - 21:00): Sequential queue execution (1 by 1)
             if status == Intraday.OPEN and len(self.current_runs) == 0 and len(self.waitlist) > 0:
+                if time.time() < self._rotation_cooldown_until:
+                    return
                 next_report = self.waitlist.popleft()
                 self._trigger_report(next_report, today_date)
 
@@ -281,6 +338,9 @@ class IntradayService:
 
     def _trigger_report(self, report_name: str, date: str):
         self.current_runs[report_name] = CLOCK.formatted_now()
+        if not self._cycle_pass_reports:
+            self._cycle_pass_reports = set(self.waitlist) | {report_name}
+        self._cycle_seen_in_pass.add(report_name)
         
         self.intraday_repo.add_timeline_event(
             date=date,
@@ -296,6 +356,10 @@ class IntradayService:
 
                 if log.status == "Completed":
                     # Terminal Success: record in intraday repo & remove from waitlist
+                    self._cycle_completions_in_pass += 1
+                    self._cycle_pass_reports.discard(name)
+                    self._rotation_cooldown_until = 0.0
+
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -313,8 +377,10 @@ class IntradayService:
                         description=f"Finished in {duration_str}",
                         event_type="success"
                     )
-                else:
-                    # Non-completed (e.g. Skipped due to missing dependency): Rotate to back of waitlist if scheduler active
+                    self._evaluate_pass_completion(date)
+                elif ReportLog.is_dependency_skip(log.status, log.last_output or output):
+                    # Non-completed dependency skip / retrial: Rotate to back of waitlist if scheduler active
+                    self._cycle_skips_in_pass += 1
                     scheduler_is_active = self.is_active or self.force_open
                     if scheduler_is_active:
                         self.waitlist.append(name)
@@ -325,59 +391,112 @@ class IntradayService:
                         last_output=f"Skipped/Dependency unready: {log.last_output}"
                     )
                     desc = "Skipped (missing dependency), rotated to back of queue" if scheduler_is_active else "Skipped (missing dependency), scheduler paused"
-                    self.intraday_repo.add_timeline_event(
-                        date=date,
-                        title=f"Rotated {name}",
-                        description=desc,
-                        event_type="system"
+                    
+                    now_ts = time.time()
+                    last_ts = self._last_rotation_logged.get(name, 0.0)
+                    cooldown = self.get_rotation_cooldown()
+                    if (now_ts - last_ts) >= cooldown:
+                        self._last_rotation_logged[name] = now_ts
+                        self.intraday_repo.add_timeline_event(
+                            date=date,
+                            title=f"Rotated {name}",
+                            description=desc,
+                            event_type="system"
+                        )
+                    self._evaluate_pass_completion(date)
+                else:
+                    # Non-completed, non-skip result (e.g. Failed status or contract violation):
+                    _handle_failure(name, started_at, duration_str, log.last_output or "Execution did not complete successfully", log)
+
+        def _handle_failure(name: str, started_at: str, duration_str: str, error: str, log: ReportLog):
+            scheduler_is_active = self.is_active or self.force_open
+            self._cycle_errors_in_pass += 1
+            attempts = self.retry_counts.get(name, 0) + 1
+            self.retry_counts[name] = attempts
+
+            if attempts < self.max_retries and scheduler_is_active:
+                self.waitlist.append(name)
+                self.automation_service.update_status(
+                    name=name,
+                    status="Retrial",
+                    duration=duration_str,
+                    last_output=f"Error (attempt {attempts}/{self.max_retries}): {error}"
+                )
+                desc = f"Re-queued for retry ({attempts}/{self.max_retries}): {error[:60]}"
+                self.intraday_repo.add_timeline_event(
+                    date=date,
+                    title=f"{name} encountered error",
+                    description=desc,
+                    event_type="failed"
+                )
+                self._evaluate_pass_completion(date)
+            else:
+                self._cycle_pass_reports.discard(name)
+                self.automation_service.update_status(
+                    name=name,
+                    status="Failed",
+                    duration=duration_str,
+                    last_output=f"Exceeded max retries ({attempts}/{self.max_retries}): {error}"
+                )
+                self.intraday_repo.add_report_run(
+                    date=date,
+                    report_name=name,
+                    run=ReportRun(
+                        started_at=started_at,
+                        finished_at=CLOCK.formatted_now(),
+                        result="failed",
+                        duration=duration_str,
+                        reason=f"Exceeded max retries ({attempts}/{self.max_retries}): {error}"
                     )
+                )
+                self.intraday_repo.add_timeline_event(
+                    date=date,
+                    title=f"{name} permanently failed",
+                    description=f"Exceeded max retries ({attempts}/{self.max_retries}): {error[:60]}",
+                    event_type="failed"
+                )
+                self._evaluate_pass_completion(date)
 
         def _on_fail(name: str, duration_str: str, error: str):
             with self._lock:
                 started_at = self.current_runs.pop(name, CLOCK.formatted_now())
-                attempts = self.retry_counts.get(name, 0) + 1
-                self.retry_counts[name] = attempts
+                log = ReportLog(name).from_json(default_stdout=error)
                 scheduler_is_active = self.is_active or self.force_open
 
-                if attempts < self.max_retries and scheduler_is_active:
-                    self.waitlist.append(name)
+                # Check if this failure was actually a dependency skip / retrial dumped by the script
+                is_dependency_skip = (
+                    ReportLog.is_dependency_skip(log.status, error) or
+                    ReportLog.is_dependency_skip(log.status, log.last_output)
+                )
+
+                if is_dependency_skip:
+                    # Dependency skip / wait: Rotate to back of waitlist WITHOUT incrementing retry_counts
+                    self._cycle_skips_in_pass += 1
+                    if scheduler_is_active:
+                        self.waitlist.append(name)
                     self.automation_service.update_status(
                         name=name,
                         status="Retrial",
                         duration=duration_str,
-                        last_output=f"Error (attempt {attempts}/{self.max_retries}): {error}"
+                        last_output=f"Skipped/Dependency unready: {log.last_output or log.reason or error}"
                     )
-                    desc = f"Re-queued for retry ({attempts}/{self.max_retries}): {error[:60]}"
-                    self.intraday_repo.add_timeline_event(
-                        date=date,
-                        title=f"{name} encountered error",
-                        description=desc,
-                        event_type="failed"
-                    )
-                else:
-                    self.automation_service.update_status(
-                        name=name,
-                        status="Failed",
-                        duration=duration_str,
-                        last_output=f"Exceeded max retries ({attempts}/{self.max_retries}): {error}"
-                    )
-                    self.intraday_repo.add_report_run(
-                        date=date,
-                        report_name=name,
-                        run=ReportRun(
-                            started_at=started_at,
-                            finished_at=CLOCK.formatted_now(),
-                            result="failed",
-                            duration=duration_str,
-                            reason=f"Exceeded max retries ({attempts}/{self.max_retries}): {error}"
+                    desc = "Skipped (missing dependency), rotated to back of queue" if scheduler_is_active else "Skipped (missing dependency), scheduler paused"
+                    
+                    now_ts = time.time()
+                    last_ts = self._last_rotation_logged.get(name, 0.0)
+                    cooldown = self.get_rotation_cooldown()
+                    if (now_ts - last_ts) >= cooldown:
+                        self._last_rotation_logged[name] = now_ts
+                        self.intraday_repo.add_timeline_event(
+                            date=date,
+                            title=f"Rotated {name}",
+                            description=desc,
+                            event_type="system"
                         )
-                    )
-                    self.intraday_repo.add_timeline_event(
-                        date=date,
-                        title=f"{name} permanently failed",
-                        description=f"Exceeded max retries ({attempts}/{self.max_retries}): {error[:60]}",
-                        event_type="failed"
-                    )
+                    self._evaluate_pass_completion(date)
+                    return
+
+                _handle_failure(name, started_at, duration_str, error, log)
 
         self.execution_service.execute_report(
             name=report_name,

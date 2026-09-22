@@ -9,7 +9,7 @@ SCRIPT_NAME = "Agency_Performance"
 FAILURE_CHANCE = 0.50
 
 REPORTS_DIR = Path(__file__).resolve().parent
-LOGS_DIR = REPORTS_DIR.parent / "paradiso_alter" / "logs"
+LOGS_DIR = REPORTS_DIR.parent / "paradiso" / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 log_file = LOGS_DIR / f"{SCRIPT_NAME}.json"
 

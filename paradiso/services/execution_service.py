@@ -35,12 +35,17 @@ class ExecutionService:
         )
 
         import json
+        from models.report_log import ReportLog
 
-        def _write_log(status_str: str, duration_str: str, log_output: str):
+        report_logger = ReportLog(name)
+        log_file = report_logger.log_dir / f"{name}.json"
+
+        # Clean slate: remove or truncate previous receipts before launching
+        report_logger.clean_slate()
+
+        def _write_fallback_log(status_str: str, duration_str: str, log_output: str):
             try:
-                logs_dir = BASE_DIR / "logs"
-                logs_dir.mkdir(exist_ok=True)
-                log_file = logs_dir / f"{name}.json"
+                report_logger.log_dir.mkdir(parents=True, exist_ok=True)
                 log_data = {
                     "name": name,
                     "status": status_str,
@@ -55,35 +60,58 @@ class ExecutionService:
                 pass
 
         def _on_good(duration_str: str, output: str):
-            from models.report_log import ReportLog
-            parsed_status = ReportLog(name).parse_output(output)
-            is_skipped = (parsed_status == "Skipped") or ("SKIPPED" in output.upper())
+            has_receipt = report_logger.has_valid_receipt()
+            if has_receipt:
+                script_log = ReportLog(name).from_json(default_stdout=output)
+                # If script explicitly recorded a fatal Failed status despite exit 0:
+                if script_log.status == "Failed":
+                    auto_status = "Failed"
+                    last_out = script_log.last_output or "Script dumped Failed status"
+                    self.automation_service.update_status(name=name, status=auto_status, duration=duration_str, last_output=last_out)
+                    if callback_fail:
+                        callback_fail(name, duration_str, last_out)
+                    return
 
-            if is_skipped:
-                log_status = "Skipped"
-                auto_status = "Retrial"
+                auto_status = "Retrial" if ReportLog.is_dependency_skip(script_log.status, script_log.last_output) else "Completed"
+                last_out = script_log.last_output or output
+                self.automation_service.update_status(name=name, status=auto_status, duration=duration_str, last_output=last_out)
+                if callback_good:
+                    callback_good(name, duration_str, output)
             else:
-                log_status = "Completed"
-                auto_status = "Completed"
-
-            _write_log(log_status, duration_str, output)
-            self.automation_service.update_status(
-                name=name,
-                status=auto_status,
-                duration=duration_str,
-                last_output=output
-            )
-            if callback_good:
-                callback_good(name, duration_str, output)
+                # No receipt written: check if stdout has explicit skip marker
+                if ReportLog.is_dependency_skip("", output):
+                    auto_status = "Retrial"
+                    _write_fallback_log("Skipped", duration_str, output)
+                    last_out = output
+                    self.automation_service.update_status(name=name, status=auto_status, duration=duration_str, last_output=last_out)
+                    if callback_good:
+                        callback_good(name, duration_str, output)
+                else:
+                    # CONTRACT VIOLATION: Exited 0 without writing required receipt file!
+                    auto_status = "Failed"
+                    err_msg = f"Contract violation: Script '{name}' exited 0 without writing receipt to logs/{name}.json"
+                    _write_fallback_log("Failed", duration_str, err_msg)
+                    last_out = err_msg
+                    self.automation_service.update_status(name=name, status=auto_status, duration=duration_str, last_output=last_out)
+                    if callback_fail:
+                        callback_fail(name, duration_str, err_msg)
 
         def _on_fail(duration_str: str, error: str):
-            _write_log("Failed", duration_str, error)
-            self.automation_service.update_status(
-                name=name,
-                status="Failed",
-                duration=duration_str,
-                last_output=error
-            )
+            has_receipt = report_logger.has_valid_receipt()
+            if has_receipt:
+                script_log = ReportLog(name).from_json(default_stdout=error)
+                auto_status = "Retrial" if ReportLog.is_dependency_skip(script_log.status, script_log.last_output or error) else "Failed"
+                last_out = script_log.last_output or error
+            else:
+                if ReportLog.is_dependency_skip("", error):
+                    auto_status = "Retrial"
+                    _write_fallback_log("Skipped", duration_str, error)
+                else:
+                    auto_status = "Failed"
+                    _write_fallback_log("Failed", duration_str, error)
+                last_out = error
+
+            self.automation_service.update_status(name=name, status=auto_status, duration=duration_str, last_output=last_out)
             if callback_fail:
                 callback_fail(name, duration_str, error)
 
@@ -97,15 +125,13 @@ class ExecutionService:
 
         if not is_authorized:
             error_msg = f"Security violation: script '{script_path}' resolves outside project directory"
-            import threading
-            threading.Thread(target=lambda: _on_fail("0s", error_msg), daemon=True).start()
+            _on_fail("0s", error_msg)
             return False
 
         # Immediate failure if script file doesn't physically exist on disk
         if not script_path.exists():
             error_msg = f"Report script not found on disk: {script_path}"
-            import threading
-            threading.Thread(target=lambda: _on_fail("0s", error_msg), daemon=True).start()
+            _on_fail("0s", error_msg)
             return False
 
         if report.filetype.lower() == "r":

@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -21,14 +22,20 @@ class Runner:
 
     def _resolve_python(self) -> Path:
         configured = CONFIG.get("executables", {}).get("python_path")
-        if configured and Path(configured).exists():
-            return Path(configured)
+        if configured:
+            p = Path(configured)
+            py_pattern = re.compile(r"^python(?:w)?(?:\d+(?:\.\d+)?)?(?:\.exe)?$", re.IGNORECASE)
+            if p.is_file() and py_pattern.match(p.name):
+                return p
         return Path(sys.executable)
 
     def _resolve_rscript(self) -> Optional[Path]:
         configured = CONFIG.get("executables", {}).get("rscript_path")
-        if configured and Path(configured).exists():
-            return Path(configured)
+        if configured:
+            p = Path(configured)
+            r_pattern = re.compile(r"^rscript(?:\.exe)?$", re.IGNORECASE)
+            if p.is_file() and r_pattern.match(p.name):
+                return p
         found = shutil.which("Rscript") or shutil.which("rscript")
         return Path(found) if found else None
 
@@ -70,7 +77,8 @@ class Runner:
 
         elapsed = time.time() - start_time
         duration_str = self._format_duration(elapsed)
-        output_snippet = (stdout or stderr or "No output").strip()
+        output_parts = [p.strip() for p in (stdout, stderr) if p and p.strip()]
+        output_snippet = "\n".join(output_parts) if output_parts else "No output"
 
         if process.returncode == 0:
             callback_good(duration_str, output_snippet)

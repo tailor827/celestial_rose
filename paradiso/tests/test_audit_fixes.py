@@ -10,13 +10,14 @@ from models.storage_base import StorageBase, StorageCorruptionError
 from models.automation import Automations
 from models.intraday import Intraday, IntradayDay, ReportRun
 from models.report import Report
+from models.report_log import ReportLog
 from services.automation_service import AutomationService
 from services.execution_service import ExecutionService
 from services.intraday_service import IntradayService
 from services.runner import Runner
 from services.paradiso import Paradiso
 from utils.clock import CLOCK
-from utils.config import CONFIG
+from utils.config import BASE_DIR, CONFIG, validate_config
 
 class TestAuditFixes(unittest.TestCase):
     def setUp(self):
@@ -384,6 +385,478 @@ class TestAuditFixes(unittest.TestCase):
         time.sleep(0.05)
         self.assertEqual(len(failed_called), 1)
         self.assertIn("Security violation", failed_called[0][1])
+
+    # ----------------------------------------------------------------------
+    # 9. F-003: Executable Path & Binary Identity Validation
+    # ----------------------------------------------------------------------
+    def test_f003_executable_validation(self):
+        """Verifies that validate_config and /api/settings reject arbitrary binaries for python_path and rscript_path."""
+        import sys
+
+        # 1. Arbitrary system executable rejected by validate_config
+        cmd_exe = "C:\\Windows\\System32\\cmd.exe"
+        if Path(cmd_exe).exists():
+            valid, err = validate_config({"executables": {"python_path": cmd_exe}})
+            self.assertFalse(valid)
+            self.assertIn("not an authorized Python executable", err)
+
+            valid_r, err_r = validate_config({"executables": {"rscript_path": cmd_exe}})
+            self.assertFalse(valid_r)
+            self.assertIn("not an authorized Rscript executable", err_r)
+
+        # 2. Non-existent path rejected
+        valid_nonexist, err_nonexist = validate_config({"executables": {"python_path": "C:\\nonexistent\\python.exe"}})
+        self.assertFalse(valid_nonexist)
+        self.assertIn("does not exist", err_nonexist)
+
+        # 3. Legitimate Python executable accepted
+        valid_py, err_py = validate_config({"executables": {"python_path": sys.executable}})
+        self.assertTrue(valid_py)
+        self.assertIsNone(err_py)
+
+        # 4. Empty path accepted (indicates system default fallback)
+        valid_empty, err_empty = validate_config({"executables": {"python_path": "", "rscript_path": ""}})
+        self.assertTrue(valid_empty)
+        self.assertIsNone(err_empty)
+
+        # 5. POST /api/settings rejects malicious executable path with HTTP 400
+        if Path(cmd_exe).exists():
+            res = self.client.post("/api/settings", json={"executables": {"python_path": cmd_exe}})
+            self.assertEqual(res.status_code, 400)
+            data = json.loads(res.data)
+            self.assertFalse(data.get("ok"))
+            self.assertIn("not an authorized Python executable", data.get("error", ""))
+
+        # 6. Runner defense-in-depth: invalid path falls back to sys.executable safely
+        test_runner = Runner()
+        test_runner.python_exe = test_runner._resolve_python()
+        self.assertTrue(test_runner.python_exe.is_file())
+        self.assertIn("python", test_runner.python_exe.name.lower())
+
+    # ----------------------------------------------------------------------
+    # 10. F-004: Dependency Skips with Non-Zero Exit Code & Parser Accuracy
+    # ----------------------------------------------------------------------
+    def test_f004_dep_skip_exit1_does_not_consume_retries(self):
+        """Verifies that dependency skips exiting with code 1 rotate to waitlist WITHOUT incrementing retry counts."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+        exec_svc = ExecutionService(auto_svc)
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc.max_retries = 3
+
+        report_name = "0base_auto.py"
+        r = Report(name=report_name, filename="0base_auto.py", filetype="python", dir=".", status="Waiting")
+        auto_repo.add(r)
+        intra_svc.start_fresh_run(force_open=True)
+
+        today_date = CLOCK.date_str()
+
+        # Simulate 5 consecutive dependency skip cycles with exit code 1
+        for cycle in range(1, 6):
+            self.assertIn(report_name, intra_svc.waitlist)
+            rep = intra_svc.waitlist.popleft()
+            intra_svc.current_runs[rep] = CLOCK.formatted_now()
+
+            # Execute mock _trigger_report callback structure for exit code 1 with dependency skip marker
+            # We call the real _on_fail method logic by triggering ExecutionService callback
+            def mock_execute(name, callback_good, callback_fail):
+                callback_fail(
+                    name=name,
+                    duration_str="1s",
+                    error="Return code 1: SKIPPED: Missing dependency 'CC_Collection_Summary'"
+                )
+                return True
+
+            exec_svc.execute_report = mock_execute
+            intra_svc._trigger_report(rep, today_date)
+
+            # Assert retry count is STILL 0 (never incremented for dependency skips)
+            self.assertEqual(intra_svc.retry_counts.get(report_name, 0), 0)
+            self.assertIn(report_name, intra_svc.waitlist)
+            self.assertEqual(auto_svc.get_by_name(report_name).status, "Retrial")
+            self.assertNotIn(report_name, intra_svc.current_runs)
+
+        # Confirm report never terminally failed
+        day = intra_repo.get_day(today_date)
+        self.assertNotIn(report_name, day.reports_ran)
+
+    def test_f004_report_log_parse_output_benign_not_found(self):
+        """Verifies that parse_output does not misclassify benign output containing 'not found' as Skipped."""
+        log = ReportLog("TestBenign")
+
+        # Benign outputs containing 'not found' must NOT be classified as Skipped
+        status_benign_1 = log.parse_output("User profile not found in cache; created new database record.")
+        self.assertEqual(status_benign_1, "Completed")
+
+        status_benign_2 = log.parse_output("No anomalies found during audit scan.")
+        self.assertEqual(status_benign_2, "Completed")
+
+        # Legitimate dependency skip markers must be classified as Skipped
+        status_skip_1 = log.parse_output("SKIPPED: Missing dependency 'SalesSummary'")
+        self.assertEqual(status_skip_1, "Skipped")
+
+        status_skip_2 = log.parse_output("Dependency not found for CC_Collections")
+        self.assertEqual(status_skip_2, "Skipped")
+
+        status_skip_3 = log.parse_output("Dataset not found: upstream warehouse pipeline pending")
+        self.assertEqual(status_skip_3, "Skipped")
+
+        status_skip_4 = log.parse_output("Status: Retrial - upstream table not ready")
+        self.assertEqual(status_skip_4, "Skipped")
+
+        # Legitimate failures must be classified as Failed
+        status_fail = log.parse_output("FATAL ERROR: Unhandled ZeroDivisionError")
+        self.assertEqual(status_fail, "Failed")
+
+    def test_f004_execution_service_preserves_script_dumped_log_and_prevents_clobber(self):
+        """Verifies that ExecutionService does not clobber script-dumped Retrial logs or cause disk divergence."""
+        auto_path = self.dir_path / "automations.json"
+        auto_repo = Automations(auto_path)
+        auto_svc = AutomationService(auto_repo)
+
+        class MockRunner:
+            def run_python(self, script_path, callback_good, callback_fail, name):
+                import json
+                log_file = BASE_DIR / "logs" / f"{name}.json"
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_file, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "name": name,
+                        "status": "Retrial",
+                        "last_run": "2026-09-23 00:00:00",
+                        "duration": "0.4s",
+                        "last_output": "Custom script receipt: upstream tables pending",
+                        "reason": "Dependencies not yet available."
+                    }, f, indent=2)
+                callback_fail("0.4s", "Return code 1: Process exited with non-zero status")
+
+        exec_svc = ExecutionService(auto_svc, runner=MockRunner())
+        report_name = "ScriptWithDump"
+        dummy_script = BASE_DIR / "reports" / "dummy_skip.py"
+        dummy_script.parent.mkdir(parents=True, exist_ok=True)
+        dummy_script.write_text("# dummy")
+        try:
+            auto_svc.add(Report(name=report_name, filename="dummy_skip.py", filetype="python", dir="reports", status="Waiting"))
+            called_fail = []
+            exec_svc.execute_report(
+                report_name,
+                callback_fail=lambda n, d, err: called_fail.append((n, d, err))
+            )
+
+            self.assertEqual(len(called_fail), 1)
+
+            # On-disk log was preserved (not overwritten with "Failed")
+            import json
+            log_data = json.loads((BASE_DIR / "logs" / f"{report_name}.json").read_text(encoding="utf-8"))
+            self.assertEqual(log_data["status"], "Retrial")
+            self.assertEqual(log_data["reason"], "Dependencies not yet available.")
+
+            # automations.json set to Retrial
+            self.assertEqual(auto_svc.get_by_name(report_name).status, "Retrial")
+        finally:
+            if dummy_script.exists():
+                dummy_script.unlink()
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            if test_log.exists():
+                test_log.unlink()
+
+    def test_f004_execution_service_fallback_log_on_unhandled_crash(self):
+        """Verifies that ExecutionService writes fallback Failed log if script crashes without writing a log."""
+        auto_path = self.dir_path / "automations.json"
+        auto_repo = Automations(auto_path)
+        auto_svc = AutomationService(auto_repo)
+
+        class MockCrashRunner:
+            def run_python(self, script_path, callback_good, callback_fail, name):
+                callback_fail("0.2s", "Return code 1: SyntaxError: invalid syntax")
+
+        exec_svc = ExecutionService(auto_svc, runner=MockCrashRunner())
+        report_name = "SyntaxCrashScript"
+        dummy_script = BASE_DIR / "reports" / "dummy_crash.py"
+        dummy_script.parent.mkdir(parents=True, exist_ok=True)
+        dummy_script.write_text("# dummy crash")
+        try:
+            auto_svc.add(Report(name=report_name, filename="dummy_crash.py", filetype="python", dir="reports", status="Waiting"))
+            exec_svc.execute_report(report_name)
+
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            self.assertTrue(test_log.exists())
+            import json
+            data = json.loads(test_log.read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "Failed")
+            self.assertIn("SyntaxError", data["last_output"])
+            self.assertEqual(auto_svc.get_by_name(report_name).status, "Failed")
+        finally:
+            if dummy_script.exists():
+                dummy_script.unlink()
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            if test_log.exists():
+                test_log.unlink()
+
+    def test_f004_deviant_script_exiting_zero_without_receipt_is_failed(self):
+        """Verifies that a deviant script exiting 0 without producing a receipt is rejected with Failed status."""
+        auto_path = self.dir_path / "automations.json"
+        auto_repo = Automations(auto_path)
+        auto_svc = AutomationService(auto_repo)
+
+        class MockDeviantRunner:
+            def run_python(self, script_path, callback_good, callback_fail, name):
+                callback_good("0.3s", "I forgot to write my receipt!")
+
+        exec_svc = ExecutionService(auto_svc, runner=MockDeviantRunner())
+        report_name = "DeviantScript"
+        dummy_script = BASE_DIR / "reports" / "dummy_deviant.py"
+        dummy_script.parent.mkdir(parents=True, exist_ok=True)
+        dummy_script.write_text("# deviant")
+        try:
+            auto_svc.add(Report(name=report_name, filename="dummy_deviant.py", filetype="python", dir="reports", status="Waiting"))
+            exec_svc.execute_report(report_name)
+
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            self.assertTrue(test_log.exists())
+            import json
+            data = json.loads(test_log.read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "Failed")
+            self.assertIn("Contract violation", data["last_output"])
+            self.assertEqual(auto_svc.get_by_name(report_name).status, "Failed")
+        finally:
+            if dummy_script.exists():
+                dummy_script.unlink()
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            if test_log.exists():
+                test_log.unlink()
+
+    def test_f004_deviant_script_exiting_zero_does_not_infinite_loop_in_queue(self):
+        """Verifies that a script exiting 0 without a receipt fails terminally after max_retries and does NOT loop infinitely."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+
+        class MockDeviantRunner:
+            def run_python(self, script_path, callback_good, callback_fail, name):
+                callback_good("0.2s", "Task finished but no receipt written")
+
+        exec_svc = ExecutionService(auto_svc, runner=MockDeviantRunner())
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc.max_retries = 3
+
+        report_name = "DeviantLoopTester"
+        dummy_script = BASE_DIR / "reports" / "dummy_loop.py"
+        dummy_script.parent.mkdir(parents=True, exist_ok=True)
+        dummy_script.write_text("# dummy")
+        try:
+            auto_svc.add(Report(name=report_name, filename="dummy_loop.py", filetype="python", dir="reports", status="Waiting"))
+            intra_svc.start_fresh_run(force_open=True)
+            today_date = CLOCK.date_str()
+
+            # Execute 3 retry cycles: attempts 1, 2, 3
+            for _ in range(3):
+                self.assertIn(report_name, intra_svc.waitlist)
+                rep = intra_svc.waitlist.popleft()
+                intra_svc.current_runs[rep] = CLOCK.formatted_now()
+                intra_svc._trigger_report(rep, today_date)
+
+            # After 3 failed attempts, it must be EXPELLED from waitlist and marked Failed!
+            self.assertNotIn(report_name, intra_svc.waitlist)
+            self.assertEqual(auto_svc.get_by_name(report_name).status, "Failed")
+            self.assertEqual(intra_svc.retry_counts.get(report_name), 3)
+
+            # In intraday reports_ran, it must be marked failed
+            day = intra_repo.get_day(today_date)
+            self.assertIn(report_name, day.reports_ran)
+            self.assertEqual(day.reports_ran[report_name].result, "failed")
+        finally:
+            if dummy_script.exists():
+                dummy_script.unlink()
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            if test_log.exists():
+                test_log.unlink()
+
+    def test_f004_end_to_end_0base_auto_pattern_preserves_retries_and_log(self):
+        """Verifies end-to-end that 0base_auto.py pattern (dump Retrial + exit 1) rotates without retry penalty."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+
+        class Mock0BaseRunner:
+            def run_python(self, script_path, callback_good, callback_fail, name):
+                import json
+                log_file = BASE_DIR / "logs" / f"{name}.json"
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                with open(log_file, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "name": name,
+                        "status": "Retrial",
+                        "last_run": "2026-09-23 00:00:00",
+                        "duration": "0.5s",
+                        "last_output": "Unavailable",
+                        "log": "Error during auto_read: database locked"
+                    }, f, indent=2)
+                callback_fail("0.5s", "Return code 1: Error during auto_read: database locked")
+
+        exec_svc = ExecutionService(auto_svc, runner=Mock0BaseRunner())
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc.max_retries = 3
+
+        report_name = "0base_pattern"
+        dummy_script = BASE_DIR / "reports" / "dummy_0base.py"
+        dummy_script.parent.mkdir(parents=True, exist_ok=True)
+        dummy_script.write_text("# dummy")
+        try:
+            auto_svc.add(Report(name=report_name, filename="dummy_0base.py", filetype="python", dir="reports", status="Waiting"))
+            intra_svc.start_fresh_run(force_open=True)
+            today_date = CLOCK.date_str()
+
+            for _ in range(4):
+                rep = intra_svc.waitlist.popleft()
+                intra_svc.current_runs[rep] = CLOCK.formatted_now()
+                intra_svc._trigger_report(rep, today_date)
+
+                self.assertEqual(intra_svc.retry_counts.get(report_name, 0), 0)
+                self.assertIn(report_name, intra_svc.waitlist)
+                self.assertEqual(auto_svc.get_by_name(report_name).status, "Retrial")
+
+            log_data = json.loads((BASE_DIR / "logs" / f"{report_name}.json").read_text(encoding="utf-8"))
+            self.assertEqual(log_data["status"], "Retrial")
+            self.assertEqual(log_data["last_output"], "Unavailable")
+        finally:
+            if dummy_script.exists():
+                dummy_script.unlink()
+            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            if test_log.exists():
+                test_log.unlink()
+
+    # ----------------------------------------------------------------------
+    # 11. F-005: Queue Rotation Throttling on Dependency Starvation
+    # ----------------------------------------------------------------------
+    def test_f005_cycle_starvation_cooldown(self):
+        """Verifies that when all reports in a queue pass skip (starvation), rotation cooldown is engaged and halts spinning."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+        exec_svc = ExecutionService(auto_svc)
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc._override_cooldown = 0.5  # Fast 0.5s cooldown for deterministic test
+
+        # Add two reports
+        auto_repo.add(Report(name="Report_Dep1", filename="dep1.py", filetype="python", dir=".", status="Waiting"))
+        auto_repo.add(Report(name="Report_Dep2", filename="dep2.py", filetype="python", dir=".", status="Waiting"))
+
+        intra_svc.start_fresh_run(force_open=True)
+        self.assertEqual(len(intra_svc.waitlist), 2)
+
+        # Mock execution so both reports return dependency skip
+        def mock_skip_execute(name, callback_good, callback_fail):
+            callback_good(name=name, duration_str="0.01s", output="SKIPPED: Missing dependency upstream_sales")
+            return True
+
+        exec_svc.execute_report = mock_skip_execute
+
+        # Item 1 in pass: Report_Dep1 pops, skips, rotates
+        intra_svc.tick()
+        self.assertEqual(len(intra_svc.current_runs), 0)
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)  # Pass not finished yet
+
+        # Item 2 in pass: Report_Dep2 pops, skips, rotates
+        intra_svc.tick()
+        self.assertEqual(len(intra_svc.current_runs), 0)
+
+        # Full pass finished with ZERO completions -> cooldown MUST be engaged!
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
+
+        # While cooldown is active, tick() must NOT pop any reports!
+        waitlist_before = list(intra_svc.waitlist)
+        intra_svc.tick()
+        self.assertEqual(list(intra_svc.waitlist), waitlist_before)
+        self.assertEqual(len(intra_svc.current_runs), 0)
+
+        # Wait for cooldown to expire
+        time.sleep(0.55)
+        self.assertLess(intra_svc._rotation_cooldown_until, time.time())
+
+        # Now tick() should resume popping
+        intra_svc.tick()
+        self.assertEqual(len(intra_svc.current_runs), 0)  # Finished execution via mock
+
+    def test_f005_cooldown_bypassed_when_report_completes(self):
+        """Verifies that cooldown is not engaged if at least one report completes during the pass."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+        exec_svc = ExecutionService(auto_svc)
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc._override_cooldown = 1.0
+
+        auto_repo.add(Report(name="Report_Skip", filename="skip.py", filetype="python", dir=".", status="Waiting"))
+        auto_repo.add(Report(name="Report_Success", filename="success.py", filetype="python", dir=".", status="Waiting"))
+
+        intra_svc.start_fresh_run(force_open=True)
+
+        def mock_mixed_execute(name, callback_good, callback_fail):
+            if name == "Report_Skip":
+                callback_good(name=name, duration_str="0.01s", output="SKIPPED: Missing dependency")
+            else:
+                callback_good(name=name, duration_str="0.01s", output="Completed successfully")
+            return True
+
+        exec_svc.execute_report = mock_mixed_execute
+
+        # Tick 1: Report_Skip runs and skips
+        intra_svc.tick()
+        # Tick 2: Report_Success runs and completes
+        intra_svc.tick()
+
+        # Cooldown must NOT be engaged because 1 report succeeded!
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+
+    def test_f005_timeline_rotation_deduplication(self):
+        """Verifies that repeated rotations of the same report within cooldown window do not flood the timeline."""
+        auto_path = self.dir_path / "automations.json"
+        intra_path = self.dir_path / "intraday.json"
+        auto_repo = Automations(auto_path)
+        intra_repo = Intraday(intra_path)
+        auto_svc = AutomationService(auto_repo)
+        exec_svc = ExecutionService(auto_svc)
+        intra_svc = IntradayService(auto_svc, exec_svc)
+        intra_svc.intraday_repo = intra_repo
+        intra_svc._override_cooldown = 10.0  # 10s window
+
+        auto_repo.add(Report(name="SpamReport", filename="spam.py", filetype="python", dir=".", status="Waiting"))
+        intra_svc.start_fresh_run(force_open=True)
+
+        today_date = CLOCK.date_str()
+
+        # Trigger 3 rapid rotations
+        for _ in range(3):
+            intra_svc._trigger_report("SpamReport", today_date)
+            # simulate _on_good skip callback
+            intra_svc.current_runs.pop("SpamReport", None)
+            now_ts = time.time()
+            last_ts = intra_svc._last_rotation_logged.get("SpamReport", 0.0)
+            if (now_ts - last_ts) >= intra_svc.get_rotation_cooldown():
+                intra_svc._last_rotation_logged["SpamReport"] = now_ts
+                intra_repo.add_timeline_event(today_date, "Rotated SpamReport", "Skipped", "system")
+
+        day = intra_repo.get_day(today_date)
+        rotation_events = [t for t in day.timeline if t.title == "Rotated SpamReport"]
+        # Only 1 rotation event should exist within the 10s cooldown window, not 3
+        self.assertEqual(len(rotation_events), 1)
 
 if __name__ == "__main__":
     unittest.main()

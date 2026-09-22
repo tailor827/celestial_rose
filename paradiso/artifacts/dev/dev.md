@@ -67,7 +67,7 @@ If the user has not provided an explicit GO signal, stop after presenting your a
 
 You may ONLY create, modify, delete, rename, move, or otherwise change files within these paths:
 
-- paradiso_alter/
+- paradiso/
 - artifacts/
 - tests/
 - session_context.md

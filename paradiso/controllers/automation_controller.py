@@ -80,6 +80,8 @@ class AutomationController:
             with self.intraday_service._lock:
                 if name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
                     self.intraday_service.waitlist.append(name)
+                    self.intraday_service._rotation_cooldown_until = 0.0
+                    self.intraday_service._cycle_pass_reports.add(name)
 
         return jsonify({"ok": True, "message": f"Report '{name}' created successfully", "report": report.to_dict()}), 201
 
