@@ -1,0 +1,7 @@
+{
+  "name": "CC_Collection_Summary",
+  "status": "Failed",
+  "last_run": "2026-09-06 20:28:21",
+  "last_output": "FAILED: Connection timeout / database error during CC_Collection_Summary processing.",
+  "reason": "FAILED: Connection timeout / database error during CC_Collection_Summary processing."
+}

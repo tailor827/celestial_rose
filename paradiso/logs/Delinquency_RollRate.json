@@ -1,0 +1,8 @@
+{
+  "name": "Delinquency_RollRate",
+  "status": "Completed",
+  "last_run": "2026-09-06 07:10:57 AM",
+  "duration": "0s",
+  "last_output": "[04:17:30] Starting Delinquency_RollRate execution...\n[04:17:30] SKIPPED: Missing dependency 'CC_Collection_Summary' has not completed yet.",
+  "reason": "[04:17:30] Starting Delinquency_RollRate execution...\n[04:17:30] SKIPPED: Missing dependency 'CC_Collection_Summary' has not completed yet."
+}

@@ -1,0 +1,604 @@
+{
+    "20260907": {
+        "status": "CLOSED",
+        "expected_reports": [
+            "Agency Performance"
+        ],
+        "reports_ran": {
+            "Agency Performance": {
+                "started_at": "--",
+                "finished_at": "--",
+                "result": "failed",
+                "duration": "0s",
+                "reason": "Historical day finalized automatically"
+            }
+        },
+        "timeline": [
+            {
+                "timestamp": "09:42 AM",
+                "title": "Day Initialized",
+                "description": "Paradiso day initialized for 20260907 (All reports reset to Waiting)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:42 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:42 AM",
+                "title": "Started Agency Performance",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:42 AM",
+                "title": "Agency Performance encountered error",
+                "description": "Re-queued for retry (1/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
+                "type": "failed"
+            },
+            {
+                "timestamp": "09:43 AM",
+                "title": "Started Agency Performance",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:43 AM",
+                "title": "Agency Performance encountered error",
+                "description": "Re-queued for retry (2/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
+                "type": "failed"
+            },
+            {
+                "timestamp": "09:43 AM",
+                "title": "Started Agency Performance",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:43 AM",
+                "title": "Agency Performance permanently failed",
+                "description": "Exceeded max retries (3/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
+                "type": "failed"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 0 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:47 AM",
+                "title": "Started Agency Performance",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:48 AM",
+                "title": "Completed Agency Performance",
+                "description": "Finished in 29s",
+                "type": "success"
+            },
+            {
+                "timestamp": "09:48 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:48 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:51 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "09:51 AM",
+                "title": "Started SF Base",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:51 AM",
+                "title": "SF Base encountered error",
+                "description": "Re-queued for retry (1/3): Return code 1: Traceback (most recent call last):\n  File \"C:",
+                "type": "failed"
+            },
+            {
+                "timestamp": "09:51 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "22:00",
+                "title": "Paradiso closed (auto-reconciled)",
+                "description": "Historical intraday window for 20260907 automatically marked CLOSED",
+                "type": "system"
+            }
+        ]
+    },
+    "20260922": {
+        "status": "WAITING_TO_OPEN",
+        "expected_reports": [
+            "SF Base"
+        ],
+        "reports_ran": {},
+        "timeline": [
+            {
+                "timestamp": "12:15 AM",
+                "title": "Day Initialized",
+                "description": "Paradiso day initialized for 20260922 (All reports reset to Waiting)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:15 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:07 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:07 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:08 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:09 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:09 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:05 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:05 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:31 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:05 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:05 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:32 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:05 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:41 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 2 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:41 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:42 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 2 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:42 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:57 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:02 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:04 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:58 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:03 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:05 AM",
+                "title": "Reports reset",
+                "description": "All report statuses reset to Waiting (Scheduler Standby)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler started",
+                "description": "Sequential queue execution initiated for 1 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "12:06 AM",
+                "title": "Scheduler stopped",
+                "description": "Queue execution paused by user; active runs terminated",
+                "type": "system"
+            }
+        ]
+    }
+}

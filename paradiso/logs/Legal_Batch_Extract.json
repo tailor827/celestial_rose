@@ -1,0 +1,8 @@
+{
+  "name": "Legal_Batch_Extract",
+  "status": "Completed",
+  "last_run": "2026-09-06 11:05:33 AM",
+  "duration": "0s",
+  "last_output": "[04:17:54] Starting Legal_Batch_Extract execution...\n[04:17:54] SKIPPED: Missing dependency 'Promise_to_Pay' has not completed yet.",
+  "reason": "[04:17:54] Starting Legal_Batch_Extract execution...\n[04:17:54] SKIPPED: Missing dependency 'Promise_to_Pay' has not completed yet."
+}

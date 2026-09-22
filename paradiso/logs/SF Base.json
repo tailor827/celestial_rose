@@ -1,0 +1,8 @@
+{
+  "name": "SF Base",
+  "status": "Failed",
+  "last_run": "2026-09-07 09:51:34 AM",
+  "duration": "0s",
+  "last_output": "Return code 1: Traceback (most recent call last):\n  File \"C:\\Users\\ubpcbcsvc2\\OneDrive - UNIONBANK of the Philippines\\Documents\\paradiso_alter\\paradiso_alter\\..\\reports\\0base_auto.py\", line 4, in <module>\n    from toolbox import toolbox\nModuleNotFoundError: No module named 'toolbox'",
+  "reason": "Return code 1: Traceback (most recent call last):\n  File \"C:\\Users\\ubpcbcsvc2\\OneDrive - UNIONBANK of the Philippines\\Documents\\paradiso_alter\\paradiso_alter\\..\\reports\\0base_auto.py\", line 4, in <module>\n    from toolbox import toolbox\nModuleNotFoundError: No module named 'toolbox'"
+}

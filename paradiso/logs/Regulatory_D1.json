@@ -1,0 +1,8 @@
+{
+  "name": "Regulatory_D1",
+  "status": "Failed",
+  "last_run": "2026-09-06 06:48:47 PM",
+  "duration": "0s",
+  "last_output": "Return code 1: [04:18:40] Starting Regulatory_D1 execution...\n[04:18:40] FAILED: Connection timeout / database error during Regulatory_D1 processing.",
+  "reason": "Return code 1: [04:18:40] Starting Regulatory_D1 execution...\n[04:18:40] FAILED: Connection timeout / database error during Regulatory_D1 processing."
+}

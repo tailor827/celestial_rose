@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PARADISO ALTER - Execution Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260906_3">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar matching goal UI -->
+    <aside class="sidebar">
+        <div class="sidebar-top">
+            <div class="brand">
+                <div class="brand-star">✦</div>
+                <div class="brand-title">PARADISO</div>
+                <div class="brand-sub">— ALTER —</div>
+            </div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-dashboard" class="nav-link active" onclick="switchTab('dashboard', event)"><span class="nav-icon">⌂</span> Dashboard</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-automations" class="nav-link" onclick="switchTab('automations', event)"><span class="nav-icon">⬡</span> Automations</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-timeline" class="nav-link" onclick="switchTab('timeline', event)"><span class="nav-icon">⏱</span> Timeline</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-executions" class="nav-link" onclick="switchTab('executions', event)"><span class="nav-icon">▷</span> Executions</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-settings" class="nav-link" onclick="switchTab('settings', event)"><span class="nav-icon">⚙</span> Settings</a></li>
+            </ul>
+        </div>
+        
+        <!-- Cathedral Artwork Background at Bottom of Sidebar -->
+        <div class="sidebar-cathedral-bg">
+            <img src="/static/images/cathedral.png" alt="Cathedral Arch" class="cathedral-bg-img">
+            <div class="cathedral-gradient-overlay"></div>
+            <div class="sidebar-quote-overlay">
+                <div>HIGHER</div>
+                <div>THROUGH</div>
+                <div>DISCIPLINE</div>
+                <div class="quote-line"></div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="quote-sub">“AUTOMATE THE MUNDANE. PRESERVE WHAT MATTERS.”</div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="margin-right: 10px; display: flex; align-items: center; gap: 8px;">
+                    <span id="clock-date" style="font-size: 11px; color: var(--text-muted);">2026-09-06</span>
+                    <span id="clock-time" style="font-weight: 700; color: #fff;">00:00</span>
+                    <span id="sim-badge" style="font-size: 10px; background: rgba(96, 165, 250, 0.15); color: #60a5fa; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(96, 165, 250, 0.3);">⚡ 10m/s</span>
+                    <span style="color: #10b981; font-size: 12px;">● System Online</span>
+                </div>
+                <button id="btn-start-scheduler" class="btn-primary" onclick="startScheduler()">Start Scheduler</button>
+                <button id="btn-stop-scheduler" class="btn-primary" onclick="stopScheduler()">Stop Scheduler</button>
+                <button class="btn-primary" onclick="resetAutomations()" style="border-color: rgba(234, 179, 8, 0.4); color: #fde047;">Reset (Test)</button>
+            </div>
+        </header>
+
+        <!-- Main Body -->
+        <main style="flex: 1; overflow-y: auto;">
+            <!-- Dashboard Tab View -->
+            <div id="view-dashboard" class="tab-view active content-container">
+                <!-- Left Column: Metrics & Table -->
+                <section class="left-content">
+                    <h1 class="hero-title">All systems in motion.</h1>
+                    <p class="hero-subtitle">Monitor, execute, and deliver your automations - in one place.</p>
+
+                    <!-- Metric Cards -->
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Completed</div>
+                            <div class="metric-num" id="completed-num" style="color: #34d399;">0</div>
+                            <div class="progress-bar-bg"><div id="completed-bar" class="progress-bar-fill" style="background: #10b981; width: 0%;"></div></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Running</div>
+                            <div class="metric-num" id="running-num" style="color: #fbbf24;">0</div>
+                            <div class="progress-bar-bg"><div id="running-bar" class="progress-bar-fill" style="background: #f59e0b; width: 0%;"></div></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Retrial</div>
+                            <div class="metric-num" id="retrial-num" style="color: #eab308;">0</div>
+                            <div class="progress-bar-bg"><div id="retrial-bar" class="progress-bar-fill" style="background: #eab308; width: 0%;"></div></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Waiting</div>
+                            <div class="metric-num" id="waiting-num" style="color: #60a5fa;">0</div>
+                            <div class="progress-bar-bg"><div id="waiting-bar" class="progress-bar-fill" style="background: #3b82f6; width: 0%;"></div></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Failed</div>
+                            <div class="metric-num" id="failed-num" style="color: #f87171;">0</div>
+                            <div class="progress-bar-bg"><div id="failed-bar" class="progress-bar-fill" style="background: #ef4444; width: 0%;"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Executions Table -->
+                    <div class="table-section">
+                        <div class="table-header">
+                            <h2>Today’s Execution</h2>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" class="btn-primary" onclick="openAddReportModal()" style="font-weight: 600; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                    <span>+</span> Add Report
+                                </button>
+                                <button type="button" class="btn-primary" style="padding: 6px 12px;">Live</button>
+                            </div>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Report Name</th>
+                                    <th>Team</th>
+                                    <th>Scheduled Time</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Started At</th>
+                                    <th>Execution Mode</th>
+                                </tr>
+                            </thead>
+                            <tbody id="automations-body">
+                                <!-- Populated via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Right Column: Timeline & Widgets -->
+                <section class="right-panel">
+                    <!-- Gabriel Banner Card -->
+                    <div class="panel-card gabriel-card">
+                        <div class="gabriel-overlay">
+                            <div class="gabriel-title">ORDER<br>IN EXECUTION.</div>
+                            <div class="gabriel-sub">PARADISO ALTER</div>
+                        </div>
+                        <img src="/static/images/gabriel.png" alt="Gabriel Archangel Statue" class="gabriel-img">
+                    </div>
+
+                    <div class="panel-card">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span>Today's Timeline</span>
+                                <span id="timeline-count-label" style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(0)</span>
+                            </div>
+                            <button type="button" class="timeline-expand-btn" onclick="switchTab('timeline', event)" title="Expand to dedicated Timeline page">
+                                <span>Expand</span> ↗
+                            </button>
+                        </h3>
+                        <div class="timeline-list" id="timeline-list">
+                            <!-- Populated via JS -->
+                        </div>
+                    </div>
+
+                    <div class="panel-card" style="background: linear-gradient(135deg, #121722 0%, #1a2333 100%);">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">System Status</h3>
+                        <div style="color: #34d399; font-weight: 600; margin-bottom: 12px;">● All Systems Operational</div>
+                        <div style="font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
+                            <div id="sys-status-scheduler">○ Scheduler: Standby</div>
+                            <div id="sys-status-execution">✓ Execution Service: Idle</div>
+                            <div>✓ File Storage: Ready</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Automations Tab View (Dedicated Catalog & Management Page) -->
+            <div id="view-automations" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h1 class="hero-title">Automations & Report Catalog</h1>
+                            <p class="hero-subtitle">Registered execution pipelines, scheduled run times, runtime interpreters, and team ownership.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button type="button" class="btn-primary" onclick="openAddReportModal()" style="padding: 8px 18px; font-weight: 700; background: rgba(96, 165, 250, 0.15); border-color: rgba(96, 165, 250, 0.4); color: #60a5fa; display: inline-flex; align-items: center; gap: 6px;">
+                                <span>+</span> Add Report
+                            </button>
+                            <button type="button" class="btn-primary" onclick="fetchAutomations()" style="padding: 8px 16px;">↻ Refresh</button>
+                            <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
+                        </div>
+                    </div>
+
+                    <!-- Summary Metrics -->
+                    <div class="timeline-stats-grid">
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-auto-total">0</div>
+                            <div class="timeline-stat-label">Configured Reports</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-auto-waiting" style="color: #60a5fa;">0</div>
+                            <div class="timeline-stat-label">Active / Scheduled</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-auto-python" style="color: #38bdf8;">0</div>
+                            <div class="timeline-stat-label">Python Pipelines</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-auto-rscript" style="color: #a78bfa;">0</div>
+                            <div class="timeline-stat-label">Rscript Pipelines</div>
+                        </div>
+                    </div>
+
+                    <!-- Filter Toolbar -->
+                    <div class="filter-toolbar" style="margin-top: 10px;">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="auto-catalog-search" placeholder="Search report name, owner, or filename..." oninput="filterAutomationsCatalog()">
+                        </div>
+                        <div class="filter-group">
+                            <label for="auto-team-filter">Team:</label>
+                            <select id="auto-team-filter" onchange="filterAutomationsCatalog()">
+                                <option value="ALL">All Teams</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="auto-runtime-filter">Runtime:</label>
+                            <select id="auto-runtime-filter" onchange="filterAutomationsCatalog()">
+                                <option value="ALL">All Runtimes</option>
+                                <option value="python">Python</option>
+                                <option value="R">Rscript</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="auto-status-filter">Status:</label>
+                            <select id="auto-status-filter" onchange="filterAutomationsCatalog()">
+                                <option value="ALL">All Statuses</option>
+                                <option value="Waiting">Waiting</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Running">Running</option>
+                                <option value="Failed">Failed</option>
+                                <option value="Inactive">Inactive / Disabled</option>
+                            </select>
+                        </div>
+                        <div style="margin-left: auto; font-size: 12px; color: var(--text-muted); align-self: center;" id="auto-match-count">
+                            Showing 0 reports
+                        </div>
+                    </div>
+
+                    <!-- Catalog Grid -->
+                    <div class="automations-grid" id="automations-catalog-grid" style="margin-top: 20px;">
+                        <!-- Populated via JS -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- Timeline Tab View (Expanded Dedicated Page) -->
+            <div id="view-timeline" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <h1 class="hero-title">Today's Event Timeline & Audit Log</h1>
+                            <p class="hero-subtitle">Chronological trace of scheduler transitions, queue rotations, automation dispatches, and day cycles.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span id="expanded-timeline-badge" class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3); font-size: 12px; padding: 6px 12px;">0 Events</span>
+                            <button class="btn-primary" onclick="fetchTimeline()" style="padding: 8px 16px;">↻ Refresh</button>
+                            <button class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats Grid -->
+                    <div class="timeline-stats-grid">
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-timeline-total">0</div>
+                            <div class="timeline-stat-label">Total Events</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-timeline-system" style="color: #60a5fa;">0</div>
+                            <div class="timeline-stat-label">Scheduler & System</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-timeline-success" style="color: #34d399;">0</div>
+                            <div class="timeline-stat-label">Completed Runs</div>
+                        </div>
+                        <div class="timeline-stat-card">
+                            <div class="timeline-stat-num" id="stat-timeline-alerts" style="color: #f87171;">0</div>
+                            <div class="timeline-stat-label">Errors & Retrials</div>
+                        </div>
+                    </div>
+
+                    <!-- Filter & Search Toolbar -->
+                    <div class="filter-toolbar" style="margin-top: 10px;">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="timeline-search" placeholder="Search event title or description..." oninput="onTimelineFilterChange()">
+                        </div>
+                        <div class="filter-group">
+                            <label for="timeline-type-filter">Category:</label>
+                            <select id="timeline-type-filter" onchange="onTimelineFilterChange()">
+                                <option value="ALL">All Categories</option>
+                                <option value="system">Scheduler & System</option>
+                                <option value="start">Run Initiations</option>
+                                <option value="success">Completions</option>
+                                <option value="retrial">Retrials & Rotations</option>
+                                <option value="fail">Failures & Terminations</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="timeline-order-filter">Order:</label>
+                            <select id="timeline-order-filter" onchange="onTimelineFilterChange()">
+                                <option value="newest">Newest First ▾</option>
+                                <option value="oldest">Oldest First ▴</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="timeline-pagesize-filter">Per Page:</label>
+                            <select id="timeline-pagesize-filter" onchange="onTimelinePageSizeChange()">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="250">250</option>
+                                <option value="ALL">All</option>
+                            </select>
+                        </div>
+                        <div style="margin-left: auto; font-size: 12px; color: var(--text-muted); align-self: center;" id="timeline-match-count">
+                            Showing 0 events
+                        </div>
+                    </div>
+
+                    <!-- Expanded Chronological Event Feed -->
+                    <div class="expanded-timeline-container" id="expanded-timeline-list">
+                        <!-- Populated via JS -->
+                    </div>
+
+                    <!-- Pagination Controls Bar -->
+                    <div class="timeline-pagination-bar" id="timeline-pagination-bar" style="display: none;">
+                        <div class="pagination-info" id="timeline-pagination-info">
+                            Showing 0–0 of 0 events
+                        </div>
+                        <div class="pagination-controls" id="timeline-pagination-controls">
+                            <button type="button" class="btn-pagination" id="btn-page-first" onclick="goToTimelinePage(1)" title="First Page">« First</button>
+                            <button type="button" class="btn-pagination" id="btn-page-prev" onclick="changeTimelinePage(-1)" title="Previous Page">‹ Prev</button>
+                            <div class="pagination-pages" id="timeline-page-numbers">
+                                <!-- Page numbers rendered via JS -->
+                            </div>
+                            <button type="button" class="btn-pagination" id="btn-page-next" onclick="changeTimelinePage(1)" title="Next Page">Next ›</button>
+                            <button type="button" class="btn-pagination" id="btn-page-last" onclick="goToTimelinePage('last')" title="Last Page">Last »</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Executions Tab View -->
+            <div id="view-executions" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <h1 class="hero-title">Execution History & Audit Trail</h1>
+                    <p class="hero-subtitle">Historical log of past report runs, rotation retries, and console output streams.</p>
+
+                    <!-- Filter Toolbar -->
+                    <div class="filter-toolbar">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="exec-search" placeholder="Search report name..." oninput="filterExecutions()">
+                        </div>
+                        <div class="filter-group">
+                            <label for="exec-status-filter">Status:</label>
+                            <select id="exec-status-filter" onchange="filterExecutions()">
+                                <option value="ALL">All Statuses</option>
+                                <option value="Completed">Completed</option>
+                                <option value="Retrial">Retrial</option>
+                                <option value="Failed">Failed</option>
+                                <option value="Skipped">Skipped / Rotated</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="fetchExecutionHistory()" style="margin-left: auto;">↻ Refresh History</button>
+                    </div>
+
+                    <!-- History Table -->
+                    <div class="table-section" style="margin-top: 20px;">
+                        <div class="table-header">
+                            <h2>Execution Logs</h2>
+                            <span style="font-size: 12px; color: var(--text-muted);" id="exec-count-label">0 total executions</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Date</th>
+                                    <th>Report Name</th>
+                                    <th>Started At</th>
+                                    <th>Finished At</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Console Log</th>
+                                </tr>
+                            </thead>
+                            <tbody id="executions-history-body">
+                                <!-- Populated via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Settings Tab View -->
+            <div id="view-settings" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                        <div>
+                            <h1 class="hero-title">System Settings & Configuration</h1>
+                            <p class="hero-subtitle">Tune intraday scheduling windows, execution interpreters, simulation rates, and persistence files.</p>
+                        </div>
+                        <div id="settings-alert-banner" class="settings-toast" style="display: none;"></div>
+                    </div>
+
+                    <form id="settings-form" onsubmit="handleSettingsSubmit(event)">
+                        <div class="settings-cards-grid">
+                            
+                            <!-- Card 1: Scheduler & 24-Hour Pipeline -->
+                            <div class="settings-card">
+                                <div class="settings-card-header">
+                                    <span class="settings-card-icon">⏱</span>
+                                    <div>
+                                        <h3>Scheduler & 24-Hour Lifecycle</h3>
+                                        <p>Controls intraday execution windows and boot lifecycle</p>
+                                    </div>
+                                </div>
+                                <div class="settings-card-body">
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-auto-start">Startup Operational Mode</label>
+                                        <select id="setting-auto-start" class="settings-control">
+                                            <option value="false">Standby Mode (Dormant until manual UI trigger)</option>
+                                            <option value="true">Autonomous Mode (Active 24-Hour Cycle upon server boot)</option>
+                                        </select>
+                                        <span class="field-hint">Standby recommended for testing; Autonomous for production servers.</span>
+                                    </div>
+
+                                    <div class="time-inputs-grid">
+                                        <div class="form-group">
+                                            <label for="setting-start-time">Queue Open Time (24h)</label>
+                                            <input type="text" id="setting-start-time" class="settings-control" placeholder="07:00" pattern="^([01]\d|2[0-3]):[0-5]\d$" required>
+                                            <span class="field-hint">Morning queue launch</span>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="setting-idle-time">Queue Idle Time (24h)</label>
+                                            <input type="text" id="setting-idle-time" class="settings-control" placeholder="21:00" pattern="^([01]\d|2[0-3]):[0-5]\d$" required>
+                                            <span class="field-hint">Stop starting new jobs</span>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="setting-close-time">Cutoff Close Time (24h)</label>
+                                            <input type="text" id="setting-close-time" class="settings-control" placeholder="22:00" pattern="^([01]\d|2[0-3]):[0-5]\d$" required>
+                                            <span class="field-hint">Kill running & fail unready</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group" style="margin-top: 16px;">
+                                        <label for="setting-job-interval">Tick / Polling Interval (seconds)</label>
+                                        <input type="number" id="setting-job-interval" class="settings-control" min="1" step="1" placeholder="15" required>
+                                        <span class="field-hint">Background daemon evaluation period</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Time Simulation & Clock -->
+                            <div class="settings-card">
+                                <div class="settings-card-header">
+                                    <span class="settings-card-icon">⚡</span>
+                                    <div>
+                                        <h3>Clock Simulation Engine</h3>
+                                        <p>Accelerate calendar testing and simulate fast-forward scenarios</p>
+                                    </div>
+                                </div>
+                                <div class="settings-card-body">
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-sim-enabled">Simulation State</label>
+                                        <select id="setting-sim-enabled" class="settings-control" onchange="toggleSimSpeedDisabled()">
+                                            <option value="true">Enabled (Accelerated Virtual Time)</option>
+                                            <option value="false">Disabled (Real System Wall-Clock)</option>
+                                        </select>
+                                        <span class="field-hint">Accelerate 24-hr cycle for demonstrations and verification.</span>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-sim-speed">Simulation Speed Multiplier</label>
+                                        <select id="setting-sim-speed" class="settings-control">
+                                            <option value="600.0">600x (10 simulated minutes per real second)</option>
+                                            <option value="300.0">300x (5 simulated minutes per real second)</option>
+                                            <option value="60.0">60x (1 simulated minute per real second)</option>
+                                            <option value="10.0">10x (10 simulated seconds per real second)</option>
+                                            <option value="1.0">1x (Real-time speed)</option>
+                                        </select>
+                                        <span class="field-hint">At 600x, an entire 24-hour day passes in 2.4 minutes.</span>
+                                    </div>
+
+                                    <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 600; color: #fff;">Reset Clock Baseline</div>
+                                            <div style="font-size: 11px; color: var(--text-muted);">Rewind simulation clock to 00:00:00 AM today</div>
+                                        </div>
+                                        <button type="button" class="btn-primary" onclick="triggerClockReset()" style="font-size: 11px; padding: 6px 12px; border-color: rgba(96, 165, 250, 0.4); color: #93c5fd;">↺ Reset to Midnight</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Execution Runtimes -->
+                            <div class="settings-card">
+                                <div class="settings-card-header">
+                                    <span class="settings-card-icon">⚙</span>
+                                    <div>
+                                        <h3>Execution Interpreters & Environment</h3>
+                                        <p>Binary paths for Python and R job runner scripts</p>
+                                    </div>
+                                </div>
+                                <div class="settings-card-body">
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-python-path">Python Executable Path</label>
+                                        <input type="text" id="setting-python-path" class="settings-control" placeholder="Default: system python">
+                                        <span class="field-hint" id="hint-detected-python">Leave blank to use current active interpreter.</span>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="setting-rscript-path">Rscript Executable Path</label>
+                                        <input type="text" id="setting-rscript-path" class="settings-control" placeholder="Default: Rscript in PATH">
+                                        <span class="field-hint" id="hint-detected-rscript">Optional: Path to Rscript binary for statistical pipeline jobs.</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 4: Logging & File Repositories -->
+                            <div class="settings-card">
+                                <div class="settings-card-header">
+                                    <span class="settings-card-icon">📁</span>
+                                    <div>
+                                        <h3>Logging & Persistence Repositories</h3>
+                                        <p>Output log verbosity and file storage paths</p>
+                                    </div>
+                                </div>
+                                <div class="settings-card-body">
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-log-level">Logging Level</label>
+                                        <select id="setting-log-level" class="settings-control">
+                                            <option value="DEBUG">DEBUG (Verbose diagnostic tracing)</option>
+                                            <option value="INFO">INFO (Standard execution tracking)</option>
+                                            <option value="WARNING">WARNING (Notable issues only)</option>
+                                            <option value="ERROR">ERROR (Only execution errors)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom: 16px;">
+                                        <label for="setting-log-dir">Log Directory</label>
+                                        <input type="text" id="setting-log-dir" class="settings-control" placeholder="logs">
+                                    </div>
+
+                                    <div class="storage-info-box">
+                                        <div class="storage-row">
+                                            <span class="storage-label">Automations Storage:</span>
+                                            <span id="info-storage-automations" class="storage-val">storage/automations.json</span>
+                                        </div>
+                                        <div class="storage-row">
+                                            <span class="storage-label">Intraday History:</span>
+                                            <span id="info-storage-intraday" class="storage-val">storage/intraday.json</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Settings Action Bar -->
+                        <div class="settings-action-bar">
+                            <button type="submit" id="btn-save-settings" class="btn-primary" style="padding: 10px 24px; font-weight: 700; letter-spacing: 1px;">💾 Save Configuration</button>
+                            <button type="button" class="btn-primary" onclick="fetchSettings()" style="padding: 10px 18px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">↻ Reload Saved</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal: Add New Automation Report -->
+    <div id="modal-add-report" class="modal-overlay" onclick="handleAddModalOverlayClick(event)">
+        <div class="modal-card" style="max-width: 580px;">
+            <div class="modal-header">
+                <div class="modal-title-group" style="display: flex; align-items: center;">
+                    <span class="modal-icon" style="font-size: 18px; margin-right: 8px;">✦</span>
+                    <div>
+                        <h3 class="modal-title">Register New Automation Report</h3>
+                        <div class="modal-subtitle">Add an automation pipeline to the execution queue and catalog</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeAddReportModal()">✖</button>
+            </div>
+            <form id="form-add-report" onsubmit="handleAddReportSubmit(event)">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+                    <div id="add-report-error" class="settings-toast toast-error" style="display: none; margin-bottom: 4px;"></div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="new-report-name">Report Name *</label>
+                            <input type="text" id="new-report-name" class="settings-control" placeholder="e.g. Treasury_Yield_Curve" required>
+                            <span class="field-hint">Unique alphanumeric identifier</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-report-filename">Script Filename *</label>
+                            <input type="text" id="new-report-filename" class="settings-control" placeholder="e.g. treasury_curve.py" required>
+                            <span class="field-hint">Executable script file</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="new-report-filetype">Interpreter / Runtime *</label>
+                            <select id="new-report-filetype" class="settings-control">
+                                <option value="python">Python (.py)</option>
+                                <option value="R">Rscript (.R)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-report-dir">Script Directory</label>
+                            <input type="text" id="new-report-dir" class="settings-control" value="../reports" placeholder="../reports">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="new-report-team">Department / Team</label>
+                            <input type="text" id="new-report-team" class="settings-control" placeholder="e.g. Finance, Risk, Collections" value="General">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-report-owner">Owner / Contact</label>
+                            <input type="text" id="new-report-owner" class="settings-control" placeholder="e.g. J. Doe" value="User">
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group">
+                            <label for="new-report-time">Scheduled Run Time</label>
+                            <input type="text" id="new-report-time" class="settings-control" placeholder="08:30" value="08:30">
+                            <span class="field-hint">24-hr format (HH:MM)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-report-status">Initial Status</label>
+                            <select id="new-report-status" class="settings-control">
+                                <option value="Waiting">Waiting (Queue for execution today)</option>
+                                <option value="Inactive">Inactive (Staged / Not queued)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-primary" onclick="closeAddReportModal()" style="border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">Cancel</button>
+                    <button type="submit" id="btn-submit-add-report" class="btn-primary" style="font-weight: 700; background: rgba(96, 165, 250, 0.15); border-color: rgba(96, 165, 250, 0.4); color: #60a5fa;">
+                        💾 Save & Register Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dark Gothic Log Viewer Modal Overlay -->
+    <div id="modal-log-viewer" class="modal-overlay" onclick="handleModalOverlayClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-group" style="display: flex; align-items: center;">
+                    <span class="modal-icon" style="font-size: 18px; margin-right: 8px;">📜</span>
+                    <div>
+                        <h3 id="modal-log-title" class="modal-title">Report Output Console</h3>
+                        <div id="modal-log-subtitle" class="modal-subtitle">Console log stream and execution status</div>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeLogModal()">✖</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-meta-bar">
+                    <div><strong style="color: var(--text-muted);">Status:</strong> <span id="modal-log-status" class="badge badge-completed">Completed</span></div>
+                    <div><strong style="color: var(--text-muted);">Duration:</strong> <span id="modal-log-duration">--</span></div>
+                    <div><strong style="color: var(--text-muted);">Last Run:</strong> <span id="modal-log-lastrun">--</span></div>
+                </div>
+                <div class="console-wrapper">
+                    <div class="console-header">
+                        <span class="console-dot red"></span>
+                        <span class="console-dot yellow"></span>
+                        <span class="console-dot green"></span>
+                        <span class="console-title">stdout / stderr stream</span>
+                    </div>
+                    <pre id="modal-log-content" class="console-content">Loading log output...</pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="closeLogModal()">Close Console</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=20260906_4"></script>
+</body>
+</html>
+

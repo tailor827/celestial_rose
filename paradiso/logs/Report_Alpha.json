@@ -1,0 +1,8 @@
+{
+  "name": "Report_Alpha",
+  "status": "Skipped",
+  "last_run": "2026-09-22 12:08:21 AM",
+  "duration": "4s",
+  "last_output": "SKIPPED: missing dependency CC_Collection_Summary",
+  "reason": "SKIPPED: missing dependency CC_Collection_Summary"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Customer_Segmentation",
+  "status": "Failed",
+  "last_run": "2026-09-06 06:43:16 PM",
+  "duration": "0s",
+  "last_output": "Return code 1: [04:18:40] Starting Customer_Segmentation execution...\n[04:18:40] FAILED: Connection timeout / database error during Customer_Segmentation processing.",
+  "reason": "Return code 1: [04:18:40] Starting Customer_Segmentation execution...\n[04:18:40] FAILED: Connection timeout / database error during Customer_Segmentation processing."
+}

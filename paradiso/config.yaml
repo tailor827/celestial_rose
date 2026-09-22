@@ -1,0 +1,25 @@
+flask:
+  DEBUG: true
+  HOST: 0.0.0.0
+  PORT: 5000
+secret_key: paradiso-alter-secret-key-change-in-production
+logging:
+  dir: logs
+  level: INFO
+storage:
+  base_dir: storage
+  automations_file: storage/automations.json
+  intraday_file: storage/intraday.json
+scheduler:
+  enabled: true
+  auto_start: false
+  job_interval_seconds: 15
+  intraday_start_time: 07:00
+  intraday_idle_time: '21:00'
+  intraday_close_time: '22:00'
+executables:
+  python_path: ''
+  rscript_path: ''
+simulation:
+  enabled: false
+  speed_multiplier: 300

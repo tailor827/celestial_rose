@@ -1,0 +1,8 @@
+{
+  "name": "DirectInject",
+  "status": "Failed",
+  "last_run": "2026-09-22 02:01:26 AM",
+  "duration": "0s",
+  "last_output": "Security violation: script 'C:\\Users\\jclmendoza\\OneDrive - UNIONBANK of the Philippines\\Documents\\paradiso_alter\\paradiso_alter\\..\\..\\arbitrary\\outside.py' resolves outside project directory",
+  "reason": "Security violation: script 'C:\\Users\\jclmendoza\\OneDrive - UNIONBANK of the Philippines\\Documents\\paradiso_alter\\paradiso_alter\\..\\..\\arbitrary\\outside.py' resolves outside project directory"
+}

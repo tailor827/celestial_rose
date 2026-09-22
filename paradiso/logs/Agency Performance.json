@@ -1,0 +1,8 @@
+{
+  "name": "Agency Performance",
+  "status": "Completed",
+  "last_run": "2026-09-07 09:48:12 AM",
+  "duration": "29s",
+  "last_output": "[09:47:42] Starting Agency_Performance execution...\n[*] Dependencies ready! Simulating report workload for 29 seconds...\n[09:48:11] Agency_Performance completed successfully in 29s!",
+  "reason": "[09:47:42] Starting Agency_Performance execution...\n[*] Dependencies ready! Simulating report workload for 29 seconds...\n[09:48:11] Agency_Performance completed successfully in 29s!"
+}

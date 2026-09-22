@@ -1,0 +1,8 @@
+{
+  "name": "FailBot",
+  "status": "Failed",
+  "last_run": "2026-09-06 07:50:13 PM",
+  "duration": "0s",
+  "last_output": "Report script not found on disk: C:\\Users\\desktop\\Documents\\work\\paradiso\\paradiso_alter\\nonexistent.py",
+  "reason": "Report script not found on disk: C:\\Users\\desktop\\Documents\\work\\paradiso\\paradiso_alter\\nonexistent.py"
+}
