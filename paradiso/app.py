@@ -23,7 +23,7 @@ def create_app(auto_start: Optional[bool] = None) -> Tuple[Flask, Paradiso]:
         static_folder=os.path.join(base_dir, "web", "static"),
         template_folder=os.path.join(base_dir, "web", "templates")
     )
-    app.config["SECRET_KEY"] = CONFIG.get("secret_key", "paradiso-alter-secret")
+    app.config["SECRET_KEY"] = CONFIG.get("secret_key", "celestial_rose")
 
     # Shared Services Layer
     automation_service = AutomationService()
@@ -36,7 +36,7 @@ def create_app(auto_start: Optional[bool] = None) -> Tuple[Flask, Paradiso]:
     ExecutionController(app, execution_service, intraday_service, automation_service)
     ParadisoController(app, paradiso)
     DashboardController(app, automation_service, intraday_service)
-    SettingsController(app, intraday_service)
+    SettingsController(app, intraday_service, paradiso)
 
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 

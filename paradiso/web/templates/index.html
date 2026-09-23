@@ -402,6 +402,11 @@
                         <div id="settings-alert-banner" class="settings-toast" style="display: none;"></div>
                     </div>
 
+                    <div id="settings-locked-banner" style="display: none; margin-bottom: 20px; padding: 14px 18px; border-radius: 8px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.4); color: #f59e0b; font-size: 13px; font-weight: 500; line-height: 1.5;">
+                        <span style="font-size: 16px; margin-right: 8px;">⚠️</span>
+                        <strong>Configuration Locked:</strong> Settings cannot be modified while Paradiso scheduler is running or jobs are in flight. Stop the scheduler before modifying settings.
+                    </div>
+
                     <form id="settings-form" onsubmit="handleSettingsSubmit(event)">
                         <div class="settings-cards-grid">
                             

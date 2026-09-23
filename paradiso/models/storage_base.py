@@ -13,6 +13,7 @@ class StorageCorruptionError(Exception):
 class StorageBase:
     """Base thread-safe storage class using atomic file replacements with transaction locking."""
     _global_lock = threading.RLock()
+    _global_corrupted_states: Dict[Path, Any] = {}
 
     def __init__(self, file_path: Path):
         self.file_path = file_path
@@ -26,12 +27,52 @@ class StorageBase:
             if self.file_path.stat().st_size == 0:
                 return {}
             with open(self.file_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+            self._global_corrupted_states.pop(self.file_path.resolve(), None)
+            return data
         except json.JSONDecodeError as e:
-            # Create emergency backup of damaged file before failing
+            # Create emergency backup of damaged file before failing, deduplicated by state and content
             try:
-                backup_path = self.file_path.with_name(f"{self.file_path.stem}_corrupted_{int(time.time())}.bak")
-                shutil.copy2(str(self.file_path), str(backup_path))
+                st = self.file_path.stat()
+                stat_key = (st.st_mtime_ns, st.st_size)
+                resolved = self.file_path.resolve()
+
+                already_backed_up = False
+                if self._global_corrupted_states.get(resolved) == stat_key:
+                    already_backed_up = True
+                else:
+                    existing_baks = sorted(
+                        list(self.file_path.parent.glob(f"{self.file_path.stem}_corrupted_*.bak")),
+                        key=lambda p: p.stat().st_mtime
+                    )
+                    if existing_baks:
+                        latest_bak = existing_baks[-1]
+                        try:
+                            if latest_bak.stat().st_size == st.st_size and latest_bak.read_bytes() == self.file_path.read_bytes():
+                                already_backed_up = True
+                                self._global_corrupted_states[resolved] = stat_key
+                        except Exception:
+                            pass
+
+                if not already_backed_up:
+                    self._global_corrupted_states[resolved] = stat_key
+                    ts = int(time.time())
+                    backup_path = self.file_path.with_name(f"{self.file_path.stem}_corrupted_{ts}.bak")
+                    if backup_path.exists():
+                        backup_path = self.file_path.with_name(f"{self.file_path.stem}_corrupted_{time.time_ns()}.bak")
+                    shutil.copy2(str(self.file_path), str(backup_path))
+
+                    # Keep at most the 5 latest rescue backups
+                    existing_baks = sorted(
+                        list(self.file_path.parent.glob(f"{self.file_path.stem}_corrupted_*.bak")),
+                        key=lambda p: p.stat().st_mtime
+                    )
+                    if len(existing_baks) > 5:
+                        for old_bak in existing_baks[:-5]:
+                            try:
+                                old_bak.unlink()
+                            except Exception:
+                                pass
             except Exception:
                 pass
             raise StorageCorruptionError(
@@ -51,6 +92,7 @@ class StorageBase:
                 
                 # os.replace is atomic on both Windows and Posix when target is on same volume
                 os.replace(str(self.temp_path), str(self.file_path))
+                self._global_corrupted_states.pop(self.file_path.resolve(), None)
                 return
             except (PermissionError, OSError) as e:
                 if attempt < max_retries - 1:

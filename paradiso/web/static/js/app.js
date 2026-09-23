@@ -160,28 +160,73 @@ async function fetchDashboardStats() {
     }
 }
 
+let isSchedulerRunning = false;
+let transitionCooldownRemaining = 0;
+let transitionCooldownTimer = null;
+
+function updateSchedulerButtonUI() {
+    const startBtn = document.getElementById('btn-start-scheduler');
+    const stopBtn = document.getElementById('btn-stop-scheduler');
+    if (!startBtn) return;
+
+    if (transitionCooldownRemaining > 0) {
+        startBtn.disabled = true;
+        if (stopBtn) stopBtn.disabled = true;
+        startBtn.innerHTML = `⏳ Cooldown (${transitionCooldownRemaining}s)`;
+    } else {
+        startBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = false;
+        if (isSchedulerRunning) {
+            startBtn.classList.add('btn-start-active');
+            startBtn.innerHTML = '● Scheduler Running';
+        } else {
+            startBtn.classList.remove('btn-start-active');
+            startBtn.innerHTML = 'Start Scheduler';
+        }
+    }
+}
+
+function startTransitionCooldown(seconds) {
+    transitionCooldownRemaining = Math.max(1, Math.ceil(seconds || 10));
+    updateSchedulerButtonUI();
+    if (transitionCooldownTimer) clearInterval(transitionCooldownTimer);
+
+    transitionCooldownTimer = setInterval(() => {
+        transitionCooldownRemaining -= 1;
+        if (transitionCooldownRemaining <= 0) {
+            clearInterval(transitionCooldownTimer);
+            transitionCooldownTimer = null;
+            transitionCooldownRemaining = 0;
+            checkSchedulerStatus();
+        } else {
+            updateSchedulerButtonUI();
+        }
+    }, 1000);
+}
+
 async function checkSchedulerStatus() {
     try {
         const res = await fetch('/api/paradiso/status');
         const data = await res.json();
-        const startBtn = document.getElementById('btn-start-scheduler');
         const sysScheduler = document.getElementById('sys-status-scheduler');
 
-        if (data.ok && data.running) {
-            startBtn.classList.add('btn-start-active');
-            startBtn.innerHTML = '● Scheduler Running';
-            if (sysScheduler) {
-                sysScheduler.innerHTML = '✓ Scheduler: Active';
-                sysScheduler.style.color = '#34d399';
+        if (data.ok) {
+            isSchedulerRunning = Boolean(data.running);
+            if (data.cooldown_remaining && data.cooldown_remaining > 0 && transitionCooldownRemaining <= 0) {
+                startTransitionCooldown(data.cooldown_remaining);
             }
-        } else {
-            startBtn.classList.remove('btn-start-active');
-            startBtn.innerHTML = 'Start Scheduler';
             if (sysScheduler) {
-                sysScheduler.innerHTML = '○ Scheduler: Standby';
-                sysScheduler.style.color = 'var(--text-muted)';
+                if (data.running) {
+                    sysScheduler.innerHTML = '✓ Scheduler: Active';
+                    sysScheduler.style.color = '#34d399';
+                } else {
+                    sysScheduler.innerHTML = '○ Scheduler: Standby';
+                    sysScheduler.style.color = 'var(--text-muted)';
+                }
             }
         }
+        updateSchedulerButtonUI();
+        updateSettingsLockUI();
     } catch (e) {}
 }
 
@@ -975,13 +1020,39 @@ async function runReport(name) {
 }
 
 async function startScheduler() {
-    await fetch('/api/paradiso/start', { method: 'POST' });
+    if (transitionCooldownRemaining > 0) return;
+    try {
+        const res = await fetch('/api/paradiso/start', { method: 'POST' });
+        const data = await res.json();
+        if (res.status === 429) {
+            startTransitionCooldown(data.cooldown_remaining || 10);
+            return;
+        }
+        if (data.ok) {
+            startTransitionCooldown(10);
+        }
+    } catch (e) {
+        console.error('Failed to start scheduler:', e);
+    }
     checkSchedulerStatus();
     fetchAutomations();
 }
 
 async function stopScheduler() {
-    await fetch('/api/paradiso/stop', { method: 'POST' });
+    if (transitionCooldownRemaining > 0) return;
+    try {
+        const res = await fetch('/api/paradiso/stop', { method: 'POST' });
+        const data = await res.json();
+        if (res.status === 429) {
+            startTransitionCooldown(data.cooldown_remaining || 10);
+            return;
+        }
+        if (data.ok) {
+            startTransitionCooldown(10);
+        }
+    } catch (e) {
+        console.error('Failed to stop scheduler:', e);
+    }
     checkSchedulerStatus();
     fetchAutomations();
 }
@@ -1069,10 +1140,30 @@ async function fetchSettings() {
         if (storageAuto && s.storage) storageAuto.innerText = s.storage.automations_file || "storage/automations.json";
         const storageIntra = document.getElementById('info-storage-intraday');
         if (storageIntra && s.storage) storageIntra.innerText = s.storage.intraday_file || "storage/intraday.json";
-
+        updateSettingsLockUI();
     } catch (e) {
         console.error('Failed to fetch settings:', e);
         showSettingsToast('Failed to load settings from server.', 'error');
+    }
+}
+
+function updateSettingsLockUI() {
+    const banner = document.getElementById('settings-locked-banner');
+    const saveBtn = document.getElementById('btn-save-settings');
+    if (!saveBtn) return;
+
+    if (isSchedulerRunning) {
+        if (banner) banner.style.display = 'block';
+        saveBtn.disabled = true;
+        saveBtn.title = 'Settings cannot be modified while Paradiso scheduler is running';
+        saveBtn.style.opacity = '0.5';
+        saveBtn.style.cursor = 'not-allowed';
+    } else {
+        if (banner) banner.style.display = 'none';
+        saveBtn.disabled = false;
+        saveBtn.title = '';
+        saveBtn.style.opacity = '1';
+        saveBtn.style.cursor = 'pointer';
     }
 }
 
@@ -1086,6 +1177,10 @@ function toggleSimSpeedDisabled() {
 
 async function handleSettingsSubmit(e) {
     e.preventDefault();
+    if (isSchedulerRunning) {
+        showSettingsToast('Settings cannot be modified while Paradiso scheduler is running. Please stop Paradiso before updating settings.', 'error');
+        return;
+    }
     const btn = document.getElementById('btn-save-settings');
     const originalText = btn.innerText;
     btn.disabled = true;
@@ -1120,11 +1215,13 @@ async function handleSettingsSubmit(e) {
             body: JSON.stringify(payload)
         });
         const data = await res.json();
+        if (res.status === 409 || !data.ok) {
+            showSettingsToast(data.error || 'Settings cannot be modified while Paradiso scheduler is running.', 'error');
+            return;
+        }
         if (data.ok) {
             showSettingsToast(data.message || 'Settings saved and applied successfully!', 'success');
             fetchDashboardStats();
-        } else {
-            showSettingsToast(data.error || 'Failed to save settings.', 'error');
         }
     } catch (err) {
         console.error('Error saving settings:', err);

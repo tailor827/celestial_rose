@@ -22,6 +22,10 @@ As specified in [`artifacts/dev/dev.md`](file:///c:/Users/desktop/Documents/work
 4. **Architectural Philosophy:**
    - Prioritize dead-simple, unbreakable walls over clever workarounds.
    - Bank-grade zero tolerance: no silent closures, strict receipt contracts for pipeline reports.
+5. **Legacy Test Integrity Protection (Hard Invariant):**
+   - Legacy test suites (`tests/test_api.py`, `tests/test_services.py`, `tests/test_settings.py`, `tests/test_storage.py`) are strictly read-only and immutable.
+   - Do NOT modify legacy test files under any circumstances without explicit user authorization.
+   - All new remediation and audit fix verification tests reside exclusively in `tests/test_audit_fixes.py`.
 
 ---
 
@@ -65,33 +69,79 @@ Based on [`artifacts/audits/ongoing/audit_20260922_0054.md`](file:///c:/Users/de
 | **F-003** | HIGH | SECURITY | **RESOLVED** | Unvalidated interpreter paths in `/api/settings` allowed arbitrary host binary execution. Resolved via strict filename pattern matching (`python*`, `rscript*`) and file existence checks in `validate_config()` and defense-in-depth in `Runner`. Verified in `tests/test_audit_fixes.py`. |
 | **F-004** | HIGH | QUEUE | **RESOLVED** | Bank-grade receipt contract enforcement: logs locked strictly to `paradiso/logs`, script-dumped logs preserved, zero retry penalty on dependency skips, contract violators routed to failure without infinite queue loops, `ReportLog.clean_slate()` and `has_valid_receipt()` supporting dated receipts, DRY `is_dependency_skip`, and documented in `TECHNICAL_DOCUMENTATION.md` Section 12. Verified across 63 tests and `poc_f004_verification.py`. |
 | **F-005** | HIGH | QUEUE | **RESOLVED** | Unbounded fast-spinning on dependency starvation caused timeline and disk write amplification. Resolved by introducing queue pass tracking and starvation cooldown (pausing pops when all pass items skip) and deduplicating timeline rotation events. Verified in `tests/test_audit_fixes.py`. |
-| **F-006** | HIGH | CONCURRENCY | **OPEN** | Process watcher suppression vulnerability due to CPython `id(process)` heap memory address reuse. Solution designed: object attribute stamping (`_was_killed = True`) + monotonic integer launch IDs. |
-| **F-007** | HIGH | STORAGE | **OPEN** | Storage corruption causes runaway `.bak` file generation flood on active 0.5s scheduler loop. Requires deduplication by file mtime/hash. |
-| **F-008** | MEDIUM | PROCESS | **OPEN** | Child process trees survive `Runner.kill_all()` on Windows. Requires `taskkill /F /T /PID` on `win32`. |
-| **F-009** | MEDIUM | CONCURRENCY | **OPEN** | Concurrent `POST /api/paradiso/start` calls spawn duplicate scheduler loops. Requires synchronization lock guarding `start()`, `start_daemon()`, `stop()`. |
-| **F-010** | MEDIUM | STATE MACHINE | **OPEN** | Midnight rollover resets running reports and duplicates queue entries. Requires excluding `self.current_runs` from the new day's initial `Waiting` batch and waitlist. |
+| **F-006** | HIGH | CONCURRENCY | **RESOLVED** | Process watcher suppression vulnerability due to CPython `id(process)` heap memory address reuse. Resolved via direct object attribute stamping (`_was_killed = True`) and monotonic integer launch IDs (`_exec_counter` / `killed_exec_ids`). Verified in `tests/test_audit_fixes.py`. |
+| **F-007** | HIGH | STORAGE | **RESOLVED** | Storage corruption causes runaway `.bak` file generation flood on active 0.5s scheduler loop. Resolved via in-memory `(mtime_ns, size)` deduplication cache, byte-for-byte disk match detection, and 5-file retention pruning in `StorageBase`. Verified in `tests/test_audit_fixes.py`. |
+| **F-008** | MEDIUM | PROCESS | **RESOLVED** | Child process trees survive `Runner.kill_all()` on Windows. Resolved via `taskkill /F /T /PID` tree-kill and synchronous `wait(timeout=1.0)` in `Runner.kill_all()`. Verified in `tests/test_audit_fixes.py`. |
+| **F-009** | MEDIUM | CONCURRENCY | **RESOLVED** | Concurrent `POST /api/paradiso/start` calls spawn duplicate scheduler loops. Resolved via `_lifecycle_lock` re-entrant mutex, pre-check before `start_fresh_run()`, synchronous thread join, and fresh stop events. Verified in `tests/test_audit_fixes.py`. |
+| **F-010** | MEDIUM | STATE MACHINE | **RESOLVED** | 22:00 cutoff forcibly kills lingering running tasks with `runner.kill_all()`, logs them as `Failed`, clears `current_runs` and `waitlist`. Midnight rollover cleans stray runs defense-in-depth and initializes new day cleanly. Verified in `tests/test_audit_fixes.py`. |
 | **F-011** | LOW | UI | **OPEN** | 1-second unpaginated timeline polling in `app.js` and hardcoded `"countdown": "32 min"` in `DashboardController.get_stats()`. |
 | **F-012** | LOW | DOC-DRIFT | **OPEN** | Documentation claims `/api/dashboard/timeline` returns newest-first (actually returns chronological/oldest-first); unlisted endpoints (`disable_automation`, `system-status`). |
+| **F-013** | HIGH | STORAGE / QUEUE | **RESOLVED** | Active automation broken due to deleted report script (`0base_auto.py`). Resolved by updating `storage/automations.json` to point to authorized blueprint `sample_report_blueprint.py` with clean initial state. |
+| **F-014** | LOW | CONCURRENCY | **RESOLVED** | Blocking `process.wait(timeout=1.0)` held under `_proc_lock` in `kill_all()`. Resolved by moving the process wait loop outside the `_proc_lock` scope, reducing lock hold time to $< 1$ms. Verified across full test suite and adversarial PoC. |
+| **BG-001** | HIGH | SECURITY / INTEGRITY | **RESOLVED** | **Idle-Only Configuration Guardrail:** Enforced HTTP 409 Conflict in `SettingsController.update_settings` when scheduler is active or jobs are in flight. Disabled Save button and displayed amber alert banner in Web UI. Verified in `tests/test_audit_fixes.py`. |
+| **BG-002** | HIGH | STABILITY / CONCURRENCY | **RESOLVED** | **Start/Stop Transition Cooldown & Mutex Guard (dovetails with F-009):** Enforced `_lifecycle_lock` and 10-second transition cooldown on `/api/paradiso/start` and `/api/paradiso/stop` rejecting rapid calls with HTTP 429 and disabling UI action buttons with a 10-second countdown indicator. Verified in `tests/test_audit_fixes.py`. |
 
 ---
 
 ## 4. Current State of Blueprints & UI
-- **Web UI:** Renamed all occurrences of `PARADISO ALTER` to `PARADISO` in `index.html` (title, sidebar brand, Gabriel card).
+- **Web UI:** Renamed all occurrences of `PARADISO ALTER` to `PARADISO` in `index.html` (title, sidebar brand, Gabriel card). Added 10-second transition cooldown and settings lock banner with button disablement.
 - **Blueprints:** `reports/sample_report_blueprint.py` (Python) and `reports/sample_report_blueprint.R` (R base) are standalone templates with zero CLI args, writing structured receipts directly to `paradiso/logs/{REPORT_NAME}.json`.
 - **Documentation:** `paradiso/TECHNICAL_DOCUMENTATION.md` updated with Section 12 formally establishing the Receipt Contract.
 
 ---
 
-## 5. Next Steps for Tomorrow (Phase 4: F-006)
-1. **Target:** `paradiso/services/runner.py` (and test suite `paradiso/tests/test_audit_fixes.py`).
-2. **Issue:** CPython heap address recycling causes newly launched processes to share memory addresses with killed processes, leading to watcher suppression and permanent queue deadlock.
+## 5. Next Steps (Phase 9: F-011 & F-012)
+1. **Target:** `paradiso/controllers/dashboard_controller.py`, `paradiso/web/static/js/app.js`, `paradiso/TECHNICAL_DOCUMENTATION.md`.
+2. **Issue:**
+   - **F-011:** `app.js` polls `/api/dashboard/timeline` every 1 second unconditionally with unpaginated payload. `DashboardController.get_stats()` returns a hardcoded `"countdown": "32 min"`.
+   - **F-012:** Documentation claims timeline is newest-first (actually oldest-first); routes `/api/automation/disable` and `/api/system-status` are unlisted in the API spec table.
 3. **Proposed Fix:**
-   - Stamp `process._was_killed = True` directly on `subprocess.Popen` instances before killing.
-   - Maintain a monotonic integer execution counter `self._exec_counter` (`1, 2, 3...`) passed to `_watcher`.
-   - Discard `id(process)` completely.
+   - Increase timeline polling interval to 5 seconds (or pause when inactive).
+   - Support `?limit=N` query param in `/api/dashboard/timeline` (defaulting to last 50 events).
+   - In `DashboardController.get_stats()`, compute dynamic countdown until the next queue open/close window using `CLOCK`.
+   - Update `TECHNICAL_DOCUMENTATION.md` to accurately document chronological ordering and add documentation for all active endpoints.
 
 ---
 
 ## 6. Verification Commands
-- **Full Test Suite:** `py -3 -m unittest discover tests` (inside `paradiso/`, 63 passing)
-- **Adversarial Verification:** `py -3 paradiso/artifacts/audits/poc/poc_f004_verification.py` (4 passing)
+- **Full Test Suite:** `py -3 -m unittest discover tests` (inside `paradiso/`, 72 passing, 0 failures)
+- **Adversarial Verification Suites:**
+  - `py -3 paradiso/artifacts/audits/poc/poc_bg001_bg002_verification.py` (6 passing)
+  - `py -3 paradiso/artifacts/audits/poc/poc_f007_verification.py` (4 passing)
+  - `py -3 paradiso/artifacts/audits/poc/poc_f006_f008_verification.py` (3 passing)
+  - `py -3 paradiso/artifacts/audits/poc/poc_f004_verification.py` (4 passing)
+  - `py -3 paradiso/artifacts/audits/poc/poc_f010_verification.py` (5 passing / defect eliminated)
+
+---
+
+## 7. Developer Handover Dossier
+
+### 7.1 Current System State & Status
+- **Progress:** 12 out of 14 audit findings are completely **RESOLVED and VERIFIED** (F-001 through F-010, F-013, F-014, BG-001, BG-002).
+- **Test Integrity:** 72/72 unit tests passing in ~5.5s. All legacy test files (`tests/test_api.py`, `tests/test_services.py`, `tests/test_settings.py`, `tests/test_storage.py`) are **strictly frozen and untouched**.
+- **Audit Files:** The `artifacts/audits/` directory is **strictly read-only**. Independent auditor has archived BG-001 and BG-002 in `resolved_findings_registry.md`.
+
+### 7.2 Core Architectural Invariants Enforced
+1. **The Receipt Contract (F-004):** Reports must write receipts to `paradiso/logs/{name}.json` (or `{name}_*.json`). Scripts exiting without receipts are contract violations and route to failure after retries. Dependency skips dumped by scripts rotate with zero retry penalty.
+2. **Process Watcher Identification (F-006):** Uses monotonic launch integer `_exec_id` and stamps `_was_killed = True` directly onto `Popen` objects, eliminating CPython heap address reuse bugs.
+3. **Windows Subprocess Tree Termination (F-008):** `Runner.kill_all()` invokes `taskkill /F /T /PID` to eliminate parent, child, and grandchild trees on Windows, followed by synchronous `wait()` outside `_proc_lock` (F-014).
+4. **Storage Rescue Deduplication (F-007):** Two-tier `(mtime_ns, size)` cache and latest `.bak` byte matching prevent runaway backup floods during storage corruption, retaining at most 5 latest `.bak` files.
+5. **Lifecycle Mutex & 10s Cooldown (BG-002 & F-009):** `Paradiso` guards `start()`, `start_daemon()`, and `stop()` with `_lifecycle_lock`. A 10-second transition cooldown is enforced (HTTP 429 on rapid toggles), and `start()` checks `is_running()` before touching `start_fresh_run()`, preventing in-flight job resets.
+6. **Idle-Only Settings Guardrail (BG-001):** `POST /api/settings` returns HTTP 409 Conflict if the scheduler is active or jobs are in flight. The Web UI disables the Save button with an amber banner.
+7. **22:00 Cutoff Hard Kill & Clean Midnight Rollover (F-010):**
+   - At 22:00 cutoff (`_close_day`), all active tasks in `current_runs` (including re-runs) are killed and marked `Failed` (`"Forcibly terminated: breached 10:00 PM cutoff"`).
+   - In `tick()`, `is_new_day = (today_date != self._active_date)` triggers full rollover even if tomorrow's date record already exists in storage, clearing stray runs and resetting automations to `"Waiting"`.
+
+### 7.3 Immediate Next Steps for Next Developer (Phase 9: F-011 & F-012)
+1. **F-011 (UI Polling Backoff & Dynamic Countdown):**
+   - In `paradiso/web/static/js/app.js`: Change timeline polling interval from 1,000ms to 5,000ms (`setInterval(loadTimeline, 5000);`) and append `?limit=50`.
+   - Add client-side pre-validation in `handleSettingsSubmit`: check `timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/` and chronological sequence `startTime < idleTime && idleTime <= closeTime`.
+   - In `paradiso/controllers/dashboard_controller.py:get_stats()`: Replace hardcoded `"countdown": "32 min"` with dynamic calculation of minutes remaining until `r.scheduled_time` using `CLOCK.time_str()`.
+   - In `DashboardController.get_timeline()`: Support query parameters `?limit=N` and `?order=asc|desc`.
+2. **F-012 (Documentation Drift Correction):**
+   - In `paradiso/TECHNICAL_DOCUMENTATION.md`: Correct timeline description to reflect chronological (oldest-first) default ordering, and document `/api/automation/disable` and `/api/dashboard/system-status`.
+3. **Operating Mandate Reminder:**
+   - **Never modify project files without explicit user GO.**
+   - **Never modify legacy test files.** Add tests only to `paradiso/tests/test_audit_fixes.py`.
+   - **Never edit anything inside `artifacts/audits/`.**
+

@@ -858,6 +858,349 @@ class TestAuditFixes(unittest.TestCase):
         # Only 1 rotation event should exist within the 10s cooldown window, not 3
         self.assertEqual(len(rotation_events), 1)
 
+    # ----------------------------------------------------------------------
+    # 9. F-006 & F-008: Process Watcher Suppression & Windows Tree-Kill
+    # ----------------------------------------------------------------------
+    def test_f006_address_reuse_does_not_suppress_new_process(self):
+        """Verifies that killed process tracking does not suppress callbacks of subsequent processes under memory address reuse."""
+        import subprocess, sys
+        runner = Runner()
+        good_called = []
+        fail_called = []
+
+        def on_good(dur, out):
+            good_called.append(out)
+
+        def on_fail(dur, err):
+            fail_called.append(err)
+
+        # 1. Start process 1 and terminate it via kill_all()
+        p1 = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"])
+        with runner._proc_lock:
+            runner._exec_counter += 1
+            exec_id_1 = runner._exec_counter
+            p1._exec_id = exec_id_1
+            p1._was_killed = False
+            runner.active_processes["Report_Gamma"] = p1
+
+        runner.kill_all()
+
+        # p1 callback must be suppressed
+        runner._watcher("Report_Gamma", p1, time.time(), on_good, on_fail, exec_id_1)
+        self.assertEqual(len(good_called), 0)
+        self.assertEqual(len(fail_called), 0)
+
+        # 2. Start process 2 with the SAME report name
+        # Even if Python heap allocator reuses the memory address or the name was in killed_processes:
+        p2 = subprocess.Popen([sys.executable, "-c", "print('Gamma succeeded', flush=True)"], stdout=subprocess.PIPE, text=True)
+        with runner._proc_lock:
+            runner._exec_counter += 1
+            exec_id_2 = runner._exec_counter
+            p2._exec_id = exec_id_2
+            p2._was_killed = False
+            runner.active_processes["Report_Gamma"] = p2
+
+        self.assertNotEqual(exec_id_1, exec_id_2)
+        self.assertNotIn(exec_id_2, runner.killed_exec_ids)
+
+        # p2 completes normally: its good callback MUST fire!
+        runner._watcher("Report_Gamma", p2, time.time(), on_good, on_fail, exec_id_2)
+        if p2.stdout:
+            p2.stdout.close()
+        self.assertEqual(len(good_called), 1)
+        self.assertIn("Gamma succeeded", good_called[0])
+        self.assertEqual(len(fail_called), 0)
+
+    def test_f008_process_tree_killed_on_windows(self):
+        """Verifies that Runner.kill_all terminates both parent and child process trees on Windows."""
+        import sys, subprocess, time
+        if sys.platform != "win32":
+            self.skipTest("Windows tree-kill is specific to win32 platform.")
+
+        parent_script = self.dir_path / "tree_parent.py"
+        parent_script.write_text(
+            'import subprocess, sys, time\n'
+            'child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])\n'
+            'print(f"CHILD_PID:{child.pid}", flush=True)\n'
+            'time.sleep(60)\n',
+            encoding="utf-8"
+        )
+
+        runner = Runner()
+        proc = subprocess.Popen(
+            [sys.executable, str(parent_script)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        runner.active_processes["test_tree"] = proc
+
+        # Read child PID output from stdout
+        line = proc.stdout.readline()
+        self.assertIn("CHILD_PID:", line)
+        child_pid = int(line.split("CHILD_PID:")[1].strip())
+
+        # Invoke kill_all
+        runner.kill_all()
+        time.sleep(0.5)
+
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            proc.stderr.close()
+
+        # 1. Parent process must be dead
+        self.assertIsNotNone(proc.poll(), "Parent process must be dead after kill_all()")
+
+        # 2. Child process must also be terminated
+        check = subprocess.run(["tasklist", "/FI", f"PID eq {child_pid}"], capture_output=True, text=True)
+        child_survived = str(child_pid) in check.stdout
+        self.assertFalse(child_survived, f"Child PID {child_pid} must be killed by taskkill tree-kill in kill_all()")
+
+    # ----------------------------------------------------------------------
+    # 10. F-007: Storage Corruption Rescue Backup Deduplication
+    # ----------------------------------------------------------------------
+    def test_f007_storage_corruption_does_not_flood_bak_files(self):
+        """Verifies that persistent storage corruption creates at most 1 rescue backup and does not flood the directory on repeated ticks."""
+        corrupt_file = self.dir_path / "test_corrupt_flood.json"
+        corrupt_file.write_text("{damaged_syntax...", encoding="utf-8")
+
+        storage = StorageBase(corrupt_file)
+
+        # 1. First read creates initial backup
+        with self.assertRaises(StorageCorruptionError):
+            storage._read_json()
+
+        bak_files = list(self.dir_path.glob("test_corrupt_flood_corrupted_*.bak"))
+        self.assertEqual(len(bak_files), 1, "Initial corruption must create exactly 1 rescue backup.")
+
+        # 2. Simulate 5 consecutive scheduler ticks across time
+        for _ in range(5):
+            time.sleep(0.05)
+            with self.assertRaises(StorageCorruptionError):
+                storage._read_json()
+
+        bak_files_after_ticks = list(self.dir_path.glob("test_corrupt_flood_corrupted_*.bak"))
+        self.assertEqual(
+            len(bak_files_after_ticks),
+            1,
+            f"Repeated ticks must not flood .bak files! Found {len(bak_files_after_ticks)}, expected 1."
+        )
+
+        # 3. New corruption modification generates a new backup for the new state
+        time.sleep(0.05)
+        corrupt_file.write_text("{different_broken_json...", encoding="utf-8")
+        with self.assertRaises(StorageCorruptionError):
+            storage._read_json()
+
+        bak_files_modified = list(self.dir_path.glob("test_corrupt_flood_corrupted_*.bak"))
+        self.assertEqual(len(bak_files_modified), 2, "A new corruption state should produce a new rescue copy.")
+
+    # ----------------------------------------------------------------------
+    # 11. BG-002 & F-009: Start/Stop Cooldown & Mutex Concurrency Guards
+    # ----------------------------------------------------------------------
+    def test_f009_concurrent_start_calls_spawn_single_thread(self):
+        """Verifies that concurrent calls to start() under _lifecycle_lock spawn strictly 1 loop thread."""
+        import threading
+        threads = []
+        results = []
+
+        def worker():
+            res = self.paradiso.start()
+            results.append(res)
+
+        for _ in range(10):
+            t = threading.Thread(target=worker)
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        try:
+            self.assertTrue(self.paradiso.is_running())
+            # Exactly 1 thread was started
+            started_count = sum(1 for r in results if r.status == "started")
+            self.assertEqual(started_count, 1, "Strictly one start() call should spawn the daemon thread.")
+        finally:
+            self.paradiso.stop()
+
+    def test_f009_start_while_running_does_not_reset_in_flight_jobs(self):
+        """Verifies Trap 1: calling start() while running does NOT wipe retry counts or reset running reports."""
+        self.paradiso.start()
+        try:
+            # Simulate in-flight job
+            with self.paradiso.intraday_service._lock:
+                self.paradiso.intraday_service.current_runs["Test_InFlight"] = "09:00"
+                self.paradiso.intraday_service.retry_counts["Test_InFlight"] = 2
+                self.paradiso.intraday_service.automation_service.update_status(
+                    name="Test_InFlight",
+                    status="Running",
+                    duration="10s"
+                )
+
+            # Call start() while already running
+            res = self.paradiso.start()
+            self.assertEqual(res.status, "already_running")
+
+            # Assert retry counts and in-flight status were NOT wiped!
+            self.assertEqual(
+                self.paradiso.intraday_service.retry_counts.get("Test_InFlight"),
+                2,
+                "In-flight retry counts must NOT be wiped by redundant start() calls!"
+            )
+            self.assertIn("Test_InFlight", self.paradiso.intraday_service.current_runs)
+        finally:
+            self.paradiso.stop()
+
+    def test_bg002_start_stop_cooldown_enforced(self):
+        """Verifies BG-002: rapid start/stop toggling within cooldown returns HTTP 429 Too Many Requests."""
+        self.paradiso._enforce_cooldown = True
+        self.paradiso.transition_cooldown = 10.0
+
+        try:
+            # 1. Start succeeds
+            res_start = self.client.post("/api/paradiso/start")
+            self.assertEqual(res_start.status_code, 200)
+
+            # 2. Immediate stop fails with 429 Too Many Requests
+            res_stop_early = self.client.post("/api/paradiso/stop")
+            self.assertEqual(res_stop_early.status_code, 429)
+            data_early = json.loads(res_stop_early.data)
+            self.assertFalse(data_early.get("ok"))
+            self.assertIn("cooldown active", data_early.get("error", "").lower())
+            self.assertGreater(data_early.get("cooldown_remaining", 0), 0)
+
+            # 3. Status endpoint reports cooldown remaining
+            res_status = self.client.get("/api/paradiso/status")
+            data_status = json.loads(res_status.data)
+            self.assertGreater(data_status.get("cooldown_remaining", 0), 0)
+
+            # 4. Advance time past 10s cooldown
+            self.paradiso._last_transition_time -= 11.0
+
+            # 5. Stop now succeeds with 200
+            res_stop_ok = self.client.post("/api/paradiso/stop")
+            self.assertEqual(res_stop_ok.status_code, 200)
+            data_stop_ok = json.loads(res_stop_ok.data)
+            self.assertTrue(data_stop_ok.get("ok"))
+        finally:
+            self.paradiso._enforce_cooldown = False
+            self.paradiso.stop()
+
+    def test_f009_stop_synchronously_joins_thread(self):
+        """Verifies Trap 2: stop() synchronously joins daemon thread so no zombie thread survives."""
+        self.paradiso.start()
+        thread_ref = self.paradiso._thread
+        self.assertIsNotNone(thread_ref)
+        self.assertTrue(thread_ref.is_alive())
+
+        self.paradiso.stop()
+        self.assertFalse(thread_ref.is_alive(), "Daemon thread must be dead immediately after stop() returns.")
+        self.assertIsNone(self.paradiso._thread)
+
+    def test_bg001_settings_mutation_rejected_when_active(self):
+        """Verifies BG-001: POST /api/settings returns HTTP 409 Conflict when scheduler is active or jobs in flight."""
+        # 1. When scheduler is running, POST /api/settings rejected with HTTP 409
+        self.paradiso.start()
+        try:
+            res_running = self.client.post("/api/settings", json={"scheduler": {"job_interval_seconds": 25}})
+            self.assertEqual(res_running.status_code, 409)
+            data_running = json.loads(res_running.data)
+            self.assertFalse(data_running.get("ok"))
+            self.assertIn("Settings cannot be modified while Paradiso scheduler is running", data_running.get("error", ""))
+        finally:
+            self.paradiso.stop()
+
+        # 2. When scheduler is idle, POST /api/settings succeeds with HTTP 200
+        res_idle = self.client.post("/api/settings", json={"scheduler": {"job_interval_seconds": 15}})
+        self.assertEqual(res_idle.status_code, 200)
+        data_idle = json.loads(res_idle.data)
+        self.assertTrue(data_idle.get("ok"))
+
+        # 3. When scheduler thread is stopped but in-flight jobs remain in current_runs, POST /api/settings rejected with HTTP 409
+        self.paradiso.intraday_service.current_runs["SimulatedReport"] = object()
+        try:
+            res_inflight = self.client.post("/api/settings", json={"scheduler": {"job_interval_seconds": 20}})
+            self.assertEqual(res_inflight.status_code, 409)
+            data_inflight = json.loads(res_inflight.data)
+            self.assertFalse(data_inflight.get("ok"))
+            self.assertIn("Settings cannot be modified while Paradiso scheduler is running", data_inflight.get("error", ""))
+        finally:
+            self.paradiso.intraday_service.current_runs.clear()
+
+        # 4. Once jobs clear, POST /api/settings succeeds again
+        res_cleared = self.client.post("/api/settings", json={"scheduler": {"job_interval_seconds": 15}})
+        self.assertEqual(res_cleared.status_code, 200)
+
+    def test_f010_cutoff_kills_running_tasks_and_rollover_is_clean(self):
+        """Verifies F-010: 22:00 cutoff forcibly kills running tasks with Failed status, and midnight rollover is clean."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        date_today = CLOCK.date_str()
+
+        # 1. Fresh in-flight report at 22:00 cutoff
+        auto_svc.update_status(name="SF Base", status="Running", started_at="21:45")
+        intra_svc.current_runs["SF Base"] = CLOCK.formatted_now()
+        intra_svc.waitlist.append("SF Base")
+
+        # Trigger 22:00 day closure
+        intra_svc._close_day(date_today)
+
+        # In-flight task must be forcibly killed and cleared from current_runs
+        self.assertEqual(len(intra_svc.current_runs), 0, "current_runs must be cleared on 22:00 cutoff")
+        self.assertEqual(len(intra_svc.waitlist), 0, "waitlist must be cleared on 22:00 cutoff")
+
+        # Automation status must be Failed with cutoff breach reason
+        sf_report = auto_svc.get_by_name("SF Base")
+        self.assertIsNotNone(sf_report)
+        self.assertEqual(sf_report.status, "Failed")
+        self.assertIn("breached 10:00 PM cutoff", sf_report.last_output)
+
+        # 2. Attack Vector 1: Re-run report (already in reports_ran from earlier today) running at 22:00 cutoff
+        # Ensure it transitions to "Failed" instead of staying stuck in "Running"
+        day_record = intra_svc.intraday_repo.get_day(date_today)
+        self.assertIn("SF Base", day_record.reports_ran)
+        auto_svc.update_status(name="SF Base", status="Running", started_at="21:55")
+        intra_svc.current_runs["SF Base"] = CLOCK.formatted_now()
+
+        intra_svc._close_day(date_today)
+        self.assertEqual(len(intra_svc.current_runs), 0)
+        sf_rerun = auto_svc.get_by_name("SF Base")
+        self.assertEqual(sf_rerun.status, "Failed", "Re-run in-flight at cutoff MUST transition to Failed!")
+
+        # 3. Attack Vector 2: Crossing midnight into a pre-existing day record in intraday.json
+        sim_tomorrow = "2029-12-31"
+        # Pre-seed tomorrow's day record so get_day returns an existing day
+        pre_existing_day = IntradayDay(
+            date=sim_tomorrow,
+            status=Intraday.WAITING_TO_OPEN,
+            expected_reports=[],
+            reports_ran={},
+            timeline=[]
+        )
+        intra_svc.intraday_repo.add_day(pre_existing_day)
+        intra_svc.current_runs["Stray_Report"] = CLOCK.formatted_now()
+
+        # Advance clock to tomorrow
+        orig_date_str = CLOCK.date_str
+        try:
+            CLOCK.date_str = lambda: sim_tomorrow
+            intra_svc.is_active = True
+            intra_svc.tick()
+
+            # Defense-in-depth: Stray run must be terminated and cleared even on pre-existing day
+            self.assertEqual(len(intra_svc.current_runs), 0, "current_runs must be cleared on new day rollover!")
+
+            # All active automations must be reset to Waiting for the new day
+            sf_tomorrow = auto_svc.get_by_name("SF Base")
+            self.assertEqual(sf_tomorrow.status, "Waiting")
+            self.assertIn("SF Base", intra_svc.waitlist)
+        finally:
+            CLOCK.date_str = orig_date_str
+            intra_svc.is_active = False
+
 if __name__ == "__main__":
     unittest.main()
+
 

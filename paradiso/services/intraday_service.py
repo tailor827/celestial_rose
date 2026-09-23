@@ -28,6 +28,7 @@ class IntradayService:
         self.day_closed: bool = False
         self.is_active: bool = False
         self.force_open: bool = False
+        self._active_date: str = CLOCK.date_str()
 
         # Queue pass tracking and starvation cooldown (F-005)
         self._cycle_pass_reports: Set[str] = set()
@@ -242,26 +243,52 @@ class IntradayService:
             today_date = CLOCK.date_str()
             day = self.intraday_repo.get_day(today_date)
             status = self.resolve_status()
+            is_new_day = (today_date != self._active_date)
 
-            if not day:
+            if not day or is_new_day:
+                self._active_date = today_date
                 # Reconcile past days upon crossing midnight
                 self._reconcile_past_days(today_date)
+
+                # F-010 Defense-in-depth: Ensure zero lingering processes or runs cross into the new day
+                if self.current_runs:
+                    self.execution_service.runner.kill_all()
+                    for r_name in list(self.current_runs.keys()):
+                        self.automation_service.update_status(
+                            name=r_name,
+                            status="Failed",
+                            last_output="Forcibly terminated at midnight rollover"
+                        )
+                    self.current_runs.clear()
+
                 self.retry_counts.clear()
+                self.waitlist.clear()
 
                 waiting = self.automation_service.set_waiting_all()
-                day = IntradayDay(
-                    date=today_date,
-                    status=status,
-                    expected_reports=waiting,
-                    reports_ran={},
-                    timeline=[TimelineEvent(
-                        timestamp=CLOCK.time_str(),
+                if not day:
+                    day = IntradayDay(
+                        date=today_date,
+                        status=status,
+                        expected_reports=waiting,
+                        reports_ran={},
+                        timeline=[TimelineEvent(
+                            timestamp=CLOCK.time_str(),
+                            title="Day Initialized",
+                            description=f"Paradiso day initialized for {today_date} (All reports reset to Waiting)",
+                            type="system"
+                        )]
+                    )
+                    self.intraday_repo.add_day(day)
+                else:
+                    if day.status != status:
+                        self.intraday_repo.update_status(today_date, status)
+                    self.intraday_repo.add_timeline_event(
+                        date=today_date,
                         title="Day Initialized",
                         description=f"Paradiso day initialized for {today_date} (All reports reset to Waiting)",
-                        type="system"
-                    )]
-                )
-                self.intraday_repo.add_day(day)
+                        event_type="system"
+                    )
+
                 if self.is_active:
                     self.waitlist = deque(waiting)
                 self.day_closed = False
@@ -304,6 +331,7 @@ class IntradayService:
     def _close_day(self, date: str):
         """Terminate lingering processes and mark remaining uncompleted reports as failed at 10:00 PM cutoff."""
         self.execution_service.runner.kill_all()
+        running_reports = set(self.current_runs.keys())
         self.current_runs.clear()
 
         day = self.intraday_repo.get_day(date)
@@ -311,11 +339,12 @@ class IntradayService:
         all_reports = self.automation_service.get_all()
 
         for r in all_reports:
-            if r.name not in already_ran and r.status != "Completed":
+            if r.name in running_reports or (r.name not in already_ran and r.status != "Completed"):
+                reason = "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)" if r.name in running_reports else "Not completed before 10:00 PM cutoff"
                 self.automation_service.update_status(
                     name=r.name,
                     status="Failed",
-                    last_output="Not completed before 10:00 PM cutoff"
+                    last_output=reason
                 )
                 self.intraday_repo.add_report_run(
                     date=date,
@@ -325,14 +354,14 @@ class IntradayService:
                         finished_at=CLOCK.formatted_now(),
                         result="failed",
                         duration="0s",
-                        reason="Not completed before 10:00 PM cutoff"
+                        reason=reason
                     )
                 )
         self.waitlist.clear()
         self.intraday_repo.add_timeline_event(
             date=date,
             title="Paradiso closed",
-            description="Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
+            description="Intraday execution window closed at 10:00 PM; all running tasks forcibly killed and uncompleted reports logged as Failed",
             event_type="system"
         )
 

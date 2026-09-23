@@ -18,6 +18,8 @@ class Runner:
         self.active_processes: Dict[str, subprocess.Popen] = {}
         self.killed_processes: set[str] = set()
         self.killed_process_ids: set[int] = set()
+        self.killed_exec_ids: set[int] = set()
+        self._exec_counter: int = 0
         self._proc_lock = threading.RLock()
 
     def _resolve_python(self) -> Path:
@@ -47,28 +49,55 @@ class Runner:
         return f"{secs}s"
 
     def kill_all(self):
-        """Terminates all currently running child subprocesses immediately."""
+        """Terminates all currently running child subprocesses immediately, including process trees."""
         with self._proc_lock:
-            for name, process in list(self.active_processes.items()):
+            procs = list(self.active_processes.items())
+            for name, process in procs:
                 self.killed_processes.add(name)
-                self.killed_process_ids.add(id(process))
+                setattr(process, "_was_killed", True)
+                exec_id = getattr(process, "_exec_id", None)
+                if exec_id is not None:
+                    self.killed_exec_ids.add(exec_id)
+
+                pid = getattr(process, "pid", None)
+                if pid and sys.platform == "win32":
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", str(pid)],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                        )
+                    except Exception:
+                        pass
+
                 try:
                     process.terminate()
                     process.kill()
                 except Exception:
                     pass
+
             self.active_processes.clear()
 
-    def _watcher(self, name: str, process: subprocess.Popen, start_time: float, callback_good: Callable, callback_fail: Callable):
+        # Wait for processes to exit and release OS handles outside the lock
+        for name, process in procs:
+            try:
+                process.wait(timeout=1.0)
+            except Exception:
+                pass
+
+    def _watcher(self, name: str, process: subprocess.Popen, start_time: float, callback_good: Callable, callback_fail: Callable, exec_id: Optional[int] = None):
         stdout, stderr = process.communicate()
+        proc_exec_id = exec_id if exec_id is not None else getattr(process, "_exec_id", None)
         with self._proc_lock:
             # Only remove from active_processes if this exact process instance is still the registered one
             if self.active_processes.get(name) is process:
                 self.active_processes.pop(name, None)
             
-            was_killed = id(process) in self.killed_process_ids or (name in self.killed_processes and self.active_processes.get(name) is not process)
-            self.killed_process_ids.discard(id(process))
-            if name in self.killed_processes and not any(id(p) in self.killed_process_ids for p in self.active_processes.values()):
+            was_killed = getattr(process, "_was_killed", False) or (proc_exec_id is not None and proc_exec_id in self.killed_exec_ids)
+            if proc_exec_id is not None:
+                self.killed_exec_ids.discard(proc_exec_id)
+            if name in self.killed_processes and self.active_processes.get(name) is not process:
                 self.killed_processes.discard(name)
 
         if was_killed:
@@ -96,11 +125,15 @@ class Runner:
                 text=True
             )
             with self._proc_lock:
+                self._exec_counter += 1
+                exec_id = self._exec_counter
+                process._exec_id = exec_id
+                process._was_killed = False
                 self.active_processes[name] = process
 
             threading.Thread(
                 target=self._watcher,
-                args=(name, process, start_time, callback_good, callback_fail),
+                args=(name, process, start_time, callback_good, callback_fail, exec_id),
                 daemon=True
             ).start()
         except Exception as e:
@@ -121,11 +154,15 @@ class Runner:
                 text=True
             )
             with self._proc_lock:
+                self._exec_counter += 1
+                exec_id = self._exec_counter
+                process._exec_id = exec_id
+                process._was_killed = False
                 self.active_processes[name] = process
 
             threading.Thread(
                 target=self._watcher,
-                args=(name, process, start_time, callback_good, callback_fail),
+                args=(name, process, start_time, callback_good, callback_fail, exec_id),
                 daemon=True
             ).start()
         except Exception as e:

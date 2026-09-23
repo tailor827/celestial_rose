@@ -1,12 +1,17 @@
+from typing import Optional, TYPE_CHECKING
 from flask import Flask, jsonify, request
 from services.intraday_service import IntradayService
 from utils.config import get_sanitized_config, save_config
 from utils.clock import CLOCK
 
+if TYPE_CHECKING:
+    from services.paradiso import Paradiso
+
 class SettingsController:
     """REST API Controller for configuration management and dynamic runtime updates."""
-    def __init__(self, app: Flask, intraday_service: IntradayService):
+    def __init__(self, app: Flask, intraday_service: IntradayService, paradiso: Optional["Paradiso"] = None):
         self.intraday_service = intraday_service
+        self.paradiso = paradiso
         self._register_routes(app)
 
     def _register_routes(self, app: Flask):
@@ -26,6 +31,19 @@ class SettingsController:
         return jsonify({"ok": True, "settings": cfg}), 200
 
     def update_settings(self):
+        # BG-001: Idle-Only Configuration Guardrail
+        is_active = False
+        if self.paradiso and self.paradiso.is_running():
+            is_active = True
+        elif self.intraday_service and (self.intraday_service.is_active or len(self.intraday_service.current_runs) > 0):
+            is_active = True
+
+        if is_active:
+            return jsonify({
+                "ok": False,
+                "error": "Settings cannot be modified while Paradiso scheduler is running. Please stop Paradiso before updating settings."
+            }), 409
+
         data = request.get_json(silent=True)
         if not data or not isinstance(data, dict):
             return jsonify({"ok": False, "error": "Invalid JSON body provided."}), 400
