@@ -1,6 +1,6 @@
 # Resolved Findings Registry — Paradiso
 
-**Date:** 2026-09-23 15:00  
+**Date:** 2026-09-23 23:30  
 **Auditor:** Independent Adversarial Auditor  
 **Location:** `artifacts/audits/resolved/resolved_findings_registry.md`
 
@@ -24,6 +24,8 @@
 | **F-014** | LOW | CONCURRENCY | I-11 | Blocking `process.wait(timeout=1.0)` held under `_proc_lock` in `kill_all()` | Moved `wait()` loop outside `_proc_lock`, reducing hold time to $< 1\text{ms}$ |
 | **BG-001** | HIGH | SECURITY / INTEGRITY | I-7, I-9 | Idle-Only Configuration Guardrail: Settings mutation while scheduler active | Verified in `tests/test_audit_fixes.py` & `poc_bg001_bg002_verification.py` (HTTP 409 Conflict) |
 | **BG-002** | HIGH | STABILITY / CONCURRENCY | I-1, I-3 | Start/Stop Transition Cooldown & Mutex Guard | Verified in `tests/test_audit_fixes.py` & `poc_bg001_bg002_verification.py` (HTTP 429 Cooldown) |
+| **F-011** | LOW | UI | I-7 | 1-second unpaginated timeline polling & hardcoded dashboard countdown | Verified in `tests/test_audit_fixes.py` (`test_f011_dashboard_stats_no_mock_countdown`, `test_f011_dashboard_timeline_pagination_and_ordering`) |
+| **F-012** | LOW | DOC-DRIFT | I-7 | Documentation drift on timeline ordering & undocumented API endpoints | Verified in `tests/test_audit_fixes.py` (`test_f012_documented_endpoints_functional`) |
 
 ---
 
@@ -84,3 +86,11 @@
 ### BG-002: Start/Stop Transition Cooldown & Mutex Guard
 - **Mechanism:** Enforced 10-second transition cooldown on `/api/paradiso/start` and `/api/paradiso/stop`. Rapid calls within cooldown rejected with HTTP 429 and `cooldown_remaining` payload. Frontend UI displays a visual countdown on the button (`⏳ Cooldown (Xs)`) and disables action buttons until expiration.
 - **Evidence:** Rapid start/stop cycling blocked with HTTP 429; transitions succeed cleanly upon cooldown expiration.
+
+### F-011: UI Polling Rate & Dashboard Countdown
+- **Mechanism:** Decoupled `fetchTimeline()` from the 1-second polling loop into a dedicated 5-second `setInterval`. Added server-side `?limit=N` and `?order=asc|desc` query parameters to `DashboardController.get_timeline()`. Frontend now requests `?limit=50`. Removed static `"countdown": "32 min"` placeholder from `DashboardController.get_stats()` — `next_scheduled` returns only `name`, `team`, and `scheduled_time`.
+- **Evidence:** Timeline polling reduced from 1000ms to 5000ms. Payload bounded to 50 events. No `countdown` field in stats response. 2 regression tests passing.
+
+### F-012: Documentation Drift & Endpoint Discovery
+- **Mechanism:** Corrected `TECHNICAL_DOCUMENTATION.md` API table: `/api/dashboard/timeline` documented as returning chronological (oldest-first) order by default with `?order=asc|desc` support. Added entries for `/api/dashboard/system-status` and `/api/automation/disable` to the API reference table.
+- **Evidence:** Documentation matches implementation. All 3 newly documented endpoints verified functional with correct HTTP error codes (400, 404, 200). 1 regression test passing.

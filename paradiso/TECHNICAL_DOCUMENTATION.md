@@ -306,10 +306,12 @@ storage.mutate(lambda data: data[date].setdefault("timeline", []).append(event))
 | :--- | :--- | :--- |
 | `GET /` | `GET` | Main application dashboard and Single Page Application HTML. |
 | `GET /api/dashboard/stats` | `GET` | Returns report metric counts, execution rates, simulated date/time, and window status. |
-| `GET /api/dashboard/timeline` | `GET` | Returns today's timeline audit events in newest-first order. |
+| `GET /api/dashboard/timeline` | `GET` | Returns today's timeline audit events in chronological (oldest-first) order by default. Supports query parameters `?limit=N` and `?order=asc\|desc`. |
+| `GET /api/dashboard/system-status` | `GET` | Returns subsystem operational status and health check across services. |
 | `GET /api/automations` | `GET` | Returns list of all registered reports with current status and metadata. |
 | `POST /api/automation/add` | `POST` | Registers a new report, validates uniqueness, and enqueues if scheduler is active. |
 | `DELETE /api/automation/delete/<name>` | `DELETE` | Deletes report from catalog and evicts from active waitlist. |
+| `POST /api/automation/disable` | `POST` | Disables a report by name (`{"name": "Report Name"}`), preventing future intraday scheduling. |
 | `POST /api/automations/reset` | `POST` | Resets all reports to `Waiting`, kills active processes, sets Standby mode. |
 | `POST /api/paradiso/start` | `POST` | Starts or resumes intraday queue scheduler in active mode. |
 | `POST /api/paradiso/stop` | `POST` | Pauses execution, clears `waitlist`, kills running subprocesses. |

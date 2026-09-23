@@ -1200,6 +1200,139 @@ class TestAuditFixes(unittest.TestCase):
             CLOCK.date_str = orig_date_str
             intra_svc.is_active = False
 
+    # ----------------------------------------------------------------------
+    # 13. F-011: Dashboard Stats Mock Countdown Removal & Timeline Pagination
+    # ----------------------------------------------------------------------
+    def test_f011_dashboard_stats_no_mock_countdown(self):
+        """Verifies that next_scheduled in /api/dashboard/stats does not contain a hardcoded mock countdown."""
+        res = self.client.get("/api/dashboard/stats")
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)
+        self.assertTrue(data.get("ok"))
+        next_sched = data.get("next_scheduled")
+        if next_sched is not None:
+            self.assertIn("name", next_sched)
+            self.assertIn("scheduled_time", next_sched)
+            self.assertNotIn("countdown", next_sched, "Static mock 'countdown' field must be removed from next_scheduled.")
+
+    def test_f011_dashboard_timeline_pagination_and_ordering(self):
+        """Verifies that /api/dashboard/timeline supports ?limit=N and ?order=asc|desc."""
+        # Seed 5 distinct timeline events in today's intraday record
+        today = CLOCK.date_str()
+        from models.intraday import TimelineEvent
+        intra_repo = self.paradiso.intraday_service.intraday_repo
+        day = intra_repo.get_day(today)
+        if not day:
+            day = IntradayDay(
+                date=today,
+                status=Intraday.OPEN,
+                expected_reports=[],
+                reports_ran={},
+                timeline=[]
+            )
+            intra_repo.add_day(day)
+
+        events = [
+            TimelineEvent(timestamp=f"08:0{i} AM", title=f"Event {i}", description=f"Desc {i}", type="system")
+            for i in range(1, 6)
+        ]
+        def _add_events(d):
+            d[today]["timeline"] = [e.to_dict() for e in events]
+        intra_repo.mutate(_add_events)
+
+        # 1. Default: returns all 5 in chronological (oldest-first) order
+        res_default = self.client.get("/api/dashboard/timeline")
+        self.assertEqual(res_default.status_code, 200)
+        data_default = json.loads(res_default.data)
+        self.assertEqual(len(data_default["timeline"]), 5)
+        self.assertEqual(data_default["timeline"][0]["title"], "Event 1")
+        self.assertEqual(data_default["timeline"][-1]["title"], "Event 5")
+
+        # 2. limit=3 in ascending order returns the last 3 (most recent chronological events)
+        res_limit = self.client.get("/api/dashboard/timeline?limit=3")
+        self.assertEqual(res_limit.status_code, 200)
+        data_limit = json.loads(res_limit.data)
+        self.assertEqual(len(data_limit["timeline"]), 3)
+        self.assertEqual(data_limit["timeline"][0]["title"], "Event 3")
+        self.assertEqual(data_limit["timeline"][-1]["title"], "Event 5")
+
+        # 3. order=desc returns newest-first order
+        res_desc = self.client.get("/api/dashboard/timeline?order=desc")
+        self.assertEqual(res_desc.status_code, 200)
+        data_desc = json.loads(res_desc.data)
+        self.assertEqual(len(data_desc["timeline"]), 5)
+        self.assertEqual(data_desc["timeline"][0]["title"], "Event 5")
+        self.assertEqual(data_desc["timeline"][-1]["title"], "Event 1")
+
+        # 4. limit=2 with order=desc returns the top 2 newest events
+        res_desc_limit = self.client.get("/api/dashboard/timeline?limit=2&order=desc")
+        self.assertEqual(res_desc_limit.status_code, 200)
+        data_desc_limit = json.loads(res_desc_limit.data)
+        self.assertEqual(len(data_desc_limit["timeline"]), 2)
+        self.assertEqual(data_desc_limit["timeline"][0]["title"], "Event 5")
+        self.assertEqual(data_desc_limit["timeline"][1]["title"], "Event 4")
+
+    # ----------------------------------------------------------------------
+    # 14. F-012: Documented Endpoints Functional Verification
+    # ----------------------------------------------------------------------
+    def test_f012_documented_endpoints_functional(self):
+        """Verifies that newly documented endpoints (/api/dashboard/system-status, /api/automation/disable) function correctly."""
+        # 1. System status
+        res_status = self.client.get("/api/dashboard/system-status")
+        self.assertEqual(res_status.status_code, 200)
+        data_status = json.loads(res_status.data)
+        self.assertTrue(data_status.get("ok"))
+        self.assertEqual(data_status.get("status"), "All Systems Operational")
+        self.assertIn("services", data_status)
+        self.assertTrue(data_status["services"].get("scheduler"))
+        self.assertTrue(data_status["services"].get("execution_service"))
+
+        # 2. Disable automation error handling
+        res_dis_none = self.client.post("/api/automation/disable", json={})
+        self.assertEqual(res_dis_none.status_code, 400)
+
+        res_dis_404 = self.client.post("/api/automation/disable", json={"name": "Non_Existent_Report_XYZ"})
+        self.assertEqual(res_dis_404.status_code, 404)
+
+        # 3. Disable existing automation
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.delete("Disability_Test_Report")
+        try:
+            res_add = self.client.post("/api/automation/add", json={
+                "name": "Disability_Test_Report",
+                "filename": "sample_report_blueprint.py",
+                "filetype": "python",
+                "dir": "../reports"
+            })
+            self.assertEqual(res_add.status_code, 201)
+
+            res_disable = self.client.post("/api/automation/disable", json={"name": "Disability_Test_Report"})
+            self.assertEqual(res_disable.status_code, 200)
+            data_dis = json.loads(res_disable.data)
+            self.assertTrue(data_dis.get("ok"))
+
+            # Verify status is Disabled
+            report = auto_svc.get_by_name("Disability_Test_Report")
+            self.assertIsNotNone(report)
+            self.assertEqual(report.status, "Disabled")
+        finally:
+            auto_svc.delete("Disability_Test_Report")
+
+    # ----------------------------------------------------------------------
+    # 15. In-App User Guide Rendering Verification
+    # ----------------------------------------------------------------------
+    def test_user_guide_tab_rendered(self):
+        """Verifies that the In-App User Guide tab and resources are rendered on the Web UI."""
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        html = res.data.decode("utf-8")
+        self.assertIn("nav-guide", html, "Sidebar must include nav-guide link.")
+        self.assertIn("view-guide", html, "DOM must include view-guide container.")
+        self.assertIn("How to Use Paradiso", html)
+        self.assertIn("The Receipt Contract", html)
+        self.assertIn("code-snippet-python", html)
+        self.assertIn("code-snippet-r", html)
+
 if __name__ == "__main__":
     unittest.main()
 

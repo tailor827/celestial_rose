@@ -21,6 +21,7 @@
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-timeline" class="nav-link" onclick="switchTab('timeline', event)"><span class="nav-icon">⏱</span> Timeline</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-executions" class="nav-link" onclick="switchTab('executions', event)"><span class="nav-icon">▷</span> Executions</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-settings" class="nav-link" onclick="switchTab('settings', event)"><span class="nav-icon">⚙</span> Settings</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-guide" class="nav-link" onclick="switchTab('guide', event)"><span class="nav-icon">📖</span> User Guide</a></li>
             </ul>
         </div>
         
@@ -566,6 +567,415 @@
                             <button type="button" class="btn-primary" onclick="fetchSettings()" style="padding: 10px 18px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">↻ Reload Saved</button>
                         </div>
                     </form>
+                </section>
+            </div>
+
+            <!-- User Guide Tab View -->
+            <div id="view-guide" class="tab-view content-container" style="display: none;">
+                <section class="guide-container">
+                    <!-- Hero Header -->
+                    <div class="guide-header">
+                        <div class="guide-badge">📖 FIELD MANUAL FOR DATA ANALYSTS & OPERATORS</div>
+                        <h1 class="guide-title">How to Use Paradiso</h1>
+                        <p class="guide-subtitle">A friendly, zero-jargon guide to writing, registering, and monitoring daily automated reports without breaking database servers.</p>
+                    </div>
+
+                    <!-- Guide Quick Navigation Cards -->
+                    <div class="guide-nav-cards">
+                        <a href="#guide-section-overview" class="guide-nav-card">
+                            <span class="guide-nav-icon">⚡</span>
+                            <h4>1-Minute Overview</h4>
+                            <p>What Paradiso does and how it runs.</p>
+                        </a>
+                        <a href="#guide-section-receipt" class="guide-nav-card">
+                            <span class="guide-nav-icon">📜</span>
+                            <h4>The Receipt Rule</h4>
+                            <p>How scripts prove they finished cleanly.</p>
+                        </a>
+                        <a href="#guide-section-blueprints" class="guide-nav-card">
+                            <span class="guide-nav-icon">📋</span>
+                            <h4>Starter Blueprints</h4>
+                            <p>Copy-paste templates for Python & R.</p>
+                        </a>
+                        <a href="#guide-section-how-to-add" class="guide-nav-card">
+                            <span class="guide-nav-icon">➕</span>
+                            <h4>Adding Reports</h4>
+                            <p>3 simple steps to register in the UI.</p>
+                        </a>
+                        <a href="#guide-section-badges" class="guide-nav-card">
+                            <span class="guide-nav-icon">🚦</span>
+                            <h4>Status Badges</h4>
+                            <p>Decoding Green, Blue, Yellow, Red.</p>
+                        </a>
+                        <a href="#guide-section-faq" class="guide-nav-card">
+                            <span class="guide-nav-icon">❓</span>
+                            <h4>Analyst FAQs</h4>
+                            <p>Quick answers to common questions.</p>
+                        </a>
+                    </div>
+
+                    <!-- Section 1: Overview -->
+                    <div id="guide-section-overview" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">01</span>
+                            <div>
+                                <h3>What is Paradiso & Why Do We Use It?</h3>
+                                <p>Understanding sequential queue execution in plain English</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p class="guide-prose">
+                                In data analytics and operations, scheduling 15 different heavy scripts to run at 8:00 AM can cause database query collisions, CPU spikes, and memory crashes. 
+                                <strong>Paradiso acts as your automated traffic controller:</strong> it lines up all daily reports and runs them <strong>strictly one at a time</strong>.
+                            </p>
+                            
+                            <h4 class="guide-subheading">The 24-Hour Daily Cycle: 4 Work Shifts</h4>
+                            <div class="guide-shift-grid">
+                                <div class="guide-shift-card">
+                                    <div class="shift-time">🌙 00:00 – 07:00</div>
+                                    <div class="shift-title">Reset & Rest</div>
+                                    <div class="shift-desc">Paradiso resets all daily reports back to <code>Waiting</code> so they are ready for the morning.</div>
+                                </div>
+                                <div class="guide-shift-card active-shift">
+                                    <div class="shift-time">☀️ 07:00 – 21:00</div>
+                                    <div class="shift-title">Active Work Window</div>
+                                    <div class="shift-desc">The queue is open! Paradiso picks up reports from the waitlist one-by-one and executes them.</div>
+                                </div>
+                                <div class="guide-shift-card">
+                                    <div class="shift-time">🌆 21:00 – 22:00</div>
+                                    <div class="shift-title">Wind-Down Window</div>
+                                    <div class="shift-desc">No new reports start. Any report already running is allowed to finish naturally.</div>
+                                </div>
+                                <div class="guide-shift-card">
+                                    <div class="shift-time">🛑 22:00 – 23:59</div>
+                                    <div class="shift-title">Hard 10 PM Cutoff</div>
+                                    <div class="shift-desc">Everything stops! Lingering processes are terminated to leave database servers clear for overnight ETL pipelines.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Receipt Contract -->
+                    <div id="guide-section-receipt" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">02</span>
+                            <div>
+                                <h3>The #1 Rule for Report Scripts: The Receipt Contract</h3>
+                                <p>How your Python or R script communicates with Paradiso</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <div class="guide-callout info">
+                                <strong>💡 Bank-Grade Rule:</strong> Silence is not success! In financial pipelines, a script that simply exits with zero output could have died silently. Paradiso requires every script to write a small <strong>JSON receipt</strong> to <code>paradiso/logs/{report_name}.json</code> before exiting.
+                            </div>
+
+                            <h4 class="guide-subheading">The 3 Sovereign Report Outcomes</h4>
+                            <div class="guide-outcomes-grid">
+                                <div class="outcome-card outcome-completed">
+                                    <div class="outcome-header">
+                                        <span class="outcome-badge badge-completed">Completed</span>
+                                        <strong>Extraction Succeeded</strong>
+                                    </div>
+                                    <p>Your script queried the database, generated the spreadsheet or deliverable, and saved its receipt. Paradiso logs it as finished and moves to the next report.</p>
+                                </div>
+
+                                <div class="outcome-card outcome-retrial">
+                                    <div class="outcome-header">
+                                        <span class="outcome-badge badge-retrial">Retrial (Skip)</span>
+                                        <strong>Upstream Table Not Ready</strong>
+                                    </div>
+                                    <p>Your script detected that yesterday's ledger or source table hasn't posted yet. Instead of crashing, your script emits <code>status: Retrial</code>. Paradiso politely <strong>moves your script to the back of the queue</strong> to try again later—<strong>with zero retry penalty!</strong></p>
+                                </div>
+
+                                <div class="outcome-card outcome-failed">
+                                    <div class="outcome-header">
+                                        <span class="outcome-badge badge-failed">Failed</span>
+                                        <strong>Real Code Error</strong>
+                                    </div>
+                                    <p>Your script threw an unhandled Python/R exception or syntax error. Paradiso retries it up to 3 times before setting it to Failed. You can inspect the error trace in the Executions tab.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Blueprints -->
+                    <div id="guide-section-blueprints" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">03</span>
+                            <div>
+                                <h3>Starter Blueprints (Copy & Paste)</h3>
+                                <p>Pre-built templates that automatically comply with the Receipt Contract</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <p class="guide-prose">
+                                Don't build from scratch! Use these official starter templates. They take zero command-line arguments and automatically write their receipts to the right folder:
+                            </p>
+
+                            <!-- Blueprint Tabs -->
+                            <div class="guide-code-container">
+                                <div class="guide-code-header">
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="btn-code-tab active" onclick="switchBlueprintTab('python')">🐍 Python Blueprint (sample_report_blueprint.py)</button>
+                                        <button class="btn-code-tab" onclick="switchBlueprintTab('r')">📊 R Blueprint (sample_report_blueprint.R)</button>
+                                    </div>
+                                    <button class="btn-copy-code" onclick="copyActiveBlueprint()">📋 Copy Template</button>
+                                </div>
+
+                                <!-- Python Code Snippet -->
+                                <pre id="code-snippet-python" class="guide-code-block"><code>import sys
+import json
+from pathlib import Path
+from datetime import datetime
+
+REPORT_NAME = "My_Custom_Report"
+
+def write_receipt(status: str, message: str, deliverable: str = None):
+    # Receipts must be written to paradiso/logs/{REPORT_NAME}.json
+    base_dir = Path(__file__).resolve().parent.parent / "paradiso" / "logs"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    receipt_file = base_dir / f"{REPORT_NAME}.json"
+    
+    data = {
+        "report_name": REPORT_NAME,
+        "status": status,  # "Completed" | "Retrial" | "Failed"
+        "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"),
+        "deliverable": deliverable or "None",
+        "message": message
+    }
+    with open(receipt_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+def main():
+    print(f"[{datetime.now()}] Starting {REPORT_NAME}...")
+
+    # 1. Dependency check: is upstream table ready?
+    database_ready = True  # Replace with your actual SQL / feed check
+    if not database_ready:
+        print("SKIPPED: Missing dependency 'raw_transactions_table'")
+        write_receipt("Retrial", "Waiting for upstream ledger to post")
+        sys.exit(0)
+
+    # 2. Extract & Transform Workload
+    try:
+        # Perform your pandas / SQL extraction here
+        # df = pd.read_sql(...)
+        # df.to_excel("reports/output.xlsx")
+        
+        # 3. Successful delivery
+        write_receipt("Completed", "Report processed successfully", deliverable="output.xlsx")
+        print(f"[{datetime.now()}] {REPORT_NAME} finished cleanly.")
+        sys.exit(0)
+    except Exception as e:
+        write_receipt("Failed", f"Critical error: {str(e)}")
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+                                <!-- R Code Snippet -->
+                                <pre id="code-snippet-r" class="guide-code-block" style="display: none;"><code>report_name &lt;- "My_Custom_R_Report"
+
+write_receipt &lt;- function(status, message, deliverable = "None") {
+  logs_dir &lt;- file.path("..", "paradiso", "logs")
+  if (!dir.exists(logs_dir)) dir.create(logs_dir, recursive = TRUE)
+  receipt_path &lt;- file.path(logs_dir, paste0(report_name, ".json"))
+  
+  receipt_json &lt;- sprintf(
+    '{\n  "report_name": "%s",\n  "status": "%s",\n  "timestamp": "%s",\n  "deliverable": "%s",\n  "message": "%s"\n}',
+    report_name, status, format(Sys.time(), "%Y-%m-%d %I:%M:%S %p"), deliverable, message
+  )
+  writeLines(receipt_json, con = receipt_path)
+}
+
+cat(sprintf("[%s] Starting %s...\n", Sys.time(), report_name))
+
+# 1. Dependency check
+data_source_ready &lt;- TRUE # Replace with file.exists() or SQL check
+if (!data_source_ready) {
+  cat("SKIPPED: Missing dependency 'daily_feed.csv'\n")
+  write_receipt("Retrial", "daily_feed.csv not yet present")
+  quit(status = 0)
+}
+
+# 2. Extract & Transform
+tryCatch({
+  # Process calculations
+  # write.csv(results, "deliverable.csv")
+  
+  write_receipt("Completed", "R report computed successfully", deliverable = "deliverable.csv")
+  cat(sprintf("[%s] %s finished successfully.\n", Sys.time(), report_name))
+  quit(status = 0)
+}, error = function(e) {
+  write_receipt("Failed", paste("Execution error:", e$message))
+  quit(status = 1)
+})</code></pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: How to Add -->
+                    <div id="guide-section-how-to-add" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">04</span>
+                            <div>
+                                <h3>How to Add a Report in 3 Simple Steps</h3>
+                                <p>Registering your script on the web dashboard</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <div class="guide-steps-list">
+                                <div class="guide-step-item">
+                                    <div class="step-num">1</div>
+                                    <div class="step-content">
+                                        <h4>Save Your Script in the Reports Directory</h4>
+                                        <p>Place your <code>.py</code> or <code>.R</code> script inside the authorized <code>reports/</code> folder (or <code>reports/python</code> / <code>reports/r</code>). Scripts outside these authorized directories are blocked for security.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step-item">
+                                    <div class="step-num">2</div>
+                                    <div class="step-content">
+                                        <h4>Open the Automations Tab & Click "+ Add New Report"</h4>
+                                        <p>In the sidebar on the left, click <strong>⬡ Automations</strong>. In the top-right corner, click the <strong>+ Add New Report</strong> button.</p>
+                                    </div>
+                                </div>
+                                <div class="guide-step-item">
+                                    <div class="step-num">3</div>
+                                    <div class="step-content">
+                                        <h4>Fill in the Form & Click "Save & Register Report"</h4>
+                                        <p>Enter a unique Report Name (e.g. <code>Monthly_Sales_Rollup</code>), select the script filename from the dropdown, choose your interpreter (Python or R), and pick a target run time (e.g. <code>08:30</code>). Click save, and Paradiso will add it to today's queue!</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 5: Badges -->
+                    <div id="guide-section-badges" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">05</span>
+                            <div>
+                                <h3>Decoding Dashboard Badges & Monitoring Logs</h3>
+                                <p>What each color means and how to inspect errors</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <div class="guide-badge-reference-table">
+                                <div class="badge-ref-row">
+                                    <span class="badge badge-waiting">Waiting</span>
+                                    <div class="badge-ref-text">
+                                        <strong>Queued in Line:</strong> The report is staged and waiting for its turn in the sequential queue.
+                                    </div>
+                                </div>
+                                <div class="badge-ref-row">
+                                    <span class="badge badge-running">Running</span>
+                                    <div class="badge-ref-text">
+                                        <strong>Currently Executing:</strong> Paradiso is actively running this report's subprocess. Only 1 report runs at any given time.
+                                    </div>
+                                </div>
+                                <div class="badge-ref-row">
+                                    <span class="badge badge-retrial">Retrial</span>
+                                    <div class="badge-ref-text">
+                                        <strong>Waiting for Upstream Data:</strong> The report checked for its dependencies and found they aren't ready yet. It was safely moved to the back of the queue to recheck later with zero retry penalty.
+                                    </div>
+                                </div>
+                                <div class="badge-ref-row">
+                                    <span class="badge badge-completed">Completed</span>
+                                    <div class="badge-ref-text">
+                                        <strong>Successfully Finished:</strong> The script finished its calculations and confirmed its delivery receipt.
+                                    </div>
+                                </div>
+                                <div class="badge-ref-row">
+                                    <span class="badge badge-failed">Failed</span>
+                                    <div class="badge-ref-text">
+                                        <strong>Error or Timeout:</strong> The script encountered an unhandled error or breached the 10:00 PM cutoff. Click the <strong>▷ Executions</strong> tab in the sidebar to view stdout/stderr terminal output.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h4 class="guide-subheading" style="margin-top: 24px;">How to View Terminal Logs</h4>
+                            <p class="guide-prose">
+                                Whenever a script fails or you want to see what it printed:
+                                <br>1. Click the <strong>▷ Executions</strong> tab in the left sidebar.
+                                <br>2. Click on the row for your report.
+                                <br>3. A dark console window will open showing the full standard output, error messages, and Python/R stack traces!
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Section 6: Safety Guardrails -->
+                    <div id="guide-section-safety" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">06</span>
+                            <div>
+                                <h3>Controls & Safety Guardrails Explained</h3>
+                                <p>Why certain buttons lock or count down</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">⏱ Why is there a 10-second countdown after I click Start or Stop?</div>
+                                <div class="guide-faq-a">
+                                    Paradiso features a <strong>Transition Cooldown</strong> guardrail. Rapid double-clicking on start/stop buttons could spawn duplicate background threads or corrupt process handles. The 10-second buffer guarantees the scheduler state transitions safely and cleanly.
+                                </div>
+                            </div>
+
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">🔒 Why is the Settings "Save" button disabled with an amber warning?</div>
+                                <div class="guide-faq-a">
+                                    Paradiso enforces an <strong>Idle-Only Settings Guardrail</strong>. You cannot reconfigure run hours, directories, or Python paths while reports are actively running in flight. To change settings: simply click <strong>Stop Scheduler</strong> in the top bar, edit your settings, click <strong>Save Configuration</strong>, and then click <strong>Start Scheduler</strong> again.
+                                </div>
+                            </div>
+
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">⚡ How do I test an entire 24-hour day in 2 minutes?</div>
+                                <div class="guide-faq-a">
+                                    Paradiso includes an accelerated <strong>Simulation Mode</strong>! Go to <strong>Settings</strong> ➔ toggle <strong>Simulation Mode: Enabled</strong> ➔ set <strong>Speed Multiplier: 600x</strong> (where 1 real second = 10 simulated minutes) ➔ click <strong>Save</strong>. In the top bar, click <strong>Reset (Test)</strong> to rewind the clock to midnight, and watch your daily pipeline execute in accelerated time!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 7: FAQs -->
+                    <div id="guide-section-faq" class="guide-card">
+                        <div class="guide-card-header">
+                            <span class="guide-card-num">07</span>
+                            <div>
+                                <h3>Frequently Asked Questions for Analysts</h3>
+                                <p>Troubleshooting common issues quickly</p>
+                            </div>
+                        </div>
+                        <div class="guide-card-body">
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">Q: My report status says "Contract Violation: missing receipt". What happened?</div>
+                                <div class="guide-faq-a">
+                                    Your script completed its run (or exited), but failed to write the JSON receipt file to <code>paradiso/logs/{report_name}.json</code>. Ensure your code calls <code>write_receipt("Completed", ...)</code> before calling <code>sys.exit(0)</code>.
+                                </div>
+                            </div>
+
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">Q: Can I manually trigger a report to run immediately?</div>
+                                <div class="guide-faq-a">
+                                    Direct manual runs return <code>403 Forbidden</code> by design. Paradiso manages execution order sequentially to prevent database overload and lockups. To run your report, make sure its status is set to <code>Waiting</code> and start the scheduler—Paradiso will dispatch it in orderly sequence.
+                                </div>
+                            </div>
+
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">Q: How do I pause a report from running without deleting it?</div>
+                                <div class="guide-faq-a">
+                                    In the Automations tab, you can set a report's status to <code>Inactive</code> or <code>Disabled</code>. Paradiso will skip disabled reports during midnight resets and daily queue runs.
+                                </div>
+                            </div>
+
+                            <div class="guide-faq-item">
+                                <div class="guide-faq-q">Q: What happens if my script takes longer than 10:00 PM to finish?</div>
+                                <div class="guide-faq-a">
+                                    At 22:00 (10:00 PM), Paradiso's hard cutoff activates. Any script still executing will be cleanly terminated using tree-kill, and its status will be marked <code>Failed: breached 10:00 PM cutoff</code>. If your report regularly takes hours to run, consider moving its scheduled start time earlier in the morning.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
         </main>

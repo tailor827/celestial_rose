@@ -7,7 +7,7 @@
 **Outstanding Findings Dossier:** [`artifacts/audits/ongoing/outstanding_findings.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/outstanding_findings.md)  
 **Resolved Findings Registry:** [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md)  
 **Builder Context Reference:** [`artifacts/dev/dev_session_context.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/dev/dev_session_context.md)  
-**Last Updated:** 2026-09-23 15:05 (Local Time)
+**Last Updated:** 2026-09-23 23:30 (Local Time)
 
 ---
 
@@ -56,8 +56,8 @@ Treat each invariant as a target to attack and verify:
 | **F-008** | MEDIUM | CONFIRMED | PROCESS | I-5 | **RESOLVED** | Child process trees surviving `Runner.kill_all()` on Windows. Resolved via `taskkill /F /T /PID` tree-kill with `CREATE_NO_WINDOW`. Verified with `poc_f006_f008_verification.py` (3-tier tree test). |
 | **F-009** | MEDIUM | CONFIRMED | CONCURRENCY | I-1, I-3 | **RESOLVED** | Concurrent `POST /api/paradiso/start` calls spawned duplicate scheduler loops and wiped in-flight states. Resolved via `_lifecycle_lock` re-entrant mutex, pre-check before `start_fresh_run()`, fresh stop events, and synchronous thread join. Verified with `poc_bg001_bg002_verification.py`. |
 | **F-010** | MEDIUM | CONFIRMED | STATE MACHINE | I-3, I-4 | **RESOLVED** | Midnight rollover duplicates queue entries & 22:00 cutoff process termination. Resolved via explicit termination of all active jobs (`running_reports`) in `_close_day()`, and `_active_date` tracking for clean midnight rollover even on pre-existing day records. Verified with `poc_f010_verification.py` (5 passing tests). |
-| **F-011** | LOW | CONFIRMED | UI | I-7 | **OPEN** | 1-second unpaginated timeline polling in `app.js` and hardcoded `"countdown": "32 min"` in `DashboardController.get_stats()`. |
-| **F-012** | LOW | CONFIRMED | DOC-DRIFT | I-7 | **OPEN** | Documentation claims `/api/dashboard/timeline` returns newest-first (actually returns chronological); unlisted endpoints (`disable_automation`, `system-status`). |
+| **F-011** | LOW | CONFIRMED | UI | I-7 | **RESOLVED** | Timeline polling decoupled to 5s interval; `?limit=N` and `?order=asc|desc` pagination added to `get_timeline()`; static `"countdown": "32 min"` removed from `get_stats()`. Verified with `test_f011_dashboard_stats_no_mock_countdown` and `test_f011_dashboard_timeline_pagination_and_ordering`. |
+| **F-012** | LOW | CONFIRMED | DOC-DRIFT | I-7 | **RESOLVED** | Documentation corrected to state chronological (oldest-first) default ordering; `/api/dashboard/system-status` and `/api/automation/disable` endpoints added to API table. Verified with `test_f012_documented_endpoints_functional`. |
 | **F-013** | HIGH | CONFIRMED | STORAGE / QUEUE | I-8 | **RESOLVED** | Broken `"SF Base"` automation targeting deleted `0base_auto.py`. Resolved by migrating target script to `sample_report_blueprint.py` with clean `"Waiting"` status in `storage/automations.json`. |
 | **F-014** | LOW | CONFIRMED | PERFORMANCE | I-11 | **RESOLVED** | Blocking `process.wait(timeout=1.0)` held under `_proc_lock` in `kill_all()`. Resolved by moving wait loop outside `_proc_lock`, reducing lock hold time to $< 1\text{ms}$. |
 | **BG-001** | HIGH | CONFIRMED | SECURITY / INTEGRITY | I-7, I-9 | **RESOLVED** | Idle-Only Configuration Guardrail: Settings mutation while scheduler active or jobs in flight rejected with HTTP 409 Conflict. UI displays amber warning banner and locks button. Verified with `poc_bg001_bg002_verification.py`. |
@@ -80,21 +80,9 @@ Located under [`artifacts/audits/poc/`](file:///c:/Users/desktop/Documents/work/
 
 ---
 
-## 5. Remaining Open Scope (Phase 9: F-011 & F-012)
+## 5. Remaining Open Scope
 
-### F-011: UI Polling Rate & Dashboard Countdown
-- **Target Invariant:** I-7 (Honest API)
-- **Target Files:** `paradiso/controllers/dashboard_controller.py`, `paradiso/web/static/js/app.js`
-- **Audit Verification Target:**
-  1. Timeline polling interval decoupled from 1-second aggressive rate ($\ge 5\text{s}$ or conditional).
-  2. Dashboard stats endpoint calculates dynamic countdown based on `CLOCK` and `scheduler.open_time` rather than static `"32 min"`.
-
-### F-012: Documentation Drift & Endpoint Discovery
-- **Target Invariant:** I-7 (Honest API)
-- **Target Files:** `paradiso/TECHNICAL_DOCUMENTATION.md`, `paradiso/controllers/automation_controller.py`, `paradiso/controllers/dashboard_controller.py`
-- **Audit Verification Target:**
-  1. Documentation matches actual timeline ordering (chronological vs reverse-chronological).
-  2. Active routes `/api/automation/disable` and `/api/system-status` documented in API specification table.
+> **All findings resolved.** No outstanding items remain. Audit complete.
 
 ---
 
@@ -112,5 +100,5 @@ py -3 paradiso/artifacts/audits/poc/poc_f007_verification.py
 py -3 paradiso/artifacts/audits/poc/poc_bg001_bg002_verification.py
 py -3 paradiso/artifacts/audits/poc/poc_f010_verification.py
 ```
-- Total Unit Tests: **72/72 passing** in ~5.8s.
+- Total Unit Tests: **75/75 passing** in ~5.4s (3 new tests for F-011/F-012).
 - Total Adversarial Attack Tests: **22/22 passing** across all PoC suites.

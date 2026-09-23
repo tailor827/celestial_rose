@@ -25,17 +25,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navExec) {
         navExec.addEventListener('click', (e) => switchTab('executions', e));
     }
+    const navGuide = document.getElementById('nav-guide');
+    if (navGuide) {
+        navGuide.addEventListener('click', (e) => switchTab('guide', e));
+    }
 
     // Poll every 1 second for live simulation status & queue progress
     setInterval(() => {
         fetchDashboardStats();
         fetchAutomations();
-        fetchTimeline();
         checkSchedulerStatus();
         if (activeTab === 'executions') {
             fetchExecutionHistory();
         }
     }, 1000);
+
+    // Poll timeline every 5 seconds to reduce polling overhead
+    setInterval(() => {
+        fetchTimeline();
+    }, 5000);
 });
 
 let activeTab = 'dashboard';
@@ -94,6 +102,14 @@ function switchTab(tabName, event) {
             viewSettings.classList.add('active');
         }
         fetchSettings();
+    } else if (tabName === 'guide') {
+        const navGuide = document.getElementById('nav-guide');
+        if (navGuide) navGuide.classList.add('active');
+        const viewGuide = document.getElementById('view-guide');
+        if (viewGuide) {
+            viewGuide.style.display = 'block';
+            viewGuide.classList.add('active');
+        }
     } else {
         const navDash = document.getElementById('nav-dashboard');
         if (navDash) navDash.classList.add('active');
@@ -103,6 +119,50 @@ function switchTab(tabName, event) {
             viewDash.classList.add('active');
         }
     }
+}
+
+let currentBlueprintTab = 'python';
+
+function switchBlueprintTab(lang) {
+    currentBlueprintTab = lang;
+    const pySnippet = document.getElementById('code-snippet-python');
+    const rSnippet = document.getElementById('code-snippet-r');
+    const tabBtns = document.querySelectorAll('.btn-code-tab');
+
+    if (lang === 'python') {
+        if (pySnippet) pySnippet.style.display = 'block';
+        if (rSnippet) rSnippet.style.display = 'none';
+        if (tabBtns[0]) tabBtns[0].classList.add('active');
+        if (tabBtns[1]) tabBtns[1].classList.remove('active');
+    } else {
+        if (pySnippet) pySnippet.style.display = 'none';
+        if (rSnippet) rSnippet.style.display = 'block';
+        if (tabBtns[0]) tabBtns[0].classList.remove('active');
+        if (tabBtns[1]) tabBtns[1].classList.add('active');
+    }
+}
+
+function copyActiveBlueprint() {
+    const snippetEl = currentBlueprintTab === 'python' 
+        ? document.getElementById('code-snippet-python') 
+        : document.getElementById('code-snippet-r');
+    if (!snippetEl) return;
+
+    const text = snippetEl.innerText || snippetEl.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.btn-copy-code');
+        if (btn) {
+            const orig = btn.innerText;
+            btn.innerText = '✓ Copied!';
+            btn.style.color = '#34d399';
+            setTimeout(() => {
+                btn.innerText = orig;
+                btn.style.color = '';
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy blueprint:', err);
+    });
 }
 
 async function fetchDashboardStats() {
@@ -579,7 +639,7 @@ async function deleteReport(name) {
 
 async function fetchTimeline() {
     try {
-        const res = await fetch('/api/dashboard/timeline');
+        const res = await fetch('/api/dashboard/timeline?limit=50');
         const data = await res.json();
         if (!data.ok) return;
 
@@ -1181,6 +1241,21 @@ async function handleSettingsSubmit(e) {
         showSettingsToast('Settings cannot be modified while Paradiso scheduler is running. Please stop Paradiso before updating settings.', 'error');
         return;
     }
+
+    const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const startTime = document.getElementById('setting-start-time').value.trim();
+    const idleTime = document.getElementById('setting-idle-time').value.trim();
+    const closeTime = document.getElementById('setting-close-time').value.trim();
+
+    if (!timeRegex.test(startTime) || !timeRegex.test(idleTime) || !timeRegex.test(closeTime)) {
+        showSettingsToast('Scheduler times must be in 24-hour HH:MM format (e.g., 07:00).', 'error');
+        return;
+    }
+    if (!(startTime < idleTime && idleTime <= closeTime)) {
+        showSettingsToast('Scheduler times must satisfy: Start Time < Idle Time <= Close Time.', 'error');
+        return;
+    }
+
     const btn = document.getElementById('btn-save-settings');
     const originalText = btn.innerText;
     btn.disabled = true;

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from services.automation_service import AutomationService
 from services.intraday_service import IntradayService
 from utils.clock import CLOCK
@@ -38,8 +38,7 @@ class DashboardController:
             next_scheduled = {
                 "name": r.name,
                 "team": r.team,
-                "scheduled_time": r.scheduled_time,
-                "countdown": "32 min"
+                "scheduled_time": r.scheduled_time
             }
         if not CLOCK.simulation_mode or CLOCK.speed_multiplier <= 1.0:
             sim_speed_str = "Realtime"
@@ -81,6 +80,24 @@ class DashboardController:
 
     def get_timeline(self):
         timeline = self.intraday_service.get_today_timeline()
+        order = request.args.get("order", "asc").lower()
+        if order == "desc":
+            timeline = list(reversed(timeline))
+
+        limit_arg = request.args.get("limit")
+        if limit_arg is not None:
+            try:
+                limit = int(limit_arg)
+                if limit > 0:
+                    if order == "asc":
+                        # In chronological order, the last N events are the newest events
+                        timeline = timeline[-limit:]
+                    else:
+                        # In descending order, the first N events are the newest events
+                        timeline = timeline[:limit]
+            except (ValueError, TypeError):
+                pass
+
         return jsonify({"ok": True, "timeline": timeline}), 200
 
     def get_system_status(self):
