@@ -231,6 +231,15 @@ Previously, running `py -3 -m unittest discover tests` caused test events (e.g. 
 | **F-038** | MEDIUM | I-6, I-7 | `POST /api/automation/add` dropped `catch_up_policy` parameter, failing to pass or persist the policy in catalog storage and response payload. | Extracted, validated against allowed set (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, `WARN_OPERATOR`), and passed `catch_up_policy` to `Report(...)` constructor in `AutomationController.add_automation`. | **RESOLVED & VERIFIED** (`poc_f038_catch_up_policy_dropped_in_api.py` defeated, unit test `test_f038_catch_up_policy_persistence_in_api`) |
 | **F-039** | MEDIUM | I-6, I-7 | `IntradayService.reset_all_reports()` failed to clear `self.type_c_warned`, permanently suppressing operator warnings after manual or API operational reset. | Added `self.type_c_warned.clear()` to `IntradayService.reset_all_reports()`. | **RESOLVED & VERIFIED** (`poc_f039_reset_all_reports_type_c_warned_retention.py` defeated, unit test `test_f039_reset_all_reports_clears_type_c_warned`) |
 
+### Batch 7: Findings from `audit_20260928_2155.md` (F-040, F-041, F-042) `[RESOLVED & VERIFIED]`
+
+| Finding ID | Severity | Invariants | Defect Summary | Resolution | Verification Status |
+|---|---|---|---|---|---|
+| **F-040** | HIGH | I-1, I-7 | `POST /api/automation/run` allowed manual triggering of Disabled reports, completely bypassing operator disable status. | Added check in `ExecutionController.run_automation` returning HTTP 409 Conflict if `report.status == "Disabled"`, and defense-in-depth in `IntradayService.trigger_manual_run`. | **RESOLVED & VERIFIED** (`poc_f040_disabled_report_manual_run_bypass.py` defeated, unit test `test_f040_disabled_report_manual_run_rejected`) |
+| **F-041** | CRITICAL | I-1, I-4 | Lane B dispatched permanently `Failed` reports and reports with exhausted retries (`retry_counts >= max_retries`) in an infinite recurring loop. | Added guard in `IntradayService.tick()` skipping Type B dispatch if `rep.status in ("Disabled", "Failed")` or `self.retry_counts.get(rep.name, 0) >= self.max_retries`. | **RESOLVED & VERIFIED** (`poc_f041_lane_b_infinite_exhausted_dispatch.py` defeated, unit test `test_f041_lane_b_does_not_dispatch_failed_report`) |
+| **F-042** | MEDIUM | I-5 | `POST /api/settings/simulation/reset` lacked BG-001 idle guardrail, allowing clock rewinds while scheduler lanes or jobs were actively running. | Enforced BG-001 idle-only check (`self.paradiso.is_running() or self.intraday_service.is_active or self.intraday_service.has_active_runs`) in `SettingsController.reset_simulation_clock`, rejecting active resets with HTTP 409 Conflict. | **RESOLVED & VERIFIED** (`poc_f042_simulation_reset_bypasses_idle_guardrail.py` defeated, unit test `test_f042_simulation_reset_rejected_when_active`) |
+| **F-043** | MEDIUM | I-1, I-8 | Manual run of Failed/exhausted Lane B report silently re-armed continuous automatic interval dispatch via status reset to Completed. | Added `type_b_exhausted` tracking in `IntradayService` excluding exhausted reports from tick dispatch, dual-guarded manual runs returning HTTP 409 Conflict for Disabled/Failed/exhausted reports, and routed re-activation exclusively through explicit `POST /api/automation/enable`. | **RESOLVED & VERIFIED** (`poc_f043_manual_run_rearms_failed_report.py` defeated, unit tests `test_f043_manual_run_failed_report_rejected` and `test_f043_failed_report_rearmed_only_via_enable`) |
+
 
 ---
 
@@ -262,8 +271,8 @@ Per banking specification and operational policy, all scheduling lanes and manua
 ## 10. Verification Commands & Test Results
 
 - **Full Test Suite:** `py -3 run_tests.py`
-  - **Result:** **125/125 tests passing in ~7.7s (100% pass rate, 0 failures)**.
-  - Covers all baseline tests, API endpoints, storage atomic transactions, settings hot-reload, audit fixes F-001 through F-036, systemic hardening items V-01 through V-05, and Phase 2 milestones P2.1 and P2.2.
+  - **Result:** **133/133 tests passing in ~9.7s (100% pass rate, 0 failures)**.
+  - Covers all baseline tests, API endpoints, storage atomic transactions, settings hot-reload, audit fixes F-001 through F-043, systemic hardening items V-01 through V-05, and Phase 2 milestones P2.1 and P2.2.
 - **Adversarial Verification Suite:**
   - `poc_bg001_bg002_verification.py`: PASS (Idle 409 guard, 25-thread burst mutex, 10s throttle)
   - `poc_f001_verification.py`: PASS (Active deletion 409 guard, missing queue recovery, ghost report non-deadlock)
@@ -283,6 +292,13 @@ Per banking specification and operational policy, all scheduling lanes and manua
   - `poc_f033_waiting_to_close_and_cross_lane_leak.py`: DEFEATED (Defect blocked, assertion fails)
   - `poc_f034_delete_active_report_orphaning.py`: DEFEATED (Defect blocked, assertion fails)
   - `poc_f035_lane_b_cold_boot_suppression.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f037_scheduled_time_format_failures.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f038_catch_up_policy_dropped_in_api.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f039_reset_all_reports_type_c_warned_retention.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f040_disabled_report_manual_run_bypass.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f041_lane_b_infinite_exhausted_dispatch.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f042_simulation_reset_bypasses_idle_guardrail.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f043_manual_run_rearms_failed_report.py`: DEFEATED (Defect blocked, assertion fails)
 
 ---
 
@@ -294,14 +310,16 @@ Per banking specification and operational policy, all scheduling lanes and manua
 - **Storage & Lifecycle Resilience (F-028, F-029, F-031, F-032, F-033, F-035, V-02):** Pre-existing prematurely closed daily records in storage preserve historical logs while enqueuing uncompleted runs without queue paralysis (F-032). Mid-day service restarts hydrate completed Lane C timeslots and Lane B last-run timestamps from disk to prevent duplicate executions or thundering herds without cold boot catalog leakage (F-029, F-031). Catalog time-only `last_run` entries are recognized as historical and never synthesized as future timestamps (F-035). Forced open overrides safely yield to 21:00 `WAITING_TO_CLOSE` wrap-up and 22:00 hard cutoffs, and do not leak cross-lane without explicit authorization (F-033).
 - **Operator Observability (F-030, V-01):** Universal Web UI toast feedback (`showToast`) immediately renders HTTP 409 window rejections, lane errors, and invalid disable attempts on running reports.
 - **Defeat Device Cleanse (F-025):** Production `clock.py` is 100% free of test evasion conditionals, command-line arguments snooping, or spoofed timestamps.
-- **Honest Lane Start & Manual Run Lifecycle (F-026, V-05):** `POST /api/paradiso/lane/start` and `POST /api/automation/run` strictly evaluate window state and parameters, returning HTTP 409 Conflict outside `OPEN`, HTTP 400 for empty payloads, and HTTP 404 for missing catalog reports.
+- **Honest Lane Start & Manual Run Lifecycle (F-026, V-05, F-040, F-043):** `POST /api/paradiso/lane/start` and `POST /api/automation/run` strictly evaluate window state, report status, and parameters, returning HTTP 409 Conflict outside `OPEN` or if report is Disabled, Failed, or exhausted, HTTP 400 for empty payloads, and HTTP 404 for missing catalog reports.
+- **Lane B Stability (F-041, F-043):** Permanently `Failed` reports and reports with exhausted retries are strictly tracked in `type_b_exhausted` and excluded from recurring dispatch, preventing infinite retry spin and accidental re-arming via manual executions.
+- **Simulation Clock Guardrail (F-042):** `POST /api/settings/simulation/reset` enforces BG-001 idle-only checks across all lanes, blocking reset during active runs with HTTP 409 Conflict.
 - **Lane A Isolation (V-03, V-04):** Lane A retries and new additions are strictly isolated to `lane_a_active`, while preserving `self.is_active` for system-wide checks.
-- **Automation Disable & Re-Enable Guardrails (V-01, F-034, F-036):** Users can disable idle reports via `POST /api/automation/disable` and re-enable them via `POST /api/automation/enable` without executing destructive system-wide resets. Deleting or disabling an actively executing report across any lane is strictly blocked with HTTP 409 Conflict.
+- **Automation Disable & Re-Enable Guardrails (V-01, F-034, F-036, F-043):** Users can disable idle reports via `POST /api/automation/disable` and re-enable disabled or failed reports via `POST /api/automation/enable` without executing destructive system-wide resets. Deleting or disabling an actively executing report across any lane is strictly blocked with HTTP 409 Conflict.
 - **Controls & UI:** Independent Start/Stop controls per lane with 10s transition cooldown guardrail in Top Bar quick pills, Dashboard Dispatcher Hub, and dedicated Lane views (`#view-type-a`, `#view-type-b`, `#view-type-c`).
 - **Safety Guardrails:** BG-001 Idle-Only Settings guardrail fully guards all 3 lanes (HTTP 409 Conflict). F-022 skip backoff prevents rapid-fire CPU and storage spinning.
-- **Test Integrity:** 128/128 unit tests passing in ~7.0s (100% pass rate). All legacy test files (`tests/test_services.py`, `tests/test_storage.py`) are strictly intact.
+- **Test Integrity:** 133/133 unit tests passing in ~9.7s (100% pass rate). All legacy test files (`tests/test_services.py`, `tests/test_storage.py`) are strictly intact.
 - **Audit Files:** The `artifacts/audits/` directory is **strictly read-only**.
-- **Batch 4, 5 & 6 Resolution (F-031..F-039):** All defects across `audit_20260926_0730.md`, `audit_20260928_1945.md`, and `audit_20260928_2030.md` have been resolved, verified, and backed by dedicated regression tests in `tests/test_audit_fixes.py`.
+- **Batch 4, 5, 6 & 7 Resolution (F-031..F-043):** All defects across `audit_20260926_0730.md`, `audit_20260928_1945.md`, `audit_20260928_2030.md`, `audit_20260928_2155.md`, and `audit_20260928_2235.md` have been resolved, verified, and backed by dedicated regression tests in `tests/test_audit_fixes.py`.
 
 ### 11.2 Key Rules for Incoming Developer
 1. **Always Request Explicit GO:** Never modify code or project files without an explicit GO signal from the user. Work 1-by-1, presenting the plan first.

@@ -124,7 +124,8 @@ Paradiso Alter orchestrates reports across three distinct execution lanes, each 
 - **Policy**: Periodic background pipelines executing throughout the day at configured intervals (e.g. 15, 30, 60 minutes).
 - **Concurrency**: Multiple distinct Type B pipelines can execute concurrently.
 - **Self-Overlap Prevention**: The engine tracks active executions in `self.active_runs_type_b`. If a previous cycle of report `X` is still in flight, a new trigger for `X` is skipped until the active run terminates cleanly.
-- **Manual Execution**: Operators can trigger on-demand runs via `POST /api/automation/run` (`{"ok": true, "name": "..."}`).
+- **Failed Report Suppression & Anti-Rearm Invariant (F-041, F-043)**: Once a Type B report transitions to terminal `Failed` or exhausts its maximum retries (`retry_counts >= max_retries`), `IntradayService` tracks it in `self.type_b_exhausted` and excludes it from automated dispatch. Manual execution of Failed/exhausted reports is rejected with HTTP `409 Conflict`, preventing silent re-arming of broken interval pipelines. Re-activation requires explicit administrative re-enablement via `POST /api/automation/enable`.
+- **Manual Execution**: Operators can trigger on-demand runs via `POST /api/automation/run` (`{"ok": true, "name": "..."}`). Disabled and Failed reports are rejected with HTTP `409 Conflict` (F-040, F-043).
 
 ### Lane C: Timeslot Pinned
 - **Policy**: Pinpoint execution pinned to daily wall-clock milestones:
@@ -185,8 +186,8 @@ Paradiso Alter supports dynamic management of the report catalog:
 - **Active Queue Enqueue**: If the intraday scheduler is currently active, `lane_a_active` is true, and `status == "Waiting"` for a Type A report, the report is immediately appended to `intraday_service.waitlist` to execute during the current window.
 
 ### 2. Disabling & Re-Enabling (`POST /api/automation/disable`, `POST /api/automation/enable`)
-- **Disable (`POST /api/automation/disable`)**: Disables an idle report (`{"name": "Report Name"}`). Rejects actively running reports with HTTP `409 Conflict`. Evicts idle reports from waitlist and rotation passes.
-- **Enable (`POST /api/automation/enable`)**: Re-enables a disabled report without destructive reset. Restores status to `Waiting` and enqueues into Lane A if active.
+- **Disable (`POST /api/automation/disable`)**: Disables an idle report (`{"name": "Report Name"}`). Rejects actively running reports with HTTP `409 Conflict`. Evicts idle reports from waitlist and rotation passes. While disabled, reports cannot be manually triggered via `POST /api/automation/run` (rejected with HTTP `409 Conflict`, F-040).
+- **Enable (`POST /api/automation/enable`)**: Re-enables a disabled or permanently failed report without destructive reset. Restores status to `Waiting`, clears exhausted retry budgets (`type_b_exhausted`, `retry_counts`), and enqueues into Lane A if active (F-043).
 
 ### 3. Deletion (`DELETE /api/automation/delete/<name>`)
 - Verifies report existence (HTTP `404 Not Found` if missing).
@@ -383,7 +384,7 @@ storage.mutate(lambda data: data[date].setdefault("timeline", []).append(event))
 | `POST /api/automation/add` | `POST` | Registers a new report, validates canonical `scheduled_time` (`HH:MM`), validates `catch_up_policy`, enforces uniqueness across all lanes (HTTP 409 if exists), and enqueues into Lane A if active. |
 | `DELETE /api/automation/delete/<name>` | `DELETE` | Deletes report from catalog and evicts from active waitlist. Rejects active executions with HTTP 409 Conflict. |
 | `POST /api/automation/disable` | `POST` | Disables an idle report by name (`{"name": "Report Name"}`). Rejects actively running reports with HTTP 409 Conflict. |
-| `POST /api/automation/enable` | `POST` | Re-enables a disabled report (`{"name": "Report Name"}`), restoring status to Waiting without destructive reset. |
+| `POST /api/automation/enable` | `POST` | Re-enables a disabled or permanently failed report (`{"name": "Report Name"}`), restoring status to Waiting, clearing exhaustion tracking, without destructive reset (F-043). |
 | `POST /api/automations/reset` | `POST` | Resets all reports to `Waiting`, kills active processes, sets Standby mode. |
 | `POST /api/paradiso/start` | `POST` | Starts or resumes intraday queue scheduler in active mode across all lanes. |
 | `POST /api/paradiso/stop` | `POST` | Pauses execution, clears `waitlist`, kills running subprocesses across all lanes. |
@@ -391,12 +392,12 @@ storage.mutate(lambda data: data[date].setdefault("timeline", []).append(event))
 | `POST /api/paradiso/lane/start` | `POST` | Starts a specific lane (`{"lane": "type_a"\|"type_b"\|"type_c"}`). Returns HTTP `409 Conflict` outside `OPEN` window (07:00–20:59) unless `force_open: true`. Enforces independent 10s cooldown (HTTP 429). |
 | `POST /api/paradiso/lane/stop` | `POST` | Stops a specific lane (`{"lane": "type_a"\|"type_b"\|"type_c"}`). Enforces independent 10s cooldown (HTTP 429). |
 | `GET /api/paradiso/lanes/status` | `GET` | Returns live running status, active process count, and remaining cooldown per lane (`type_a`, `type_b`, `type_c`). |
-| `POST /api/automation/run` | `POST` | Triggers on-demand report execution. Returns HTTP `403 Forbidden` for Type A (sequential); returns HTTP `409 Conflict` outside `OPEN` window (07:00–20:59); returns `200 OK` and dispatches for Type B and Type C during `OPEN`. |
+| `POST /api/automation/run` | `POST` | Triggers on-demand report execution. Returns HTTP `403 Forbidden` for Type A (sequential); returns HTTP `409 Conflict` outside `OPEN` window (07:00–20:59) or if report is `Disabled`, `Failed`, or exhausted (F-040, F-043); returns `200 OK` and dispatches for Type B and Type C during `OPEN`. |
 | `GET /api/executions/history` | `GET` | Returns historical execution runs across all dates. |
 | `GET /api/executions/log/<name>` | `GET` | Returns detailed log output for specified report. Sandboxed: blocks directory traversal (`..`, `/`, `\`) with HTTP 400. |
 | `GET /api/settings` | `GET` | Returns current system configuration (secret masked) with runtime metadata. |
 | `POST /api/settings` | `POST` | Validates, updates `config.yaml`, and hot-reloads runtime window times and simulation speeds. |
-| `POST /api/settings/simulation/reset` | `POST` | Rewinds simulated clock baseline to 00:00:00 midnight today. |
+| `POST /api/settings/simulation/reset` | `POST` | Rewinds simulated clock baseline to 00:00:00 midnight today. Enforces BG-001 idle-only guardrail: returns HTTP `409 Conflict` if any lane is active or running (F-042). |
 
 ---
 
@@ -429,9 +430,10 @@ python run_tests.py
 # or: py -3 -m unittest discover tests (from paradiso/)
 ```
 
-#### Coverage Breakdown (128 Automated Tests)
-- **`tests/test_audit_fixes.py`** (86 tests):
+#### Coverage Breakdown (133 Automated Tests)
+- **`tests/test_audit_fixes.py`** (91 tests):
   - **Phase 2.1 & Phase 2.2**: Lane A concurrency pool (`max_concurrent_run`: multi-dispatch, slot replenishment, settings hot-reload, bounds validation, starvation cooldown coordination), Lane C missed window catch-up policies (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, `WARN_OPERATOR`), grace window verification, per-report policy overrides, settings validation and dynamic hot-reload.
+  - **Batch 7 Remediations & Anti-Rearm Fix (F-040, F-041, F-042, F-043)**: Manual run disabled report bypass prevention (`POST /api/automation/run` returns HTTP 409 Conflict, F-040), Lane B terminal Failed and exhausted retry report suppression preventing infinite dispatch loops (F-041), simulation clock reset BG-001 idle-only guardrail enforcement (`POST /api/settings/simulation/reset` returns HTTP 409 Conflict when active, F-042), and manual run Failed report rejection with explicit administrative re-enablement preventing silent auto-dispatch resurrection (F-043).
   - **Batch 6 Remediations (F-037, F-038, F-039)**: Canonical 24-hour `scheduled_time` regex validation (`^([01]\d|2[0-3]):[0-5]\d$`), defensive runtime timeslot normalization (12-hr AM/PM and unpadded hours), API retention and catalog persistence of `catch_up_policy`, and operational reset `type_c_warned` clearance in `reset_all_reports()`.
   - **Batch 4 & 5 Remediations (F-031 to F-036)**: Cold boot Lane C leak prevention (F-031), partial-day cutoff preservation without log wipe (F-032), `force_open` stickiness and cross-lane leakage elimination (F-033), active Type B/C deletion 409 guardrail (F-034), Lane B cold boot historical time handling (F-035), non-destructive automation enabling (F-036).
   - **Vulnerabilities V-01 to V-05**: Automation disabling idle-only 409 guard and waitlist eviction (V-01), Lane B mid-day reboot last-run hydration (V-02), Lane A retry callback lane scoping (V-03), Type A waitlist bleed prevention (V-04), manual run 400/404 parameter validation (V-05).

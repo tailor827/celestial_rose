@@ -1,7 +1,7 @@
 # Paradiso
 
 > **Bank-Grade Decoupled Multi-Lane Daemon Scheduling Engine & Observability Platform**  
-> *Certified 100% Audit-Passing Baseline (128/128 Unit Tests — 100% Pass Rate, 0 Active Defects)*
+> *Certified 100% Audit-Passing Baseline (133/133 Unit Tests — 100% Pass Rate, 0 Active Defects)*
 
 ---
 
@@ -89,13 +89,13 @@ Open **`http://localhost:5000`** in your browser.
 
 ## 5. Verification & Testing
 
-### Automated Unit Test Suite (128 Tests)
+### Automated Unit Test Suite (133 Tests)
 ```bash
 python run_tests.py
 # or: py -3 run_tests.py
 ```
 ```
-Ran 128 tests in 6.867s
+Ran 133 tests in 9.690s
 OK
 ```
 

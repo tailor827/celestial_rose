@@ -30,6 +30,7 @@ class IntradayService:
         self.active_runs_type_b: Dict[str, str] = {} # report_name -> started_at (Lane B)
         self.active_runs_type_c: Dict[str, str] = {} # report_name -> started_at (Lane C)
         self.type_b_last_run: Dict[str, Any] = {} # report_name -> datetime of last execution
+        self.type_b_exhausted: Set[str] = set() # report names permanently failed or exhausted retries today (Lane B)
         self.type_c_ran_today: Set[str] = set() # report names completed/exhausted today
         self.type_c_retry_after: Dict[str, Any] = {} # report_name -> datetime of retry cooldown
         self.type_c_warned: Set[str] = set() # report names warned for missed timeslot today
@@ -506,6 +507,7 @@ class IntradayService:
             self._cycle_completions_in_pass = 0
             self._last_rotation_logged.clear()
             self.type_b_last_run.clear()
+            self.type_b_exhausted.clear()
             self.type_c_ran_today.clear()
             self.type_c_retry_after.clear()
             self.type_c_warned.clear()
@@ -535,7 +537,9 @@ class IntradayService:
             today_date = CLOCK.date_str()
             day = self.intraday_repo.get_day(today_date)
             status = self.resolve_status()
-            is_new_day = (today_date != self._active_date)
+            is_new_day = (today_date > self._active_date)
+            if today_date < self._active_date:
+                self._active_date = today_date
 
             if not day or is_new_day:
                 self._active_date = today_date
@@ -562,6 +566,7 @@ class IntradayService:
                 self.retry_counts.clear()
                 self.waitlist.clear()
                 self.type_b_last_run.clear()
+                self.type_b_exhausted.clear()
                 self.type_c_ran_today.clear()
                 self.type_c_retry_after.clear()
                 self.type_c_warned.clear()
@@ -621,7 +626,14 @@ class IntradayService:
                     self._hydrate_type_b_last_run(today_date)
                     b_reports = self.automation_service.get_by_type("type_b")
                     for rep in b_reports:
-                        if rep.status == "Disabled":
+                        if rep.name in self.type_b_exhausted:
+                            continue
+                        if rep.status in ("Disabled", "Failed"):
+                            if rep.status == "Failed":
+                                self.type_b_exhausted.add(rep.name)
+                            continue
+                        if self.retry_counts.get(rep.name, 0) >= self.max_retries:
+                            self.type_b_exhausted.add(rep.name)
                             continue
                         if rep.name in self.active_runs_type_b:
                             continue  # Self-overlap prevention
@@ -961,7 +973,8 @@ class IntradayService:
                 log = ReportLog(name).from_json(default_stdout=output)
 
                 if log.status == "Completed":
-                    self.retry_counts[name] = 0
+                    if name not in self.type_b_exhausted:
+                        self.retry_counts[name] = 0
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -1015,6 +1028,7 @@ class IntradayService:
                     event_type="failed"
                 )
             else:
+                self.type_b_exhausted.add(name)
                 self.type_b_last_run[name] = CLOCK.now()
                 self.automation_service.update_status(
                     name=name,
@@ -1195,7 +1209,12 @@ class IntradayService:
     def trigger_manual_run(self, name: str) -> bool:
         """Triggers manual execution for a Type B or Type C report, strictly yielding to intraday open window."""
         report = self.automation_service.get_by_name(name)
-        if not report or report.report_type == "type_a":
+        if (
+            not report
+            or report.report_type == "type_a"
+            or getattr(report, "status", "") in ("Disabled", "Failed")
+            or name in self.type_b_exhausted
+        ):
             return False
         with self._lock:
             status = self.resolve_status()

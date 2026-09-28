@@ -40,7 +40,7 @@ flowchart TD
 
 ### Phase 1: Core 3-Lane Engine & Guardrail Baseline (v1.0 — Current)
 > [!NOTE]
-> **Status: 100% COMPLETE & AUDIT PASSED** (128/128 Unit Tests Passing — 0 Active Audit Defects)
+> **Status: 100% COMPLETE & AUDIT PASSED** (133/133 Unit Tests Passing — 0 Active Audit Defects)
 
 - [x] **Lane A (Sequential Queue & Concurrency Pool):**
   - FIFO queue execution within intraday window (07:00 – 20:59) with 22:00 hard cutoff.
@@ -121,9 +121,9 @@ flowchart TD
     ├── Distinct Report Invariant              [DONE]
     ├── Independent Lane Controls              [DONE]
     ├── Universal Intraday Window Yielding     [DONE]
-    └── F-021 - F-027 Audit Remediations       [DONE - VERIFIED]
+    └── F-021 - F-043 Audit Remediations       [DONE - VERIFIED]
 
-[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS]
+[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 133/133 TESTS PASSING]
     ├── [P2.1] Lane A Concurrency Expansion    [DONE - VERIFIED]
     ├── [P2.2] Lane C Missed Window Catch-up   [DONE - VERIFIED]
     ├── [P2.3] Lane B Window Masking           [PLANNED]

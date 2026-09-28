@@ -43,10 +43,26 @@ class ExecutionController:
                         "ok": False,
                         "error": f"Manual execution is blocked outside the intraday open window (07:00 - 21:00). Current status: {status}."
                     }), 409
+
+                rep_status = getattr(report, "status", "")
+                is_exhausted = bool(name in getattr(self.intraday_service, "type_b_exhausted", set()))
+                if rep_status in ("Disabled", "Failed") or is_exhausted:
+                    status_label = "Failed" if is_exhausted else rep_status
+                    return jsonify({
+                        "ok": False,
+                        "error": f"Cannot execute report '{name}': report is {status_label}. Re-enable it before running."
+                    }), 409
+
                 success = self.intraday_service.trigger_manual_run(name)
                 if not success:
                     return jsonify({"ok": False, "error": f"Unable to execute '{name}': report is already running or scheduler state invalid."}), 409
             else:
+                rep_status = getattr(report, "status", "")
+                if rep_status in ("Disabled", "Failed"):
+                    return jsonify({
+                        "ok": False,
+                        "error": f"Cannot execute report '{name}': report is {rep_status}. Re-enable it before running."
+                    }), 409
                 self.execution_service.execute_report(name=name)
             return jsonify({"ok": True, "message": f"Manual run triggered for {report.report_type.upper()} report '{name}'."}), 200
 

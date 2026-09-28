@@ -226,8 +226,8 @@ class AutomationController:
         if not report:
             return jsonify({"ok": False, "error": f"Report '{name}' not found"}), 404
 
-        if report.status != "Disabled":
-            return jsonify({"ok": False, "error": f"Report '{name}' is not disabled (current status: {report.status})"}), 400
+        if report.status not in ("Disabled", "Failed"):
+            return jsonify({"ok": False, "error": f"Report '{name}' is not disabled or failed (current status: {report.status})"}), 400
 
         success = self.automation_service.enable(name)
         if not success:
@@ -237,6 +237,8 @@ class AutomationController:
             with self.intraday_service._lock:
                 from utils.clock import CLOCK
                 today_date = CLOCK.date_str()
+                self.intraday_service.type_b_exhausted.discard(name)
+                self.intraday_service.retry_counts.pop(name, None)
                 if report.report_type == "type_a" and self.intraday_service.lane_a_active:
                     day = self.intraday_service.intraday_repo.get_day(today_date)
                     already_ran = self.intraday_service._get_completed_or_exhausted_reports(day) if day else set()

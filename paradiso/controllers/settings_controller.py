@@ -75,6 +75,19 @@ class SettingsController:
             return jsonify({"ok": False, "error": f"Failed to save settings: {str(e)}"}), 500
 
     def reset_simulation_clock(self):
+        # BG-001: Idle-Only Configuration Guardrail
+        is_active = False
+        if self.paradiso and self.paradiso.is_running():
+            is_active = True
+        elif self.intraday_service and (self.intraday_service.is_active or self.intraday_service.has_active_runs):
+            is_active = True
+
+        if is_active:
+            return jsonify({
+                "ok": False,
+                "error": "Simulation clock cannot be reset while Paradiso scheduler or jobs are running. Please stop Paradiso before resetting the clock."
+            }), 409
+
         CLOCK.reset_simulation()
         return jsonify({
             "ok": True,

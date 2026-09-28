@@ -793,6 +793,7 @@ class TestAuditFixes(unittest.TestCase):
         intra_svc = IntradayService(auto_svc, exec_svc)
         intra_svc.intraday_repo = intra_repo
         intra_svc._override_cooldown = 0.5  # Fast 0.5s cooldown for deterministic test
+        intra_svc.max_concurrent_run = 1
 
         # Add two reports
         auto_repo.add(Report(name="Report_Dep1", filename="dep1.py", filetype="python", dir=".", status="Waiting"))
@@ -847,6 +848,7 @@ class TestAuditFixes(unittest.TestCase):
         intra_svc = IntradayService(auto_svc, exec_svc)
         intra_svc.intraday_repo = intra_repo
         intra_svc._override_cooldown = 1.0
+        intra_svc.max_concurrent_run = 1
 
         auto_repo.add(Report(name="Report_Skip", filename="skip.py", filetype="python", dir=".", status="Waiting"))
         auto_repo.add(Report(name="Report_Success", filename="success.py", filetype="python", dir=".", status="Waiting"))
@@ -2855,13 +2857,13 @@ class TestAuditFixes(unittest.TestCase):
             (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
             (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
 
-            app, paradiso = create_app(storage_dir=storage_dir)
-            try:
-                intra = paradiso.intraday_service
-                sim_morning = datetime(2026, 9, 28, 8, 0, 0)
-                with patch.object(CLOCK, "now", return_value=sim_morning), \
-                     patch.object(CLOCK, "time_24_str", return_value="08:00"):
-
+            sim_morning = datetime(2026, 9, 28, 8, 0, 0)
+            with patch.object(CLOCK, "now", return_value=sim_morning), \
+                 patch.object(CLOCK, "time_24_str", return_value="08:00"), \
+                 patch.object(CLOCK, "date_str", return_value="20260928"):
+                app, paradiso = create_app(storage_dir=storage_dir)
+                try:
+                    intra = paradiso.intraday_service
                     intra.start_lane("type_b")
 
                     hydrated = intra.type_b_last_run.get("Recurring_Pipeline")
@@ -2875,8 +2877,8 @@ class TestAuditFixes(unittest.TestCase):
 
                     self.assertIn("Recurring_Pipeline", dispatched,
                                   "Recurring pipeline must dispatch immediately upon cold boot.")
-            finally:
-                paradiso.stop()
+                finally:
+                    paradiso.stop()
 
     def test_f033_waiting_to_close_enforced_and_cross_lane_isolated(self):
         """F-033: WAITING_TO_CLOSE window is enforced even if force_open is True, and lane_start rejects out-of-window requests without explicit force_open."""
@@ -3304,7 +3306,11 @@ class TestAuditFixes(unittest.TestCase):
         ))
 
         # Trigger missed timeslot warning at 09:00 AM
-        with patch.object(CLOCK, "time_24_str", return_value="09:00"):
+        from datetime import datetime
+        warn_dt = datetime(2026, 9, 28, 9, 0, 0)
+        with patch.object(CLOCK, "time_24_str", return_value="09:00"), \
+             patch.object(CLOCK, "now", return_value=warn_dt), \
+             patch.object(CLOCK, "date_str", return_value="20260928"):
             intra.tick()
 
         self.assertIn(rep_name, intra.type_c_warned)
@@ -3313,6 +3319,150 @@ class TestAuditFixes(unittest.TestCase):
         intra.reset_all_reports()
         self.assertNotIn(rep_name, intra.type_c_warned)
         self.assertEqual(len(intra.type_c_warned), 0)
+
+    def test_f040_disabled_report_manual_run_rejected(self):
+        """F-040: POST /api/automation/run rejects Disabled reports with HTTP 409 Conflict."""
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(
+            name="Disabled_B_Report",
+            filename="dummy.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_b",
+            interval_minutes=15,
+            status="Disabled"
+        ))
+        from unittest.mock import patch
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            res = self.client.post("/api/automation/run", json={"name": "Disabled_B_Report"})
+            self.assertEqual(res.status_code, 409)
+            data = json.loads(res.data)
+            self.assertFalse(data["ok"])
+            self.assertIn("disabled", data["error"].lower())
+
+    def test_f041_lane_b_does_not_dispatch_failed_report(self):
+        """F-041: Lane B suppresses automatic interval dispatch for Failed reports."""
+        from unittest.mock import patch
+        from datetime import datetime, timedelta
+        intra = self.paradiso.intraday_service
+        intra.max_retries = 3
+        rep_name = "Permanently_Failed_B"
+
+        now_dt = datetime(2026, 9, 28, 10, 25, 0)
+        with patch.object(CLOCK, "time_24_str", return_value="10:25"), \
+             patch.object(CLOCK, "now", return_value=now_dt), \
+             patch.object(CLOCK, "date_str", return_value="20260928"):
+            intra._active_date = "20260928"
+            intra.automation_service.add(Report(
+                name=rep_name,
+                filename="dummy.py",
+                filetype="python",
+                dir="../reports",
+                report_type="type_b",
+                interval_minutes=15,
+                status="Failed"
+            ))
+            intra.start_lane("type_b", force_open=True)
+            intra.retry_counts[rep_name] = 3
+            intra.type_b_exhausted.add(rep_name)
+            intra.type_b_last_run[rep_name] = now_dt - timedelta(minutes=20)
+
+            dispatched = []
+            intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+            intra.tick()
+
+            self.assertNotIn(rep_name, dispatched)
+
+    def test_f042_simulation_reset_rejected_when_active(self):
+        """F-042: POST /api/settings/simulation/reset enforces BG-001 idle-only check returning 409."""
+        intra = self.paradiso.intraday_service
+        # 1. Scheduler active
+        intra.start_lane("type_a", force_open=True)
+        res_active = self.client.post("/api/settings/simulation/reset")
+        self.assertEqual(res_active.status_code, 409)
+        data_active = json.loads(res_active.data)
+        self.assertFalse(data_active["ok"])
+        self.assertIn("running", data_active["error"].lower())
+        intra.stop_lane("type_a")
+
+        # 2. In-flight jobs
+        intra.current_runs["Active_Run"] = CLOCK.formatted_now()
+        res_inflight = self.client.post("/api/settings/simulation/reset")
+        self.assertEqual(res_inflight.status_code, 409)
+        intra.current_runs.clear()
+
+        # 3. Clean idle state -> 200 OK
+        res_idle = self.client.post("/api/settings/simulation/reset")
+        self.assertEqual(res_idle.status_code, 200)
+
+    def test_f043_manual_run_failed_report_rejected(self):
+        """F-043: POST /api/automation/run rejects Failed reports with HTTP 409 Conflict."""
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(
+            name="Failed_Report_F043",
+            filename="dummy.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_b",
+            interval_minutes=15,
+            status="Failed"
+        ))
+        from unittest.mock import patch
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            res = self.client.post("/api/automation/run", json={"name": "Failed_Report_F043"})
+            self.assertEqual(res.status_code, 409)
+            data = json.loads(res.data)
+            self.assertFalse(data["ok"])
+            self.assertIn("failed", data["error"].lower())
+
+    def test_f043_failed_report_rearmed_only_via_enable(self):
+        """F-043: Failed reports can be explicitly re-enabled via POST /api/automation/enable, clearing type_b_exhausted."""
+        from unittest.mock import patch
+        from datetime import datetime, timedelta
+        intra = self.paradiso.intraday_service
+        auto_svc = intra.automation_service
+        rep_name = "Exhausted_Feed_F043"
+
+        now_dt = datetime(2026, 9, 28, 10, 0, 0)
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"), \
+             patch.object(CLOCK, "now", return_value=now_dt), \
+             patch.object(CLOCK, "date_str", return_value="20260928"):
+            intra._active_date = "20260928"
+            auto_svc.add(Report(
+                name=rep_name,
+                filename="dummy.py",
+                filetype="python",
+                dir="../reports",
+                report_type="type_b",
+                interval_minutes=15,
+                status="Waiting"
+            ))
+            intra.start_lane("type_b", force_open=True)
+            auto_svc.update_status(name=rep_name, status="Failed")
+            intra.type_b_exhausted.add(rep_name)
+            intra.retry_counts[rep_name] = 3
+            intra.type_b_last_run[rep_name] = now_dt - timedelta(minutes=20)
+
+            # 1. While Failed/exhausted, manual run rejected with 409
+            res = self.client.post("/api/automation/run", json={"name": rep_name})
+            self.assertEqual(res.status_code, 409)
+
+            # 2. tick() does not dispatch
+            dispatched = []
+            intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+            intra.tick()
+            self.assertNotIn(rep_name, dispatched)
+
+            # 3. Explicit administrative re-enablement via API
+            res_enable = self.client.post("/api/automation/enable", json={"name": rep_name})
+            self.assertEqual(res_enable.status_code, 200)
+            self.assertEqual(auto_svc.get_by_name(rep_name).status, "Waiting")
+            self.assertNotIn(rep_name, intra.type_b_exhausted)
+            self.assertNotIn(rep_name, intra.retry_counts)
+
+            # 4. Now tick() can dispatch
+            intra.tick()
+            self.assertIn(rep_name, dispatched)
 
 if __name__ == "__main__":
     unittest.main()
