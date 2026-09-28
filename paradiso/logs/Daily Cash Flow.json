@@ -1,0 +1,18 @@
+{
+  "name": "Daily Cash Flow",
+  "report_name": "Daily Cash Flow",
+  "status": "Completed",
+  "last_run": "2026-09-24 10:22:09",
+  "timestamp": "2026-09-24 10:22:09 AM",
+  "duration": "0.5s",
+  "last_output": "Daily cash flow reconciliation completed successfully with zero variance.",
+  "message": "Daily cash flow reconciliation completed successfully with zero variance.",
+  "reason": "Daily cash flow reconciliation completed successfully with zero variance.",
+  "deliverable": "cash_flow_summary.xlsx",
+  "metrics": {
+    "opening_balance": 14250000.0,
+    "total_inflows": 3120450.75,
+    "total_outflows": 1890200.25,
+    "net_closing_position": 15480250.5
+  }
+}

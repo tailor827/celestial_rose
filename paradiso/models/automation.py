@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from models.storage_base import StorageBase
@@ -8,7 +9,12 @@ class Automations(StorageBase):
     """Manages automations stored in storage/automations.json."""
 
     def __init__(self, file_path: Optional[Path] = None):
-        target = file_path or (BASE_DIR / "storage" / "automations.json")
+        if file_path is not None:
+            target = file_path
+        elif "PARADISO_STORAGE_DIR" in os.environ:
+            target = Path(os.environ["PARADISO_STORAGE_DIR"]) / "automations.json"
+        else:
+            target = BASE_DIR / "storage" / "automations.json"
         super().__init__(target)
 
     def get_all(self, serialized: bool = False) -> List[Any]:
@@ -52,5 +58,15 @@ class Automations(StorageBase):
                     updated_waiting.append(k)
         self.mutate(_mutate)
         return updated_waiting
+
+    def get_by_type(self, report_type: str) -> List[Report]:
+        """Returns all reports belonging to a specific lane type (type_a, type_b, type_c)."""
+        target_type = report_type.lower()
+        return [r for r in self.get_all(serialized=False) if r.report_type == target_type]
+
+    def get_pending_by_type(self, report_type: str) -> List[str]:
+        """Returns pending non-terminal reports for a specific lane."""
+        target_type = report_type.lower()
+        return [r.name for r in self.get_all(serialized=False) if r.report_type == target_type and r.status not in ["Completed", "Disabled"]]
 
 

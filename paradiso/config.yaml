@@ -14,12 +14,16 @@ scheduler:
   enabled: true
   auto_start: false
   job_interval_seconds: 15
+  max_concurrent_run: 2
   intraday_start_time: 07:00
   intraday_idle_time: '21:00'
   intraday_close_time: '22:00'
+  max_retries: 5
+  lane_c_catch_up_policy: CATCH_UP_IMMEDIATE
+  lane_c_catch_up_grace_minutes: 15
 executables:
   python_path: ''
   rscript_path: ''
 simulation:
   enabled: false
-  speed_multiplier: 300
+  speed_multiplier: 1

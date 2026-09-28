@@ -28,6 +28,14 @@ class AutomationService:
         self.add(report)
         return True
 
+    def enable(self, name: str) -> bool:
+        report = self.get_by_name(name)
+        if not report:
+            return False
+        report.status = "Waiting"
+        self.add(report)
+        return True
+
     def get_waiting(self) -> List[str]:
         return self.automations.get_waiting()
 
@@ -36,6 +44,12 @@ class AutomationService:
 
     def set_waiting_all(self) -> List[str]:
         return self.automations.set_waiting_all()
+
+    def get_by_type(self, report_type: str) -> List[Report]:
+        return self.automations.get_by_type(report_type)
+
+    def get_pending_by_type(self, report_type: str) -> List[str]:
+        return self.automations.get_pending_by_type(report_type)
 
     def update_status(self, name: str, status: str, started_at: str = "--", duration: str = "--", last_output: str = "Unavailable") -> None:
         now_str = CLOCK.formatted_now()

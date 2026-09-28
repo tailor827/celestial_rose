@@ -12,5 +12,21 @@
         "started_at": "21:55",
         "duration": "0s",
         "last_output": "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)"
+    },
+    "EOD Ledger Reconciliation": {
+        "name": "EOD Ledger Reconciliation",
+        "filename": "eod_ledger_reconciliation.py",
+        "filetype": "python",
+        "dir": "../reports",
+        "team": "Finance Controllership",
+        "owner": "Cy",
+        "report_type": "type_c",
+        "timeslot_tier": "EOD",
+        "scheduled_time": "20:30",
+        "status": "Waiting",
+        "last_run": "--/--/--",
+        "started_at": "--",
+        "duration": "--",
+        "last_output": "Staged for execution"
     }
 }

@@ -1,6 +1,6 @@
 import time
 import threading
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 from services.intraday_service import IntradayService
 from utils.config import CONFIG
 from utils.clock import CLOCK
@@ -29,6 +29,11 @@ class Paradiso:
         self.transition_cooldown: float = 10.0
         self._last_transition_time: float = 0.0
         self._override_cooldown: Optional[float] = None
+        self._lane_transition_times: Dict[str, float] = {
+            "type_a": 0.0,
+            "type_b": 0.0,
+            "type_c": 0.0
+        }
 
     @property
     def interval(self) -> float:
@@ -50,6 +55,16 @@ class Paradiso:
         with self._lifecycle_lock:
             return self._thread is not None and self._thread.is_alive() and not self._stop_event.is_set()
 
+    def is_lane_running(self, lane: str) -> bool:
+        norm = self.intraday_service._normalize_lane(lane)
+        if norm == "type_a":
+            return self.intraday_service.lane_a_active
+        elif norm == "type_b":
+            return self.intraday_service.lane_b_active
+        elif norm == "type_c":
+            return self.intraday_service.lane_c_active
+        return False
+
     def get_effective_cooldown(self) -> float:
         if self._override_cooldown is not None:
             return self._override_cooldown
@@ -62,6 +77,53 @@ class Paradiso:
         elapsed = time.time() - self._last_transition_time
         remaining = cooldown - elapsed
         return max(0.0, remaining)
+
+    def get_lane_cooldown_remaining(self, lane: str) -> float:
+        norm = self.intraday_service._normalize_lane(lane)
+        cooldown = self.get_effective_cooldown()
+        if cooldown <= 0:
+            return 0.0
+        elapsed = time.time() - self._lane_transition_times.get(norm, 0.0)
+        remaining = cooldown - elapsed
+        return max(0.0, remaining)
+
+    def start_lane(self, lane: str, force_open: bool = False, check_cooldown: bool = False) -> TransitionResult:
+        norm = self.intraday_service._normalize_lane(lane)
+        with self._lifecycle_lock:
+            if self.is_lane_running(norm):
+                return TransitionResult(False, "already_running", 0.0)
+
+            if check_cooldown:
+                remaining = self.get_lane_cooldown_remaining(norm)
+                if remaining > 0:
+                    return TransitionResult(False, "cooldown", remaining)
+
+            self.intraday_service.start_lane(norm, force_open=force_open)
+
+            if not self.is_running():
+                self._stop_event = threading.Event()
+                self._thread = threading.Thread(target=self._loop, daemon=True)
+                self._thread.start()
+
+            self._lane_transition_times[norm] = time.time()
+            self._last_transition_time = time.time()
+            return TransitionResult(True, "started", 0.0)
+
+    def stop_lane(self, lane: str, check_cooldown: bool = False) -> TransitionResult:
+        norm = self.intraday_service._normalize_lane(lane)
+        with self._lifecycle_lock:
+            if not self.is_lane_running(norm):
+                return TransitionResult(False, "not_running", 0.0)
+
+            if check_cooldown:
+                remaining = self.get_lane_cooldown_remaining(norm)
+                if remaining > 0:
+                    return TransitionResult(False, "cooldown", remaining)
+
+            self.intraday_service.stop_lane(norm)
+            self._lane_transition_times[norm] = time.time()
+            self._last_transition_time = time.time()
+            return TransitionResult(True, "stopped", 0.0)
 
     def start_daemon(self, check_cooldown: bool = False) -> TransitionResult:
         """Starts daemon thread for automatic time window monitoring without force_open override."""

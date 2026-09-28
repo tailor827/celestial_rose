@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 from typing import Optional
@@ -7,7 +8,12 @@ class ReportLog:
     """Helper to parse report output logs (JSON file or process stdout)."""
     def __init__(self, name: str, log_dir: Optional[Path] = None):
         self.name = name
-        self.log_dir = log_dir or (BASE_DIR / "logs")
+        if log_dir is not None:
+            self.log_dir = Path(log_dir)
+        elif "PARADISO_LOGS_DIR" in os.environ:
+            self.log_dir = Path(os.environ["PARADISO_LOGS_DIR"])
+        else:
+            self.log_dir = BASE_DIR / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
         self.status = "Completed"
@@ -90,9 +96,9 @@ class ReportLog:
                     self.status = "Skipped" if raw_status in ("Skipped", "Retrial") else raw_status
                 else:
                     self.status = self.parse_output(default_stdout)
-                self.last_run = data.get("last_run", "--")
-                self.last_output = data.get("last_output", default_stdout)
-                self.reason = data.get("reason", "") or data.get("log", "")
+                self.last_run = data.get("last_run") or data.get("timestamp") or "--"
+                self.last_output = data.get("last_output") or data.get("message") or default_stdout
+                self.reason = data.get("reason", "") or data.get("log", "") or data.get("message", "")
         except Exception:
             self.status = self.parse_output(default_stdout)
             self.last_output = default_stdout

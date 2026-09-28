@@ -1,15 +1,44 @@
-import unittest
+import os
 import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
 from unittest.mock import patch
 from app import create_app
-from utils.config import CONFIG
+from utils.config import BASE_DIR, CONFIG
 from utils.clock import CLOCK
 
 class TestAPIEndpoints(unittest.TestCase):
     def setUp(self):
-        self.app, self.paradiso = create_app()
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.dir_path = Path(self.test_dir.name)
+        real_auto = BASE_DIR / "storage" / "automations.json"
+        if real_auto.exists():
+            shutil.copy2(real_auto, self.dir_path / "automations.json")
+        (self.dir_path / "intraday.json").write_text("{}", encoding="utf-8")
+        os.environ["PARADISO_STORAGE_DIR"] = str(self.dir_path)
+
+        self.logs_dir = self.dir_path / "logs"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["PARADISO_LOGS_DIR"] = str(self.logs_dir)
+        (self.logs_dir / "Delinquency_RollRate.json").write_text(json.dumps({
+            "name": "Delinquency_RollRate",
+            "status": "Completed",
+            "last_output": "Roll-rate metrics computed successfully"
+        }), encoding="utf-8")
+
+        self.app, self.paradiso = create_app(storage_dir=self.dir_path)
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
+
+    def tearDown(self):
+        os.environ.pop("PARADISO_STORAGE_DIR", None)
+        os.environ.pop("PARADISO_LOGS_DIR", None)
+        try:
+            self.test_dir.cleanup()
+        except Exception:
+            pass
 
     def test_index_route(self):
         res = self.client.get("/")
@@ -109,7 +138,7 @@ class TestAPIEndpoints(unittest.TestCase):
 
     def test_trigger_single_automation_run(self):
         """Verifies that manual trigger attempts on Type A intraday reports return 403 Disabled error."""
-        res = self.client.post("/api/automation/run", json={"name": "Delinquency_RollRate"})
+        res = self.client.post("/api/automation/run", json={"name": "SF Base"})
         self.assertEqual(res.status_code, 403)
         data = json.loads(res.data)
         self.assertFalse(data.get("ok"))

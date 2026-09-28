@@ -1,3 +1,5 @@
+import os
+import shutil
 import unittest
 import tempfile
 import json
@@ -7,6 +9,7 @@ from unittest.mock import patch
 
 from app import create_app
 from utils.config import (
+    BASE_DIR,
     load_config,
     save_config,
     validate_config,
@@ -17,13 +20,26 @@ from utils.clock import CLOCK
 
 class TestSettingsSubsystem(unittest.TestCase):
     def setUp(self):
-        self.config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.dir_path = Path(self.test_dir.name)
+        real_auto = BASE_DIR / "storage" / "automations.json"
+        if real_auto.exists():
+            shutil.copy2(real_auto, self.dir_path / "automations.json")
+        (self.dir_path / "intraday.json").write_text("{}", encoding="utf-8")
+        os.environ["PARADISO_STORAGE_DIR"] = str(self.dir_path)
+
+        self.config_path = BASE_DIR / "config.yaml"
         self.original_config_content = self.config_path.read_text(encoding="utf-8")
-        self.app, self.paradiso = create_app()
+        self.app, self.paradiso = create_app(storage_dir=self.dir_path)
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
     def tearDown(self):
+        os.environ.pop("PARADISO_STORAGE_DIR", None)
+        try:
+            self.test_dir.cleanup()
+        except Exception:
+            pass
         self.config_path.write_text(self.original_config_content, encoding="utf-8")
         load_config(self.config_path)
         CLOCK.set_simulation_mode(True)

@@ -86,6 +86,43 @@ class Runner:
             except Exception:
                 pass
 
+    def kill_process(self, name: str):
+        """Terminates a specific named child subprocess immediately, including its process tree."""
+        process = None
+        with self._proc_lock:
+            process = self.active_processes.pop(name, None)
+            if not process:
+                return
+            self.killed_processes.add(name)
+            setattr(process, "_was_killed", True)
+            exec_id = getattr(process, "_exec_id", None)
+            if exec_id is not None:
+                self.killed_exec_ids.add(exec_id)
+
+            pid = getattr(process, "pid", None)
+            if pid and sys.platform == "win32":
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+                    )
+                except Exception:
+                    pass
+
+            try:
+                process.terminate()
+                process.kill()
+            except Exception:
+                pass
+
+        if process:
+            try:
+                process.wait(timeout=1.0)
+            except Exception:
+                pass
+
     def _watcher(self, name: str, process: subprocess.Popen, start_time: float, callback_good: Callable, callback_fail: Callable, exec_id: Optional[int] = None):
         stdout, stderr = process.communicate()
         proc_exec_id = exec_id if exec_id is not None else getattr(process, "_exec_id", None)

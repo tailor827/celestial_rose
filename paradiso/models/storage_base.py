@@ -84,6 +84,8 @@ class StorageBase:
             ) from e
 
     def _write_json_unlocked(self, data: Dict[str, Any]) -> None:
+        if not self.file_path.parent.exists():
+            return
         max_retries = 5
         for attempt in range(max_retries):
             try:

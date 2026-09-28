@@ -17,7 +17,15 @@ from models.intraday import ReportRun, IntradayDay, Intraday
 
 class TestF010AdversarialVerification(unittest.TestCase):
     def setUp(self):
-        self.app, self.paradiso = create_app()
+        import tempfile
+        import os
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.storage_dir = Path(self.test_dir.name)
+        (self.storage_dir / "automations.json").write_text("{}", encoding="utf-8")
+        (self.storage_dir / "intraday.json").write_text("{}", encoding="utf-8")
+        os.environ["PARADISO_STORAGE_DIR"] = str(self.storage_dir)
+
+        self.app, self.paradiso = create_app(storage_dir=self.storage_dir)
         self.app.config["TESTING"] = True
         self.intra_svc = self.paradiso.intraday_service
         self.auto_svc = self.intra_svc.automation_service
@@ -30,17 +38,12 @@ class TestF010AdversarialVerification(unittest.TestCase):
             self.runner.kill_all()
         except Exception:
             pass
-
-        date = CLOCK.date_str()
-        for r_name in self.test_reports:
-            try:
-                self.auto_svc.delete(r_name)
-            except Exception:
-                pass
-            def _clean(data):
-                if date in data and "reports_ran" in data[date]:
-                    data[date]["reports_ran"].pop(r_name, None)
-            self.intra_svc.intraday_repo.mutate(_clean)
+        import os
+        os.environ.pop("PARADISO_STORAGE_DIR", None)
+        try:
+            self.test_dir.cleanup()
+        except Exception:
+            pass
 
     def test_2200_cutoff_fresh_task_killed_and_marked_failed(self):
         """Vector 1: Fresh in-flight task is killed and transitions to Failed on 22:00 cutoff."""

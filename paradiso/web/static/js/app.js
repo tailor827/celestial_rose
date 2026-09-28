@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchDashboardStats();
     fetchAutomations();
     fetchTimeline();
+    fetchLanesStatus();
     checkSchedulerStatus();
 
     // Attach direct click listeners to nav items
@@ -21,9 +22,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navTimeline) {
         navTimeline.addEventListener('click', (e) => switchTab('timeline', e));
     }
+    const navTypeA = document.getElementById('nav-type-a');
+    if (navTypeA) {
+        navTypeA.addEventListener('click', (e) => switchTab('type-a', e));
+    }
+    const navTypeB = document.getElementById('nav-type-b');
+    if (navTypeB) {
+        navTypeB.addEventListener('click', (e) => switchTab('type-b', e));
+    }
+    const navTypeC = document.getElementById('nav-type-c');
+    if (navTypeC) {
+        navTypeC.addEventListener('click', (e) => switchTab('type-c', e));
+    }
     const navExec = document.getElementById('nav-executions');
     if (navExec) {
         navExec.addEventListener('click', (e) => switchTab('executions', e));
+    }
+    const navTesting = document.getElementById('nav-testing');
+    if (navTesting) {
+        navTesting.addEventListener('click', (e) => switchTab('testing', e));
     }
     const navGuide = document.getElementById('nav-guide');
     if (navGuide) {
@@ -34,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         fetchDashboardStats();
         fetchAutomations();
+        fetchLanesStatus();
         checkSchedulerStatus();
         if (activeTab === 'executions') {
             fetchExecutionHistory();
@@ -75,6 +93,30 @@ function switchTab(tabName, event) {
             viewAuto.classList.add('active');
         }
         fetchAutomations();
+    } else if (tabName === 'type-a') {
+        const navTypeA = document.getElementById('nav-type-a');
+        if (navTypeA) navTypeA.classList.add('active');
+        const viewTypeA = document.getElementById('view-type-a');
+        if (viewTypeA) {
+            viewTypeA.style.display = 'grid';
+            viewTypeA.classList.add('active');
+        }
+    } else if (tabName === 'type-b') {
+        const navTypeB = document.getElementById('nav-type-b');
+        if (navTypeB) navTypeB.classList.add('active');
+        const viewTypeB = document.getElementById('view-type-b');
+        if (viewTypeB) {
+            viewTypeB.style.display = 'grid';
+            viewTypeB.classList.add('active');
+        }
+    } else if (tabName === 'type-c') {
+        const navTypeC = document.getElementById('nav-type-c');
+        if (navTypeC) navTypeC.classList.add('active');
+        const viewTypeC = document.getElementById('view-type-c');
+        if (viewTypeC) {
+            viewTypeC.style.display = 'grid';
+            viewTypeC.classList.add('active');
+        }
     } else if (tabName === 'timeline') {
         const navTimeline = document.getElementById('nav-timeline');
         if (navTimeline) navTimeline.classList.add('active');
@@ -93,6 +135,16 @@ function switchTab(tabName, event) {
             viewExec.classList.add('active');
         }
         fetchExecutionHistory();
+    } else if (tabName === 'testing') {
+        const navTesting = document.getElementById('nav-testing');
+        if (navTesting) navTesting.classList.add('active');
+        const viewTesting = document.getElementById('view-testing');
+        if (viewTesting) {
+            viewTesting.style.display = 'block';
+            viewTesting.classList.add('active');
+        }
+        fetchSettings();
+        updateTestingBadge();
     } else if (tabName === 'settings') {
         const navSettings = document.getElementById('nav-settings');
         if (navSettings) navSettings.classList.add('active');
@@ -224,42 +276,277 @@ let isSchedulerRunning = false;
 let transitionCooldownRemaining = 0;
 let transitionCooldownTimer = null;
 
-function updateSchedulerButtonUI() {
-    const startBtn = document.getElementById('btn-start-scheduler');
-    const stopBtn = document.getElementById('btn-stop-scheduler');
-    if (!startBtn) return;
+const lanesState = {
+    type_a: { running: false, cooldown: 0, timer: null, active_runs: 0, max_concurrent_run: 1 },
+    type_b: { running: false, cooldown: 0, timer: null, active_runs: 0 },
+    type_c: { running: false, cooldown: 0, timer: null, active_runs: 0 }
+};
 
-    if (transitionCooldownRemaining > 0) {
-        startBtn.disabled = true;
-        if (stopBtn) stopBtn.disabled = true;
-        startBtn.innerHTML = `⏳ Cooldown (${transitionCooldownRemaining}s)`;
-    } else {
-        startBtn.disabled = false;
-        if (stopBtn) stopBtn.disabled = false;
-        if (isSchedulerRunning) {
-            startBtn.classList.add('btn-start-active');
-            startBtn.innerHTML = '● Scheduler Running';
+function normalizeLaneKey(lane) {
+    const l = String(lane || '').toLowerCase();
+    if (l.includes('b')) return 'type_b';
+    if (l.includes('c')) return 'type_c';
+    return 'type_a';
+}
+
+function showToast(msg, type = 'info') {
+    let container = document.getElementById('global-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'global-toast-container';
+        container.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; max-width: 440px;';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    const isError = (type === 'error' || type === 'warn' || type === 'warning');
+    toast.className = `settings-toast ${isError ? 'toast-error' : 'toast-success'}`;
+    toast.style.cssText = 'box-shadow: 0 4px 20px rgba(0,0,0,0.5); backdrop-filter: blur(8px); cursor: pointer;';
+    const icon = isError ? '⚠ ' : (type === 'success' ? '✓ ' : 'ℹ ');
+    toast.innerText = icon + msg;
+    toast.onclick = () => toast.remove();
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4500);
+}
+
+async function startLane(lane) {
+    const key = normalizeLaneKey(lane);
+    try {
+        const res = await fetch('/api/paradiso/lane/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lane: key })
+        });
+        const data = await res.json();
+        if (data.cooldown_remaining && data.cooldown_remaining > 0) {
+            startLaneCooldown(key, data.cooldown_remaining);
+        }
+        if (!data.ok && res.status === 429) {
+            showToast(`Lane cooldown active: please wait ${Math.ceil(data.cooldown_remaining || 10)}s`, 'error');
+            return;
+        }
+        if (!data.ok && res.status === 409) {
+            showToast(data.error || `Lane start blocked outside the intraday open window.`, 'error');
+            return;
+        }
+        if (!data.ok) {
+            showToast(data.error || `Failed to start lane ${key}`, 'error');
+            return;
+        }
+        await fetchLanesStatus();
+        fetchDashboardStats();
+    } catch (err) {
+        console.error(`Failed to start lane ${key}:`, err);
+        showToast(`Network error starting lane ${key}`, 'error');
+    }
+}
+
+async function stopLane(lane) {
+    const key = normalizeLaneKey(lane);
+    try {
+        const res = await fetch('/api/paradiso/lane/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lane: key })
+        });
+        const data = await res.json();
+        if (data.cooldown_remaining && data.cooldown_remaining > 0) {
+            startLaneCooldown(key, data.cooldown_remaining);
+        }
+        if (!data.ok && res.status === 429) {
+            showToast(`Lane cooldown active: please wait ${Math.ceil(data.cooldown_remaining || 10)}s`, 'error');
+            return;
+        }
+        if (!data.ok) {
+            showToast(data.error || `Failed to stop lane ${key}`, 'error');
+            return;
+        }
+        await fetchLanesStatus();
+        fetchDashboardStats();
+    } catch (err) {
+        console.error(`Failed to stop lane ${key}:`, err);
+        showToast(`Network error stopping lane ${key}`, 'error');
+    }
+}
+
+function startLaneCooldown(laneKey, seconds) {
+    const s = lanesState[laneKey];
+    if (!s) return;
+    s.cooldown = Math.max(1, Math.ceil(seconds || 10));
+    updateLaneUI(laneKey);
+
+    if (s.timer) clearInterval(s.timer);
+    s.timer = setInterval(() => {
+        s.cooldown -= 1;
+        if (s.cooldown <= 0) {
+            clearInterval(s.timer);
+            s.timer = null;
+            s.cooldown = 0;
+            fetchLanesStatus();
         } else {
-            startBtn.classList.remove('btn-start-active');
-            startBtn.innerHTML = 'Start Scheduler';
+            updateLaneUI(laneKey);
+        }
+    }, 1000);
+}
+
+function updateLaneUI(laneKey) {
+    const s = lanesState[laneKey];
+    if (!s) return;
+
+    const tabSuffix = laneKey === 'type_a' ? 'a' : (laneKey === 'type_b' ? 'b' : 'c');
+    const isRunning = s.running;
+    const inCooldown = s.cooldown > 0;
+
+    // 1. Top bar elements
+    const topStartBtn = document.getElementById(`btn-top-start-${laneKey}`);
+    const topStopBtn = document.getElementById(`btn-top-stop-${laneKey}`);
+    const topStatus = document.getElementById(`top-status-${laneKey}`);
+
+    // 2. Dashboard hub elements
+    const dashStartBtn = document.getElementById(`btn-dash-start-${laneKey}`);
+    const dashStopBtn = document.getElementById(`btn-dash-stop-${laneKey}`);
+    const dashStatus = document.getElementById(`dash-status-${laneKey}`);
+
+    // 3. Tab view header elements
+    const tabStartBtn = document.getElementById(`btn-start-lane-${tabSuffix}`);
+    const tabStopBtn = document.getElementById(`btn-stop-lane-${tabSuffix}`);
+    const tabBadge = document.getElementById(`lane-${tabSuffix}-badge`);
+
+    const configureBtn = (startBtn, stopBtn, isTop) => {
+        if (!startBtn || !stopBtn) return;
+        if (inCooldown) {
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            startBtn.innerHTML = `⏳ ${s.cooldown}s`;
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+        } else if (isRunning) {
+            startBtn.style.display = 'none';
+            stopBtn.disabled = false;
+            stopBtn.innerHTML = isTop ? '⏹ Stop' : `⏹ Stop Lane ${tabSuffix.toUpperCase()}`;
+            stopBtn.style.display = 'inline-flex';
+        } else {
+            startBtn.disabled = false;
+            startBtn.innerHTML = isTop ? '▶ Start' : `▶ Start Lane ${tabSuffix.toUpperCase()}`;
+            startBtn.style.display = 'inline-flex';
+            stopBtn.style.display = 'none';
+        }
+    };
+
+    const configureStatus = (badgeEl) => {
+        if (!badgeEl) return;
+        if (isRunning) {
+            badgeEl.innerHTML = '● Active';
+            badgeEl.style.color = '#34d399';
+            if (badgeEl.classList.contains('badge')) {
+                badgeEl.style.background = 'rgba(52, 211, 153, 0.15)';
+                badgeEl.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+            }
+        } else {
+            badgeEl.innerHTML = '○ Standby';
+            badgeEl.style.color = 'var(--text-muted)';
+            if (badgeEl.classList.contains('badge')) {
+                badgeEl.style.background = 'rgba(140, 150, 171, 0.15)';
+                badgeEl.style.borderColor = 'rgba(140, 150, 171, 0.3)';
+            }
+        }
+    };
+
+    configureBtn(topStartBtn, topStopBtn, true);
+    configureStatus(topStatus);
+
+    configureBtn(dashStartBtn, dashStopBtn, false);
+    configureStatus(dashStatus);
+
+    configureBtn(tabStartBtn, tabStopBtn, false);
+    configureStatus(tabBadge);
+
+    // 4. Lane A specific Concurrency Pool metrics
+    if (laneKey === 'type_a') {
+        const maxSlots = s.max_concurrent_run || 1;
+        const modeBadge = document.getElementById('lane-a-mode-badge');
+        if (modeBadge) {
+            modeBadge.innerText = maxSlots > 1 ? `Concurrent Pool (${maxSlots} Slots)` : 'Single-Threaded FIFO';
+        }
+        const modeNum = document.getElementById('metric-a-mode-num');
+        if (modeNum) {
+            modeNum.innerText = maxSlots > 1 ? `${maxSlots}-at-a-time` : '1-at-a-time';
+        }
+        const modeSub = document.getElementById('metric-a-mode-sub');
+        if (modeSub) {
+            modeSub.innerText = maxSlots > 1 ? `Parallel Slot Semaphore Pool` : 'Strict FIFO Queue (1 Slot)';
+        }
+        const activeSlots = document.getElementById('metric-a-active-slots');
+        if (activeSlots) {
+            if (isRunning) {
+                activeSlots.innerText = `${s.active_runs} / ${maxSlots} Active`;
+                activeSlots.style.color = s.active_runs > 0 ? '#34d399' : '#60a5fa';
+            } else {
+                activeSlots.innerText = `0 / ${maxSlots} Standby`;
+                activeSlots.style.color = 'var(--text-muted)';
+            }
+        }
+        const slotsSub = document.getElementById('metric-a-slots-sub');
+        if (slotsSub) {
+            slotsSub.innerText = `Max ${maxSlots} in-flight process${maxSlots > 1 ? 'es' : ''} permitted`;
         }
     }
 }
 
+async function fetchLanesStatus() {
+    try {
+        const res = await fetch('/api/paradiso/lanes/status');
+        const data = await res.json();
+        if (!data.ok || !data.lanes) return;
+
+        ['type_a', 'type_b', 'type_c'].forEach(k => {
+            const laneInfo = data.lanes[k];
+            if (!laneInfo) return;
+            lanesState[k].running = Boolean(laneInfo.running);
+            lanesState[k].active_runs = laneInfo.running_count || 0;
+            if (laneInfo.max_concurrent_run) {
+                lanesState[k].max_concurrent_run = laneInfo.max_concurrent_run;
+            }
+            if (laneInfo.cooldown_remaining && laneInfo.cooldown_remaining > 0 && lanesState[k].cooldown <= 0) {
+                startLaneCooldown(k, laneInfo.cooldown_remaining);
+            }
+            updateLaneUI(k);
+        });
+
+        // Update system status line in panel
+        const sysScheduler = document.getElementById('sys-status-scheduler');
+        if (sysScheduler) {
+            const runningLanes = Object.entries(lanesState).filter(([_, s]) => s.running).map(([k, _]) => k.replace('type_', '').toUpperCase());
+            if (runningLanes.length > 0) {
+                sysScheduler.innerHTML = `✓ Scheduler: Active (Lanes: ${runningLanes.join(', ')})`;
+                sysScheduler.style.color = '#34d399';
+            } else {
+                sysScheduler.innerHTML = '○ Scheduler: Standby';
+                sysScheduler.style.color = 'var(--text-muted)';
+            }
+        }
+    } catch (e) {
+        console.error('Failed to fetch lanes status:', e);
+    }
+}
+
+function updateSchedulerButtonUI() {
+    // Kept for backward compatibility
+}
+
 function startTransitionCooldown(seconds) {
     transitionCooldownRemaining = Math.max(1, Math.ceil(seconds || 10));
-    updateSchedulerButtonUI();
     if (transitionCooldownTimer) clearInterval(transitionCooldownTimer);
-
     transitionCooldownTimer = setInterval(() => {
         transitionCooldownRemaining -= 1;
         if (transitionCooldownRemaining <= 0) {
             clearInterval(transitionCooldownTimer);
             transitionCooldownTimer = null;
             transitionCooldownRemaining = 0;
-            checkSchedulerStatus();
-        } else {
-            updateSchedulerButtonUI();
         }
     }, 1000);
 }
@@ -268,24 +555,12 @@ async function checkSchedulerStatus() {
     try {
         const res = await fetch('/api/paradiso/status');
         const data = await res.json();
-        const sysScheduler = document.getElementById('sys-status-scheduler');
-
         if (data.ok) {
             isSchedulerRunning = Boolean(data.running);
             if (data.cooldown_remaining && data.cooldown_remaining > 0 && transitionCooldownRemaining <= 0) {
                 startTransitionCooldown(data.cooldown_remaining);
             }
-            if (sysScheduler) {
-                if (data.running) {
-                    sysScheduler.innerHTML = '✓ Scheduler: Active';
-                    sysScheduler.style.color = '#34d399';
-                } else {
-                    sysScheduler.innerHTML = '○ Scheduler: Standby';
-                    sysScheduler.style.color = 'var(--text-muted)';
-                }
-            }
         }
-        updateSchedulerButtonUI();
         updateSettingsLockUI();
     } catch (e) {}
 }
@@ -505,9 +780,15 @@ function filterAutomationsCatalog() {
 
             <div class="automation-card-actions">
                 <span style="font-size: 11px; color: var(--text-muted);">Last: ${escapeHtml(item.last_run || '--')}</span>
-                <button type="button" class="btn-card-action" onclick="deleteReport('${escapeHtml(item.name)}')" title="Delete report from catalog">
-                    🗑 Delete
-                </button>
+                <div style="display: flex; gap: 6px;">
+                    ${item.status !== 'Disabled' ? `
+                    <button type="button" class="btn-card-action" onclick="disableReport('${escapeHtml(item.name)}')" title="Disable report from scheduling">
+                        ⏸ Disable
+                    </button>` : ''}
+                    <button type="button" class="btn-card-action" onclick="deleteReport('${escapeHtml(item.name)}')" title="Delete report from catalog">
+                        🗑 Delete
+                    </button>
+                </div>
             </div>
         `;
         grid.appendChild(card);
@@ -611,6 +892,31 @@ async function handleAddReportSubmit(e) {
     } finally {
         btn.disabled = false;
         btn.innerText = origText;
+    }
+}
+
+async function disableReport(name) {
+    if (!confirm(`Are you sure you want to disable report '${name}'? This will remove it from today's active execution queue.`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/automation/disable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(data.message || `Report '${name}' disabled.`, 'success');
+            await fetchAutomations();
+            await fetchDashboardStats();
+        } else {
+            showToast(data.error || 'Failed to disable report.', 'error');
+        }
+    } catch (e) {
+        console.error('Disable report error:', e);
+        showToast('Network error disabling report.', 'error');
     }
 }
 
@@ -1164,6 +1470,9 @@ async function fetchSettings() {
         const jobIntEl = document.getElementById('setting-job-interval');
         if (jobIntEl) jobIntEl.value = sched.job_interval_seconds || 15;
 
+        const maxConcEl = document.getElementById('setting-max-concurrent');
+        if (maxConcEl) maxConcEl.value = sched.max_concurrent_run || 1;
+
         // Simulation fields
         const simEnabledEl = document.getElementById('setting-sim-enabled');
         if (simEnabledEl) simEnabledEl.value = sim.enabled ? "true" : "false";
@@ -1172,6 +1481,7 @@ async function fetchSettings() {
         if (simSpeedEl) simSpeedEl.value = parseFloat(sim.speed_multiplier || 600.0).toFixed(1);
 
         toggleSimSpeedDisabled();
+        updateTestingBadge();
 
         // Executable fields
         const pyPathEl = document.getElementById('setting-python-path');
@@ -1267,7 +1577,8 @@ async function handleSettingsSubmit(e) {
             intraday_start_time: document.getElementById('setting-start-time').value.trim(),
             intraday_idle_time: document.getElementById('setting-idle-time').value.trim(),
             intraday_close_time: document.getElementById('setting-close-time').value.trim(),
-            job_interval_seconds: parseInt(document.getElementById('setting-job-interval').value, 10) || 15
+            job_interval_seconds: parseInt(document.getElementById('setting-job-interval').value, 10) || 15,
+            max_concurrent_run: parseInt(document.getElementById('setting-max-concurrent').value, 10) || 1
         },
         simulation: {
             enabled: document.getElementById('setting-sim-enabled').value === 'true',
@@ -1313,12 +1624,14 @@ async function triggerClockReset() {
         const data = await res.json();
         if (data.ok) {
             showSettingsToast('Simulation clock reset to midnight.', 'success');
+            showTestingToast('Simulation clock reset to midnight.', 'success');
             fetchDashboardStats();
             fetchTimeline();
         }
     } catch (e) {
         console.error('Error resetting clock:', e);
         showSettingsToast('Failed to reset simulation clock.', 'error');
+        showTestingToast('Failed to reset simulation clock.', 'error');
     }
 }
 
@@ -1332,5 +1645,100 @@ function showSettingsToast(msg, type = 'success') {
     window._toastTimeout = setTimeout(() => {
         banner.style.display = 'none';
     }, 4000);
+}
+
+async function applySimulationSettings() {
+    if (isSchedulerRunning) {
+        showTestingToast('Simulation settings cannot be changed while scheduler is running. Stop the scheduler first.', 'error');
+        return;
+    }
+    const simEnabled = document.getElementById('setting-sim-enabled').value === 'true';
+    const simSpeed = parseFloat(document.getElementById('setting-sim-speed').value);
+    const btn = document.getElementById('btn-apply-simulation');
+    const origText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Applying...';
+    }
+
+    try {
+        const res = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                simulation: {
+                    enabled: simEnabled,
+                    speed_multiplier: simSpeed
+                }
+            })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showTestingToast('Simulation settings applied successfully.', 'success');
+            fetchDashboardStats();
+            updateTestingBadge();
+        } else {
+            showTestingToast(data.error || 'Failed to apply simulation settings.', 'error');
+        }
+    } catch (err) {
+        console.error('Error applying simulation settings:', err);
+        showTestingToast('Network error while applying simulation settings.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+async function resetAutomationsFromLab() {
+    const btn = document.getElementById('btn-reset-test');
+    const origText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Resetting...';
+    }
+    try {
+        await resetAutomations();
+        showTestingToast('Intraday automations and queue reset for testing.', 'success');
+    } catch (e) {
+        showTestingToast('Failed to reset automations.', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
+    }
+}
+
+function showTestingToast(msg, type = 'success') {
+    const banner = document.getElementById('testing-alert-banner');
+    if (!banner) return;
+    banner.className = `settings-toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+    banner.innerText = (type === 'success' ? '✓ ' : '⚠ ') + msg;
+    banner.style.display = 'flex';
+    clearTimeout(window._testingToastTimeout);
+    window._testingToastTimeout = setTimeout(() => {
+        banner.style.display = 'none';
+    }, 4000);
+}
+
+function updateTestingBadge() {
+    const badge = document.getElementById('testing-mode-badge');
+    const simEnabled = document.getElementById('setting-sim-enabled');
+    const simSpeed = document.getElementById('setting-sim-speed');
+    if (!badge) return;
+    if (simEnabled && simEnabled.value === 'true') {
+        const speedText = simSpeed && simSpeed.selectedIndex >= 0 ? simSpeed.options[simSpeed.selectedIndex].text.split(' ')[0] : '600x';
+        badge.innerText = `⚡ Fast-Forward Simulation (${speedText})`;
+        badge.style.background = 'rgba(96, 165, 250, 0.15)';
+        badge.style.color = '#60a5fa';
+        badge.style.borderColor = 'rgba(96, 165, 250, 0.3)';
+    } else {
+        badge.innerText = '● Real System Wall-Clock';
+        badge.style.background = 'rgba(16, 185, 129, 0.15)';
+        badge.style.color = '#34d399';
+        badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+    }
 }
 

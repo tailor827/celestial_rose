@@ -26,6 +26,30 @@ class ExecutionController:
         app.add_url_rule("/api/executions/log/<name>", "get_execution_log", self.get_execution_log, methods=["GET"])
 
     def run_automation(self):
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return jsonify({"ok": False, "error": "Missing name parameter"}), 400
+
+        report = self.automation_service.get_by_name(name)
+        if not report:
+            return jsonify({"ok": False, "error": f"Report '{name}' not found in catalog"}), 404
+
+        if report.report_type in ["type_b", "type_c"]:
+            if self.intraday_service:
+                status = self.intraday_service.resolve_status()
+                if status != "OPEN" and not getattr(self.intraday_service, "force_open", False):
+                    return jsonify({
+                        "ok": False,
+                        "error": f"Manual execution is blocked outside the intraday open window (07:00 - 21:00). Current status: {status}."
+                    }), 409
+                success = self.intraday_service.trigger_manual_run(name)
+                if not success:
+                    return jsonify({"ok": False, "error": f"Unable to execute '{name}': report is already running or scheduler state invalid."}), 409
+            else:
+                self.execution_service.execute_report(name=name)
+            return jsonify({"ok": True, "message": f"Manual run triggered for {report.report_type.upper()} report '{name}'."}), 200
+
         return jsonify({
             "ok": False,
             "error": "Manual execution is disabled for intraday sequential reports. Paradiso manages execution automatically."
@@ -40,7 +64,11 @@ class ExecutionController:
         if not name or ".." in name or "/" in name or "\\" in name:
             return jsonify({"ok": False, "error": "Invalid report name provided."}), 400
 
-        logs_dir = (BASE_DIR / "logs").resolve()
+        import os
+        if "PARADISO_LOGS_DIR" in os.environ:
+            logs_dir = Path(os.environ["PARADISO_LOGS_DIR"]).resolve()
+        else:
+            logs_dir = (BASE_DIR / "logs").resolve()
         safe_name = Path(name).name
         if safe_name != name:
             return jsonify({"ok": False, "error": "Invalid report name provided."}), 400

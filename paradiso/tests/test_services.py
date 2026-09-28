@@ -48,12 +48,19 @@ class TestServices(unittest.TestCase):
         auto_storage = Automations(self.auto_path)
         auto_storage._write_json(sample_automations)
 
+        self.logs_dir = self.dir_path / "logs"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        import os
+        os.environ["PARADISO_LOGS_DIR"] = str(self.logs_dir)
+
         self.automation_service = AutomationService(auto_storage)
         self.execution_service = ExecutionService(self.automation_service)
         self.intraday_service = IntradayService(self.automation_service, self.execution_service)
         self.intraday_service.intraday_repo = Intraday(self.intraday_path)
 
     def tearDown(self):
+        import os
+        os.environ.pop("PARADISO_LOGS_DIR", None)
         try:
             self.test_dir.cleanup()
         except Exception:

@@ -17,13 +17,27 @@ from services.paradiso import Paradiso
 
 class TestBG001BG002AdversarialVerification(unittest.TestCase):
     def setUp(self):
-        self.app, self.paradiso = create_app()
+        import tempfile
+        import os
+        self.test_dir = tempfile.TemporaryDirectory()
+        self.storage_dir = Path(self.test_dir.name)
+        (self.storage_dir / "automations.json").write_text("{}", encoding="utf-8")
+        (self.storage_dir / "intraday.json").write_text("{}", encoding="utf-8")
+        os.environ["PARADISO_STORAGE_DIR"] = str(self.storage_dir)
+
+        self.app, self.paradiso = create_app(storage_dir=self.storage_dir)
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
     def tearDown(self):
         try:
             self.paradiso.stop()
+        except Exception:
+            pass
+        import os
+        os.environ.pop("PARADISO_STORAGE_DIR", None)
+        try:
+            self.test_dir.cleanup()
         except Exception:
             pass
 

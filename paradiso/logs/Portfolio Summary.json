@@ -1,0 +1,18 @@
+{
+  "name": "Portfolio Summary",
+  "report_name": "Portfolio Summary",
+  "status": "Completed",
+  "last_run": "2026-09-24 10:22:09",
+  "timestamp": "2026-09-24 10:22:09 AM",
+  "duration": "0.5s",
+  "last_output": "Portfolio performance metrics and sector allocations calculated successfully.",
+  "message": "Portfolio performance metrics and sector allocations calculated successfully.",
+  "reason": "Portfolio performance metrics and sector allocations calculated successfully.",
+  "deliverable": "portfolio_summary_published.csv",
+  "metrics": {
+    "total_aum": 85420000.0,
+    "daily_pnl": 412500.0,
+    "daily_return_pct": "+0.483%",
+    "active_positions_count": 142
+  }
+}

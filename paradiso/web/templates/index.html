@@ -17,9 +17,13 @@
             </div>
             <ul class="nav-list">
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-dashboard" class="nav-link active" onclick="switchTab('dashboard', event)"><span class="nav-icon">⌂</span> Dashboard</a></li>
-                <li class="nav-item"><a href="javascript:void(0)" id="nav-automations" class="nav-link" onclick="switchTab('automations', event)"><span class="nav-icon">⬡</span> Automations</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-automations" class="nav-link" onclick="switchTab('automations', event)"><span class="nav-icon">⬡</span> All Automations</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-type-a" class="nav-link" onclick="switchTab('type-a', event)"><span class="nav-icon">📋</span> Type A: Sequential</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-type-b" class="nav-link" onclick="switchTab('type-b', event)"><span class="nav-icon">🔄</span> Type B: Recurring</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-type-c" class="nav-link" onclick="switchTab('type-c', event)"><span class="nav-icon">⏰</span> Type C: Timeslots</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-timeline" class="nav-link" onclick="switchTab('timeline', event)"><span class="nav-icon">⏱</span> Timeline</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-executions" class="nav-link" onclick="switchTab('executions', event)"><span class="nav-icon">▷</span> Executions</a></li>
+                <li class="nav-item"><a href="javascript:void(0)" id="nav-testing" class="nav-link" onclick="switchTab('testing', event)"><span class="nav-icon">🧪</span> Testing Lab</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-settings" class="nav-link" onclick="switchTab('settings', event)"><span class="nav-icon">⚙</span> Settings</a></li>
                 <li class="nav-item"><a href="javascript:void(0)" id="nav-guide" class="nav-link" onclick="switchTab('guide', event)"><span class="nav-icon">📖</span> User Guide</a></li>
             </ul>
@@ -43,6 +47,26 @@
         <!-- Top Bar -->
         <header class="top-bar">
             <div class="quote-sub">“AUTOMATE THE MUNDANE. PRESERVE WHAT MATTERS.”</div>
+            <div id="top-lane-bar" style="display: flex; gap: 8px; align-items: center;">
+                <div class="top-lane-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--card-border); border-radius: 6px; font-size: 11px;">
+                    <span style="font-weight: 700; color: #60a5fa;">Lane A</span>
+                    <button type="button" class="btn-lane-action" id="btn-top-start-type_a" onclick="startLane('type_a')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600;">▶ Start</button>
+                    <button type="button" class="btn-lane-action" id="btn-top-stop-type_a" onclick="stopLane('type_a')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600; display: none;">⏹ Stop</button>
+                    <span id="top-status-type_a" style="color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                </div>
+                <div class="top-lane-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--card-border); border-radius: 6px; font-size: 11px;">
+                    <span style="font-weight: 700; color: #fde047;">Lane B</span>
+                    <button type="button" class="btn-lane-action" id="btn-top-start-type_b" onclick="startLane('type_b')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600;">▶ Start</button>
+                    <button type="button" class="btn-lane-action" id="btn-top-stop-type_b" onclick="stopLane('type_b')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600; display: none;">⏹ Stop</button>
+                    <span id="top-status-type_b" style="color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                </div>
+                <div class="top-lane-pill" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(30, 41, 59, 0.7); border: 1px solid var(--card-border); border-radius: 6px; font-size: 11px;">
+                    <span style="font-weight: 700; color: #c084fc;">Lane C</span>
+                    <button type="button" class="btn-lane-action" id="btn-top-start-type_c" onclick="startLane('type_c')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600;">▶ Start</button>
+                    <button type="button" class="btn-lane-action" id="btn-top-stop-type_c" onclick="stopLane('type_c')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600; display: none;">⏹ Stop</button>
+                    <span id="top-status-type_c" style="color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                </div>
+            </div>
             <div style="display: flex; gap: 12px; align-items: center;">
                 <div style="margin-right: 10px; display: flex; align-items: center; gap: 8px;">
                     <span id="clock-date" style="font-size: 11px; color: var(--text-muted);">2026-09-06</span>
@@ -50,9 +74,6 @@
                     <span id="sim-badge" style="font-size: 10px; background: rgba(96, 165, 250, 0.15); color: #60a5fa; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(96, 165, 250, 0.3);">⚡ 10m/s</span>
                     <span style="color: #10b981; font-size: 12px;">● System Online</span>
                 </div>
-                <button id="btn-start-scheduler" class="btn-primary" onclick="startScheduler()">Start Scheduler</button>
-                <button id="btn-stop-scheduler" class="btn-primary" onclick="stopScheduler()">Stop Scheduler</button>
-                <button class="btn-primary" onclick="resetAutomations()" style="border-color: rgba(234, 179, 8, 0.4); color: #fde047;">Reset (Test)</button>
             </div>
         </header>
 
@@ -91,6 +112,66 @@
                             <div class="metric-label">Failed</div>
                             <div class="metric-num" id="failed-num" style="color: #f87171;">0</div>
                             <div class="progress-bar-bg"><div id="failed-bar" class="progress-bar-fill" style="background: #ef4444; width: 0%;"></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Lane Dispatcher & Control Hub -->
+                    <div class="panel-card" style="margin-bottom: 24px; padding: 16px 20px; background: rgba(18, 23, 34, 0.7); border: 1px solid var(--card-border); border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px;">Execution Lanes & Control Hub</h3>
+                                <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Start and stop individual scheduling lanes independently with dedicated transition protection.</p>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+                            <!-- Lane A Card -->
+                            <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid var(--card-border); border-radius: 6px; padding: 14px; display: flex; flex-direction: column;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 16px;">📋</span>
+                                        <strong style="color: #60a5fa; font-size: 13px;">Lane A: Sequential</strong>
+                                    </div>
+                                    <span id="dash-status-type_a" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                                </div>
+                                <p style="font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex: 1;">FIFO Queue (07:00–21:00) with zero-penalty dependency skips and 10 PM cutoff.</p>
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top: auto;">
+                                    <button type="button" id="btn-dash-start-type_a" class="btn-primary" onclick="startLane('type_a')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Start Lane A</button>
+                                    <button type="button" id="btn-dash-stop-type_a" class="btn-primary" onclick="stopLane('type_a')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; display: none; cursor: pointer;">⏹ Stop Lane A</button>
+                                    <button type="button" class="btn-primary" onclick="switchTab('type-a', event)" style="padding: 6px 10px; font-size: 11px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">View ↗</button>
+                                </div>
+                            </div>
+                            <!-- Lane B Card -->
+                            <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid var(--card-border); border-radius: 6px; padding: 14px; display: flex; flex-direction: column;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 16px;">🔄</span>
+                                        <strong style="color: #fde047; font-size: 13px;">Lane B: Recurring</strong>
+                                    </div>
+                                    <span id="dash-status-type_b" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                                </div>
+                                <p style="font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex: 1;">Interval background pipelines executing concurrently with self-overlap prevention.</p>
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top: auto;">
+                                    <button type="button" id="btn-dash-start-type_b" class="btn-primary" onclick="startLane('type_b')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Start Lane B</button>
+                                    <button type="button" id="btn-dash-stop-type_b" class="btn-primary" onclick="stopLane('type_b')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; display: none; cursor: pointer;">⏹ Stop Lane B</button>
+                                    <button type="button" class="btn-primary" onclick="switchTab('type-b', event)" style="padding: 6px 10px; font-size: 11px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">View ↗</button>
+                                </div>
+                            </div>
+                            <!-- Lane C Card -->
+                            <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid var(--card-border); border-radius: 6px; padding: 14px; display: flex; flex-direction: column;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 16px;">⏰</span>
+                                        <strong style="color: #c084fc; font-size: 13px;">Lane C: Timeslots</strong>
+                                    </div>
+                                    <span id="dash-status-type_c" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); font-size: 10px;">○ Standby</span>
+                                </div>
+                                <p style="font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex: 1;">Fixed time-pinned reports for BOD (07:00), Mid-day (12:00), EOD (21:00), and custom slots.</p>
+                                <div style="display: flex; gap: 8px; align-items: center; margin-top: auto;">
+                                    <button type="button" id="btn-dash-start-type_c" class="btn-primary" onclick="startLane('type_c')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Start Lane C</button>
+                                    <button type="button" id="btn-dash-stop-type_c" class="btn-primary" onclick="stopLane('type_c')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; display: none; cursor: pointer;">⏹ Stop Lane C</button>
+                                    <button type="button" class="btn-primary" onclick="switchTab('type-c', event)" style="padding: 6px 10px; font-size: 11px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">View ↗</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -239,6 +320,416 @@
                     <!-- Catalog Grid -->
                     <div class="automations-grid" id="automations-catalog-grid" style="margin-top: 20px;">
                         <!-- Populated via JS -->
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==========================================================================
+                 Type A Tab View: Sequential Pipelines
+                 ========================================================================== -->
+            <div id="view-type-a" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                                <h1 class="hero-title" style="margin-bottom: 0;">Type A: Sequential Queue</h1>
+                                <span id="lane-a-mode-badge" class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3); font-size: 11px; padding: 4px 8px;">Single-Threaded FIFO</span>
+                            </div>
+                            <p id="lane-a-subtitle" class="hero-subtitle">Bank-grade sequential intraday queue with zero-penalty dependency skips and 10:00 PM cutoff.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="lane-control-cluster" style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" id="btn-start-lane-a" class="btn-primary" onclick="startLane('type_a')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; font-weight: 700; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>▶</span> Start Lane A
+                                </button>
+                                <button type="button" id="btn-stop-lane-a" class="btn-primary" onclick="stopLane('type_a')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; padding: 7px 14px; display: none; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>⏹</span> Stop Lane A
+                                </button>
+                                <span id="lane-a-badge" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); border: 1px solid rgba(140, 150, 171, 0.3); font-size: 11px; padding: 6px 10px;">○ Standby</span>
+                            </div>
+                            <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; font-weight: 600;">
+                                ● Window: 07:00 – 21:00
+                            </span>
+                            <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
+                        </div>
+                    </div>
+
+                    <!-- Metric Cards -->
+                    <div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+                        <div class="metric-card">
+                            <div class="metric-label">Execution Mode</div>
+                            <div class="metric-num" id="metric-a-mode-num" style="font-size: 16px; font-weight: 700; color: #60a5fa; margin-top: 8px;">1-at-a-time</div>
+                            <div id="metric-a-mode-sub" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Strict FIFO Queue (1 Slot)</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Active Slot</div>
+                            <div class="metric-num" id="metric-a-active-slots" style="font-size: 16px; font-weight: 700; color: #34d399; margin-top: 8px;">0 / 1 Active</div>
+                            <div id="metric-a-slots-sub" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Max 1 in-flight process permitted</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Dependency Skips</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #fde047; margin-top: 8px;">0 Penalty</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Auto-rotates to back of deck</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Error Retries</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #f87171; margin-top: 8px;">3x Limit</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Terminal failure on 3rd genuine crash</div>
+                        </div>
+                    </div>
+
+                    <!-- Guardrail Banner -->
+                    <div style="margin-bottom: 24px; padding: 14px 18px; border-radius: 8px; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 20px;">🛡️</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Queue Integrity Guardrail (HTTP 403)</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Manual runs are intentionally disabled for Type A reports to prevent concurrency collisions with the sequential intraday deck.</div>
+                            </div>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
+                            Autonomous Dispatch Only
+                        </span>
+                    </div>
+
+                    <!-- Queue Deck Table -->
+                    <div class="table-section">
+                        <div class="table-header">
+                            <h2>Sequential Waitlist & Report Deck</h2>
+                            <span style="font-size: 12px; color: var(--text-muted);">Type A Reports run strictly in FIFO order during the 07:00–21:00 window</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Report Name</th>
+                                    <th>Owner / Team</th>
+                                    <th>Queue Status</th>
+                                    <th>Error Retries</th>
+                                    <th>Receipt Contract Path</th>
+                                    <th>Execution Policy</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="color: var(--text-muted);">1</td>
+                                    <td><strong style="color: #fff;">SF Base</strong></td>
+                                    <td>Cy / MIS Agency</td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td>0 / 3</td>
+                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/SF Base.json</code></td>
+                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--text-muted);">2</td>
+                                    <td><strong style="color: #fff;">Daily Cash Flow</strong></td>
+                                    <td>Finance / Treasury</td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td>0 / 3</td>
+                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Daily Cash Flow.json</code></td>
+                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--text-muted);">3</td>
+                                    <td><strong style="color: #fff;">Portfolio Summary</strong></td>
+                                    <td>Analytics / Asset Mgmt</td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td>0 / 3</td>
+                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Portfolio Summary.json</code></td>
+                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--text-muted);">4</td>
+                                    <td><strong style="color: #fff;">Credit Risk Monitor</strong></td>
+                                    <td>Risk / Credit Analytics</td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td>0 / 3</td>
+                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Credit Risk Monitor.json</code></td>
+                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==========================================================================
+                 Type B Tab View: Recurring at Intervals
+                 ========================================================================== -->
+            <div id="view-type-b" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                                <h1 class="hero-title" style="margin-bottom: 0;">Type B: Recurring at Intervals</h1>
+                                <span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3); font-size: 11px; padding: 4px 8px;">Concurrent Workers</span>
+                            </div>
+                            <p class="hero-subtitle">Automated background pipelines executing recurrently at configured intervals (e.g. 15m, 30m, 1h) with self-overlap prevention.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="lane-control-cluster" style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" id="btn-start-lane-b" class="btn-primary" onclick="startLane('type_b')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; font-weight: 700; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>▶</span> Start Lane B
+                                </button>
+                                <button type="button" id="btn-stop-lane-b" class="btn-primary" onclick="stopLane('type_b')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; padding: 7px 14px; display: none; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>⏹</span> Stop Lane B
+                                </button>
+                                <span id="lane-b-badge" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); border: 1px solid rgba(140, 150, 171, 0.3); font-size: 11px; padding: 6px 10px;">○ Standby</span>
+                            </div>
+                            <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); color: #60a5fa; font-weight: 600;">
+                                ⚡ Concurrent Engine Ready
+                            </span>
+                            <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
+                        </div>
+                    </div>
+
+                    <!-- Metric Cards -->
+                    <div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+                        <div class="metric-card">
+                            <div class="metric-label">Execution Mode</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #fde047; margin-top: 8px;">Concurrent</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Parallel Background Workers</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Active Workers</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #34d399; margin-top: 8px;">0 In-Flight</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Multiple jobs run simultaneously</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Recurrence Engine</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #60a5fa; margin-top: 8px;">Interval-Based</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Configurable per report (e.g. 15m)</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Error Retries</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #f87171; margin-top: 8px;">3x Per Cycle</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Genuine errors retry up to 3x</div>
+                        </div>
+                    </div>
+
+                    <!-- Guardrail Banner -->
+                    <div style="margin-bottom: 24px; padding: 14px 18px; border-radius: 8px; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 20px;">⚡</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Parallel Independence & Self-Overlap Prevention</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Type B reports never block Type A's sequential queue. If a long-running report exceeds its interval, it waits for completion before re-triggering.</div>
+                            </div>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(52, 211, 153, 0.12); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);">
+                            On-Demand Run Enabled
+                        </span>
+                    </div>
+
+                    <!-- Recurring Feeds Table -->
+                    <div class="table-section">
+                        <div class="table-header">
+                            <h2>Recurring Interval Pipelines</h2>
+                            <span style="font-size: 12px; color: var(--text-muted);">Configured recurring streams triggered across the intraday schedule</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Report Name</th>
+                                    <th>Recurrence Interval</th>
+                                    <th>Next Scheduled Due</th>
+                                    <th>Status</th>
+                                    <th>Last Run Output</th>
+                                    <th>Error Retries</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td style="color: var(--text-muted);">1</td>
+                                    <td><strong style="color: #fff;">Hourly Liquidity Feed</strong></td>
+                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 15 min</span></td>
+                                    <td><span style="color: #60a5fa; font-weight: 600;">07:15 (Due in 15m)</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--text-muted);">2</td>
+                                    <td><strong style="color: #fff;">Intraday Transaction Feed</strong></td>
+                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 30 min</span></td>
+                                    <td><span style="color: #60a5fa; font-weight: 600;">07:30 (Due in 30m)</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="color: var(--text-muted);">3</td>
+                                    <td><strong style="color: #fff;">Risk Limit Poller</strong></td>
+                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 60 min</span></td>
+                                    <td><span style="color: #60a5fa; font-weight: 600;">08:00 (Due in 1h)</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ==========================================================================
+                 Type C Tab View: Custom Timeslots
+                 ========================================================================== -->
+            <div id="view-type-c" class="tab-view content-container" style="display: none; grid-template-columns: 1fr;">
+                <section class="left-content">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
+                                <h1 class="hero-title" style="margin-bottom: 0;">Type C: Custom Timeslots</h1>
+                                <span class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 11px; padding: 4px 8px;">Time-Pinned Triggers</span>
+                            </div>
+                            <p class="hero-subtitle">Automated reports scheduled for designated operational moments: BOD (07:00), Mid-day (12:00), EOD (21:00), or custom HH:MM.</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <div class="lane-control-cluster" style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" id="btn-start-lane-c" class="btn-primary" onclick="startLane('type_c')" style="background: rgba(52, 211, 153, 0.15); border: 1px solid rgba(52, 211, 153, 0.4); color: #34d399; font-weight: 700; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>▶</span> Start Lane C
+                                </button>
+                                <button type="button" id="btn-stop-lane-c" class="btn-primary" onclick="stopLane('type_c')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; padding: 7px 14px; display: none; align-items: center; gap: 6px; cursor: pointer;">
+                                    <span>⏹</span> Stop Lane C
+                                </button>
+                                <span id="lane-c-badge" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); border: 1px solid rgba(140, 150, 171, 0.3); font-size: 11px; padding: 6px 10px;">○ Standby</span>
+                            </div>
+                            <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; font-weight: 600;">
+                                ⏰ Timeslot Dispatcher Ready
+                            </span>
+                            <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
+                        </div>
+                    </div>
+
+                    <!-- Metric Cards -->
+                    <div class="metrics-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+                        <div class="metric-card">
+                            <div class="metric-label">BOD Slot (07:00)</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #38bdf8; margin-top: 8px;">Scheduled</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Beginning of Day Open Snapshot</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Mid-Day Slot (12:00)</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #fbbf24; margin-top: 8px;">Scheduled</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Noon Benchmark / FX Rates Fix</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">EOD Slot (21:00)</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #f43f5e; margin-top: 8px;">Scheduled</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">End-of-Day Ledger Reconciliation</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Error Retries</div>
+                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #f87171; margin-top: 8px;">3x Penalty</div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">3x retries per scheduled timeslot</div>
+                        </div>
+                    </div>
+
+                    <!-- Guardrail Banner -->
+                    <div style="margin-bottom: 24px; padding: 14px 18px; border-radius: 8px; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 20px;">⏰</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Timeslot Precision & Single-Execution Invariant</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Each Type C report triggers exactly once per day when the clock crosses its timeslot, or immediately via on-demand manual trigger.</div>
+                            </div>
+                        </div>
+                        <span style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(192, 132, 252, 0.12); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.3);">
+                            On-Demand Run Enabled
+                        </span>
+                    </div>
+
+                    <!-- Timeslot Schedule Table -->
+                    <div class="table-section">
+                        <div class="table-header">
+                            <h2>Timeslot Daily Schedule</h2>
+                            <span style="font-size: 12px; color: var(--text-muted);">Scheduled daily triggers aligned to corporate operating milestones</span>
+                        </div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timeslot Tier</th>
+                                    <th>Report Name</th>
+                                    <th>Scheduled Wall-Clock</th>
+                                    <th>Today's Status</th>
+                                    <th>Last Execution Run</th>
+                                    <th>Error Retries</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">BOD (07:00)</span></td>
+                                    <td><strong style="color: #fff;">Beginning of Day Position File</strong></td>
+                                    <td><span style="color: #fff; font-weight: 600;">07:00 AM</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">Mid-Day (12:00)</span></td>
+                                    <td><strong style="color: #fff;">Mid-Day Currency Benchmark</strong></td>
+                                    <td><span style="color: #fff; font-weight: 600;">12:00 PM</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">EOD (21:00)</span></td>
+                                    <td><strong style="color: #fff;">General Ledger EOD Reconciliation</strong></td>
+                                    <td><span style="color: #fff; font-weight: 600;">09:00 PM</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc;">Custom (16:30)</span></td>
+                                    <td><strong style="color: #fff;">Market Close Portfolio Extract</strong></td>
+                                    <td><span style="color: #fff; font-weight: 600;">04:30 PM</span></td>
+                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
+                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
+                                    <td>0 / 3</td>
+                                    <td>
+                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
+                                            ▶ Run Now
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
             </div>
@@ -453,47 +944,31 @@
                                         <input type="number" id="setting-job-interval" class="settings-control" min="1" step="1" placeholder="15" required>
                                         <span class="field-hint">Background daemon evaluation period</span>
                                     </div>
+
+                                    <div class="form-group" style="margin-top: 16px;">
+                                        <label for="setting-max-concurrent">Lane A Concurrency Pool (parallel slots)</label>
+                                        <input type="number" id="setting-max-concurrent" class="settings-control" min="1" max="20" step="1" placeholder="1" required>
+                                        <span class="field-hint">Max parallel running tasks permitted in Lane A (1–20, default 1)</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Card 2: Time Simulation & Clock -->
-                            <div class="settings-card">
+                            <!-- Card 2: Testing & Simulation Lab Notice -->
+                            <div class="settings-card" style="border: 1px dashed rgba(96, 165, 250, 0.3); background: rgba(96, 165, 250, 0.03);">
                                 <div class="settings-card-header">
-                                    <span class="settings-card-icon">⚡</span>
+                                    <span class="settings-card-icon" style="background: rgba(96, 165, 250, 0.12); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3);">🧪</span>
                                     <div>
-                                        <h3>Clock Simulation Engine</h3>
-                                        <p>Accelerate calendar testing and simulate fast-forward scenarios</p>
+                                        <h3 style="color: #93c5fd;">Testing & Clock Simulation Lab</h3>
+                                        <p>Virtual clock acceleration and test execution sandboxes</p>
                                     </div>
                                 </div>
                                 <div class="settings-card-body">
-                                    <div class="form-group" style="margin-bottom: 16px;">
-                                        <label for="setting-sim-enabled">Simulation State</label>
-                                        <select id="setting-sim-enabled" class="settings-control" onchange="toggleSimSpeedDisabled()">
-                                            <option value="true">Enabled (Accelerated Virtual Time)</option>
-                                            <option value="false">Disabled (Real System Wall-Clock)</option>
-                                        </select>
-                                        <span class="field-hint">Accelerate 24-hr cycle for demonstrations and verification.</span>
-                                    </div>
-
-                                    <div class="form-group" style="margin-bottom: 16px;">
-                                        <label for="setting-sim-speed">Simulation Speed Multiplier</label>
-                                        <select id="setting-sim-speed" class="settings-control">
-                                            <option value="600.0">600x (10 simulated minutes per real second)</option>
-                                            <option value="300.0">300x (5 simulated minutes per real second)</option>
-                                            <option value="60.0">60x (1 simulated minute per real second)</option>
-                                            <option value="10.0">10x (10 simulated seconds per real second)</option>
-                                            <option value="1.0">1x (Real-time speed)</option>
-                                        </select>
-                                        <span class="field-hint">At 600x, an entire 24-hour day passes in 2.4 minutes.</span>
-                                    </div>
-
-                                    <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <div style="font-size: 13px; font-weight: 600; color: #fff;">Reset Clock Baseline</div>
-                                            <div style="font-size: 11px; color: var(--text-muted);">Rewind simulation clock to 00:00:00 AM today</div>
-                                        </div>
-                                        <button type="button" class="btn-primary" onclick="triggerClockReset()" style="font-size: 11px; padding: 6px 12px; border-color: rgba(96, 165, 250, 0.4); color: #93c5fd;">↺ Reset to Midnight</button>
-                                    </div>
+                                    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px;">
+                                        To maintain bank-grade separation between production operations and testing utilities, virtual time simulation, fast-forward speed multipliers, and pipeline state resets are hosted inside the unified <strong style="color: #fff;">Testing Lab</strong>.
+                                    </p>
+                                    <button type="button" class="btn-primary" onclick="switchTab('testing', event)" style="font-size: 11px; padding: 7px 14px; border-color: rgba(96, 165, 250, 0.4); color: #93c5fd; background: rgba(96, 165, 250, 0.1);">
+                                        Open Testing Lab ➔
+                                    </button>
                                 </div>
                             </div>
 
@@ -567,6 +1042,117 @@
                             <button type="button" class="btn-primary" onclick="fetchSettings()" style="padding: 10px 18px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">↻ Reload Saved</button>
                         </div>
                     </form>
+                </section>
+            </div>
+
+            <!-- Testing Lab Tab View -->
+            <div id="view-testing" class="tab-view content-container" style="display: none;">
+                <section class="settings-container">
+                    <!-- Hero Header -->
+                    <div class="settings-header">
+                        <div class="badge-tag" style="background: rgba(234, 179, 8, 0.15); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3);">
+                            🧪 UNIFIED TESTING & SIMULATION LAB
+                        </div>
+                        <h1 class="hero-title" style="margin-top: 8px;">Testing Sandbox & Simulation</h1>
+                        <p class="hero-subtitle">Accelerate calendar cycles, fast-forward intraday workflows, and execute pipeline state resets in an isolated developer sandbox.</p>
+                    </div>
+
+                    <!-- Sandbox Safety & Environment Banner -->
+                    <div id="testing-alert-banner" class="settings-toast toast-success" style="display: none; margin-bottom: 20px;"></div>
+
+                    <div style="margin-bottom: 24px; padding: 14px 18px; border-radius: 8px; background: rgba(30, 41, 59, 0.5); border: 1px solid var(--card-border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 20px;">🛡️</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Environment Isolation Guardrail</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Testing tools are unified in this sandbox to protect production pipelines from accidental resets.</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="testing-mode-badge" style="font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3);">
+                                ⚡ Simulation Mode Active
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Two-Column Testing Grid -->
+                    <div class="settings-cards-grid">
+                        <!-- Card 1: Clock Simulation Engine -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-icon" style="background: rgba(234, 179, 8, 0.15); color: #fde047; border-color: rgba(234, 179, 8, 0.3);">⚡</span>
+                                <div>
+                                    <h3>Clock Simulation Engine</h3>
+                                    <p>Accelerate calendar testing and simulate fast-forward scenarios</p>
+                                </div>
+                            </div>
+                            <div class="settings-card-body">
+                                <div class="form-group" style="margin-bottom: 16px;">
+                                    <label for="setting-sim-enabled">Simulation State</label>
+                                    <select id="setting-sim-enabled" class="settings-control" onchange="toggleSimSpeedDisabled(); updateTestingBadge();">
+                                        <option value="true">Enabled (Accelerated Virtual Time)</option>
+                                        <option value="false">Disabled (Real System Wall-Clock)</option>
+                                    </select>
+                                    <span class="field-hint">Accelerate 24-hr cycle for demonstrations and verification.</span>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom: 16px;">
+                                    <label for="setting-sim-speed">Simulation Speed Multiplier</label>
+                                    <select id="setting-sim-speed" class="settings-control" onchange="updateTestingBadge();">
+                                        <option value="600.0">600x (10 simulated minutes per real second)</option>
+                                        <option value="300.0">300x (5 simulated minutes per real second)</option>
+                                        <option value="60.0">60x (1 simulated minute per real second)</option>
+                                        <option value="10.0">10x (10 simulated seconds per real second)</option>
+                                        <option value="1.0">1x (Real-time speed)</option>
+                                    </select>
+                                    <span class="field-hint">At 600x, an entire 24-hour day passes in 2.4 minutes.</span>
+                                </div>
+
+                                <div style="display: flex; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--card-border); align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Reset Clock Baseline</div>
+                                        <div style="font-size: 11px; color: var(--text-muted);">Rewind simulation clock to 00:00:00 AM today</div>
+                                    </div>
+                                    <button type="button" class="btn-primary" onclick="triggerClockReset()" style="font-size: 11px; padding: 6px 14px; border-color: rgba(96, 165, 250, 0.4); color: #93c5fd;">↺ Reset to Midnight</button>
+                                </div>
+
+                                <div style="margin-top: 16px;">
+                                    <button type="button" id="btn-apply-simulation" class="btn-primary" onclick="applySimulationSettings()" style="width: 100%; padding: 9px 16px; font-size: 12px; font-weight: 600; background: rgba(96, 165, 250, 0.15); border-color: rgba(96, 165, 250, 0.4); color: #93c5fd;">
+                                        ⚡ Apply Simulation Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Intraday Queue & State Reset -->
+                        <div class="settings-card">
+                            <div class="settings-card-header">
+                                <span class="settings-card-icon" style="background: rgba(234, 179, 8, 0.15); color: #fde047; border-color: rgba(234, 179, 8, 0.3);">↻</span>
+                                <div>
+                                    <h3>Intraday State & Automations Reset</h3>
+                                    <p>Reset report statuses, clear in-flight jobs, and restart daily cycle</p>
+                                </div>
+                            </div>
+                            <div class="settings-card-body">
+                                <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                                    This testing utility resets all registered automations back to <span style="color: #60a5fa; font-weight: 600;">Waiting</span>, clears active in-flight executions from the waitlist, and initializes the queue for fresh testing.
+                                </p>
+                                
+                                <div style="padding: 12px 14px; border-radius: 6px; background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.25); margin-bottom: 20px;">
+                                    <div style="font-size: 12px; font-weight: 600; color: #fde047; margin-bottom: 4px;">⚠️ Testing Action Notice</div>
+                                    <div style="font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                                        Clicking this button triggers <code style="color: #fde047; background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">POST /api/automations/reset</code>. It is segregated here so it cannot be triggered by accident in production.
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <button type="button" id="btn-reset-test" class="btn-primary" onclick="resetAutomationsFromLab()" style="border-color: rgba(234, 179, 8, 0.5); color: #fde047; background: rgba(234, 179, 8, 0.12); padding: 9px 18px; font-size: 13px; font-weight: 600;">
+                                        ↻ Reset (Test)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
 
@@ -931,7 +1517,7 @@ tryCatch({
                             <div class="guide-faq-item">
                                 <div class="guide-faq-q">⚡ How do I test an entire 24-hour day in 2 minutes?</div>
                                 <div class="guide-faq-a">
-                                    Paradiso includes an accelerated <strong>Simulation Mode</strong>! Go to <strong>Settings</strong> ➔ toggle <strong>Simulation Mode: Enabled</strong> ➔ set <strong>Speed Multiplier: 600x</strong> (where 1 real second = 10 simulated minutes) ➔ click <strong>Save</strong>. In the top bar, click <strong>Reset (Test)</strong> to rewind the clock to midnight, and watch your daily pipeline execute in accelerated time!
+                                    Paradiso includes an accelerated <strong>Simulation Mode</strong>! Go to the <strong>Testing Lab</strong> in the sidebar ➔ toggle <strong>Simulation Mode: Enabled</strong> ➔ set <strong>Speed Multiplier: 600x</strong> (where 1 real second = 10 simulated minutes) ➔ click <strong>Apply Simulation Settings</strong>. Click <strong>Reset (Test)</strong> to rewind the clock to midnight and reset automations, then watch your daily pipeline execute in accelerated time!
                                 </div>
                             </div>
                         </div>

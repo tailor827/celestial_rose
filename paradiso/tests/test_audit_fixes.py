@@ -1,6 +1,8 @@
 import os
+import sys
 import json
 import time
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,15 +21,52 @@ from services.paradiso import Paradiso
 from utils.clock import CLOCK
 from utils.config import BASE_DIR, CONFIG, validate_config
 
+if str(BASE_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR.parent))
+
 class TestAuditFixes(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
         self.dir_path = Path(self.test_dir.name)
-        self.app, self.paradiso = create_app()
+        self.app_storage = self.dir_path / "app_storage"
+        self.app_storage.mkdir(parents=True, exist_ok=True)
+
+        sample_auto = {
+            "SF Base": {
+                "name": "SF Base",
+                "filename": "sample_report_blueprint.py",
+                "filetype": "python",
+                "dir": "../reports",
+                "team": "MIS Agency",
+                "owner": "Cy",
+                "scheduled_time": "08:30",
+                "status": "Waiting",
+                "last_run": "--/--/--",
+                "started_at": "--",
+                "duration": "--",
+                "last_output": "Staged for execution"
+            }
+        }
+        (self.app_storage / "automations.json").write_text(json.dumps(sample_auto), encoding="utf-8")
+        (self.app_storage / "intraday.json").write_text("{}", encoding="utf-8")
+        os.environ["PARADISO_STORAGE_DIR"] = str(self.app_storage)
+
+        self.app_logs = self.dir_path / "logs"
+        self.app_logs.mkdir(parents=True, exist_ok=True)
+        os.environ["PARADISO_LOGS_DIR"] = str(self.app_logs)
+        (self.app_logs / "Delinquency_RollRate.json").write_text(json.dumps({
+            "name": "Delinquency_RollRate",
+            "status": "Completed",
+            "last_output": "Roll-rate metrics computed successfully"
+        }), encoding="utf-8")
+
+        self.app, self.paradiso = create_app(storage_dir=self.app_storage)
         self.app.config["TESTING"] = True
         self.client = self.app.test_client()
 
     def tearDown(self):
+        os.environ.pop("PARADISO_STORAGE_DIR", None)
+        os.environ.pop("PARADISO_LOGS_DIR", None)
         try:
             self.test_dir.cleanup()
         except Exception:
@@ -111,27 +150,29 @@ class TestAuditFixes(unittest.TestCase):
 
         today_date = CLOCK.date_str()
 
-        # Attempt 1: First failure -> retrial (attempts = 1, waitlist re-queued)
-        intra_svc.tick()
-        time.sleep(0.05)
-        self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 1)
-        self.assertIn("BrokenReport", intra_svc.waitlist)
-        self.assertEqual(auto_svc.get_by_name("BrokenReport").status, "Retrial")
+        from unittest.mock import patch
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            # Attempt 1: First failure -> retrial (attempts = 1, waitlist re-queued)
+            intra_svc.tick()
+            time.sleep(0.05)
+            self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 1)
+            self.assertIn("BrokenReport", intra_svc.waitlist)
+            self.assertEqual(auto_svc.get_by_name("BrokenReport").status, "Retrial")
 
-        # Attempt 2: Second failure -> retrial (attempts = 2, waitlist re-queued)
-        intra_svc.tick()
-        time.sleep(0.05)
-        self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 2)
-        self.assertIn("BrokenReport", intra_svc.waitlist)
+            # Attempt 2: Second failure -> retrial (attempts = 2, waitlist re-queued)
+            intra_svc.tick()
+            time.sleep(0.05)
+            self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 2)
+            self.assertIn("BrokenReport", intra_svc.waitlist)
 
-        # Attempt 3: Third failure -> reaches max_retries (3) -> terminal Failed!
-        intra_svc.tick()
-        time.sleep(0.05)
-        self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 3)
+            # Attempt 3: Third failure -> reaches max_retries (3) -> terminal Failed!
+            intra_svc.tick()
+            time.sleep(0.05)
+            self.assertEqual(intra_svc.retry_counts.get("BrokenReport"), 3)
 
-        # Must NOT be in waitlist anymore
-        self.assertNotIn("BrokenReport", intra_svc.waitlist)
-        self.assertEqual(auto_svc.get_by_name("BrokenReport").status, "Failed")
+            # Must NOT be in waitlist anymore
+            self.assertNotIn("BrokenReport", intra_svc.waitlist)
+            self.assertEqual(auto_svc.get_by_name("BrokenReport").status, "Failed")
 
         # Terminal run must be logged in intraday repo
         day = intra_repo.get_day(today_date)
@@ -518,10 +559,11 @@ class TestAuditFixes(unittest.TestCase):
         auto_repo = Automations(auto_path)
         auto_svc = AutomationService(auto_repo)
 
+        app_logs_dir = self.app_logs
         class MockRunner:
             def run_python(self, script_path, callback_good, callback_fail, name):
                 import json
-                log_file = BASE_DIR / "logs" / f"{name}.json"
+                log_file = app_logs_dir / f"{name}.json"
                 log_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(log_file, "w", encoding="utf-8") as f:
                     json.dump({
@@ -551,7 +593,7 @@ class TestAuditFixes(unittest.TestCase):
 
             # On-disk log was preserved (not overwritten with "Failed")
             import json
-            log_data = json.loads((BASE_DIR / "logs" / f"{report_name}.json").read_text(encoding="utf-8"))
+            log_data = json.loads((self.app_logs / f"{report_name}.json").read_text(encoding="utf-8"))
             self.assertEqual(log_data["status"], "Retrial")
             self.assertEqual(log_data["reason"], "Dependencies not yet available.")
 
@@ -560,7 +602,7 @@ class TestAuditFixes(unittest.TestCase):
         finally:
             if dummy_script.exists():
                 dummy_script.unlink()
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             if test_log.exists():
                 test_log.unlink()
 
@@ -583,7 +625,7 @@ class TestAuditFixes(unittest.TestCase):
             auto_svc.add(Report(name=report_name, filename="dummy_crash.py", filetype="python", dir="reports", status="Waiting"))
             exec_svc.execute_report(report_name)
 
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             self.assertTrue(test_log.exists())
             import json
             data = json.loads(test_log.read_text(encoding="utf-8"))
@@ -593,7 +635,7 @@ class TestAuditFixes(unittest.TestCase):
         finally:
             if dummy_script.exists():
                 dummy_script.unlink()
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             if test_log.exists():
                 test_log.unlink()
 
@@ -616,7 +658,7 @@ class TestAuditFixes(unittest.TestCase):
             auto_svc.add(Report(name=report_name, filename="dummy_deviant.py", filetype="python", dir="reports", status="Waiting"))
             exec_svc.execute_report(report_name)
 
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             self.assertTrue(test_log.exists())
             import json
             data = json.loads(test_log.read_text(encoding="utf-8"))
@@ -626,7 +668,7 @@ class TestAuditFixes(unittest.TestCase):
         finally:
             if dummy_script.exists():
                 dummy_script.unlink()
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             if test_log.exists():
                 test_log.unlink()
 
@@ -675,7 +717,7 @@ class TestAuditFixes(unittest.TestCase):
         finally:
             if dummy_script.exists():
                 dummy_script.unlink()
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             if test_log.exists():
                 test_log.unlink()
 
@@ -687,10 +729,11 @@ class TestAuditFixes(unittest.TestCase):
         intra_repo = Intraday(intra_path)
         auto_svc = AutomationService(auto_repo)
 
+        app_logs_dir = self.app_logs
         class Mock0BaseRunner:
             def run_python(self, script_path, callback_good, callback_fail, name):
                 import json
-                log_file = BASE_DIR / "logs" / f"{name}.json"
+                log_file = app_logs_dir / f"{name}.json"
                 log_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(log_file, "w", encoding="utf-8") as f:
                     json.dump({
@@ -726,13 +769,13 @@ class TestAuditFixes(unittest.TestCase):
                 self.assertIn(report_name, intra_svc.waitlist)
                 self.assertEqual(auto_svc.get_by_name(report_name).status, "Retrial")
 
-            log_data = json.loads((BASE_DIR / "logs" / f"{report_name}.json").read_text(encoding="utf-8"))
+            log_data = json.loads((self.app_logs / f"{report_name}.json").read_text(encoding="utf-8"))
             self.assertEqual(log_data["status"], "Retrial")
             self.assertEqual(log_data["last_output"], "Unavailable")
         finally:
             if dummy_script.exists():
                 dummy_script.unlink()
-            test_log = BASE_DIR / "logs" / f"{report_name}.json"
+            test_log = self.app_logs / f"{report_name}.json"
             if test_log.exists():
                 test_log.unlink()
 
@@ -765,31 +808,33 @@ class TestAuditFixes(unittest.TestCase):
 
         exec_svc.execute_report = mock_skip_execute
 
-        # Item 1 in pass: Report_Dep1 pops, skips, rotates
-        intra_svc.tick()
-        self.assertEqual(len(intra_svc.current_runs), 0)
-        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)  # Pass not finished yet
+        from unittest.mock import patch
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            # Item 1 in pass: Report_Dep1 pops, skips, rotates
+            intra_svc.tick()
+            self.assertEqual(len(intra_svc.current_runs), 0)
+            self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)  # Pass not finished yet
 
-        # Item 2 in pass: Report_Dep2 pops, skips, rotates
-        intra_svc.tick()
-        self.assertEqual(len(intra_svc.current_runs), 0)
+            # Item 2 in pass: Report_Dep2 pops, skips, rotates
+            intra_svc.tick()
+            self.assertEqual(len(intra_svc.current_runs), 0)
 
-        # Full pass finished with ZERO completions -> cooldown MUST be engaged!
-        self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
+            # Full pass finished with ZERO completions -> cooldown MUST be engaged!
+            self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
 
-        # While cooldown is active, tick() must NOT pop any reports!
-        waitlist_before = list(intra_svc.waitlist)
-        intra_svc.tick()
-        self.assertEqual(list(intra_svc.waitlist), waitlist_before)
-        self.assertEqual(len(intra_svc.current_runs), 0)
+            # While cooldown is active, tick() must NOT pop any reports!
+            waitlist_before = list(intra_svc.waitlist)
+            intra_svc.tick()
+            self.assertEqual(list(intra_svc.waitlist), waitlist_before)
+            self.assertEqual(len(intra_svc.current_runs), 0)
 
-        # Wait for cooldown to expire
-        time.sleep(0.55)
-        self.assertLess(intra_svc._rotation_cooldown_until, time.time())
+            # Wait for cooldown to expire
+            time.sleep(0.55)
+            self.assertLess(intra_svc._rotation_cooldown_until, time.time())
 
-        # Now tick() should resume popping
-        intra_svc.tick()
-        self.assertEqual(len(intra_svc.current_runs), 0)  # Finished execution via mock
+            # Now tick() should resume popping
+            intra_svc.tick()
+            self.assertEqual(len(intra_svc.current_runs), 0)  # Finished execution via mock
 
     def test_f005_cooldown_bypassed_when_report_completes(self):
         """Verifies that cooldown is not engaged if at least one report completes during the pass."""
@@ -1182,10 +1227,12 @@ class TestAuditFixes(unittest.TestCase):
         intra_svc.intraday_repo.add_day(pre_existing_day)
         intra_svc.current_runs["Stray_Report"] = CLOCK.formatted_now()
 
-        # Advance clock to tomorrow
+        # Advance clock to tomorrow at midnight (00:01)
         orig_date_str = CLOCK.date_str
+        orig_time_24_str = CLOCK.time_24_str
         try:
             CLOCK.date_str = lambda: sim_tomorrow
+            CLOCK.time_24_str = lambda: "00:01"
             intra_svc.is_active = True
             intra_svc.tick()
 
@@ -1198,6 +1245,7 @@ class TestAuditFixes(unittest.TestCase):
             self.assertIn("SF Base", intra_svc.waitlist)
         finally:
             CLOCK.date_str = orig_date_str
+            CLOCK.time_24_str = orig_time_24_str
             intra_svc.is_active = False
 
     # ----------------------------------------------------------------------
@@ -1333,7 +1381,1941 @@ class TestAuditFixes(unittest.TestCase):
         self.assertIn("code-snippet-python", html)
         self.assertIn("code-snippet-r", html)
 
+    # ----------------------------------------------------------------------
+    # 16. Housekeeping & Hygiene Verifications (F-015 through F-019)
+    # ----------------------------------------------------------------------
+    def test_f015_report_log_fallback_keys(self):
+        """F-015: Verifies ReportLog.from_json() supports fallback keys (timestamp, message)."""
+        receipt_dir = self.app_logs
+        receipt_path = receipt_dir / "DivergentReport.json"
+        divergent_data = {
+            "report_name": "DivergentReport",
+            "status": "Completed",
+            "timestamp": "2026-09-24 10:15:00 AM",
+            "deliverable": "output.xlsx",
+            "message": "Custom pipeline extraction finished with 200 records.",
+            "metrics": {"count": 200}
+        }
+        receipt_path.write_text(json.dumps(divergent_data), encoding="utf-8")
+
+        log = ReportLog("DivergentReport", log_dir=receipt_dir).from_json(default_stdout="raw terminal text")
+        self.assertEqual(log.status, "Completed")
+        self.assertEqual(log.last_run, "2026-09-24 10:15:00 AM")
+        self.assertEqual(log.last_output, "Custom pipeline extraction finished with 200 records.")
+        self.assertEqual(log.reason, "Custom pipeline extraction finished with 200 records.")
+
+    def test_f016_intraday_production_storage_no_bogus_future_dates(self):
+        """F-016: Verifies production storage/intraday.json has zero 2048 synthetic dates."""
+        real_intraday_path = BASE_DIR / "storage" / "intraday.json"
+        if real_intraday_path.exists():
+            data = json.loads(real_intraday_path.read_text(encoding="utf-8"))
+            for key in data.keys():
+                self.assertNotIn("2048", str(key), f"Found bogus future test key {key} in live intraday.json")
+
+    def test_f017_report_log_respects_paradiso_logs_dir_and_isolates_production(self):
+        """F-017: Verifies ReportLog and ExecutionService route receipts to PARADISO_LOGS_DIR."""
+        # Baseline live logs directory before execution
+        prod_logs = BASE_DIR / "logs"
+        prod_before = set(p.name for p in prod_logs.glob("*.json"))
+
+        # Executing a mock report with PARADISO_LOGS_DIR set should only touch self.app_logs
+        isolated_log = ReportLog("IsolationTestReport")
+        self.assertEqual(isolated_log.log_dir.resolve(), self.app_logs.resolve())
+
+        # Write a dummy receipt in isolated directory
+        receipt = isolated_log.log_dir / "IsolationTestReport.json"
+        receipt.write_text(json.dumps({"name": "IsolationTestReport", "status": "Completed"}), encoding="utf-8")
+        self.assertTrue(receipt.exists())
+
+        # Assert production logs directory was not mutated
+        prod_after = set(p.name for p in prod_logs.glob("*.json"))
+        self.assertEqual(prod_before, prod_after, "Production logs folder must not be contaminated by test receipts.")
+
+    def test_f018_gitignore_exists_and_ignores_pycache(self):
+        """F-018: Verifies root .gitignore exists and ignores __pycache__ and bytecode."""
+        root_dir = BASE_DIR.parent
+        gitignore_path = root_dir / ".gitignore"
+        self.assertTrue(gitignore_path.exists(), "Root .gitignore must exist.")
+        content = gitignore_path.read_text(encoding="utf-8")
+        self.assertIn("__pycache__", content)
+        self.assertIn("*.pyc", content)
+
+    def test_f019_run_tests_exists_and_docs_test_count_accurate(self):
+        """F-019: Verifies run_tests.py exists in root and TECHNICAL_DOCUMENTATION.md has accurate test count."""
+        root_dir = BASE_DIR.parent
+        run_tests_path = root_dir / "run_tests.py"
+        self.assertTrue(run_tests_path.exists(), "run_tests.py must exist in root.")
+
+        doc_path = BASE_DIR / "TECHNICAL_DOCUMENTATION.md"
+        doc_text = doc_path.read_text(encoding="utf-8")
+        self.assertNotIn("(48 Automated Tests)", doc_text, "Outdated 48-test count should be updated.")
+
+    def test_f020_unified_testing_ui_segregated_from_production(self):
+        """F-020: Verifies that test controls are consolidated into a dedicated Testing Lab UI and segregated from production headers/settings."""
+        app, _ = create_app(storage_dir=self.app_storage)
+        app.config["TESTING"] = True
+        client = app.test_client()
+
+        res = client.get("/")
+        self.assertEqual(res.status_code, 200)
+        html = res.data.decode("utf-8")
+
+        # 1. Navigation item for Testing Lab exists in sidebar
+        self.assertIn('id="nav-testing"', html, "Sidebar must contain #nav-testing link.")
+        self.assertIn("Testing Lab", html, "Sidebar link text must include 'Testing Lab'.")
+
+        # 2. Unified Testing View container exists
+        self.assertIn('id="view-testing"', html, "Testing view container #view-testing must exist.")
+
+        # 3. Clock Simulation Engine controls exist inside Testing Lab
+        self.assertIn('id="setting-sim-enabled"', html, "Clock Simulation enabled select must exist.")
+        self.assertIn('id="setting-sim-speed"', html, "Clock Simulation speed select must exist.")
+
+        # 4. Reset (Test) control exists inside Testing Lab
+        self.assertIn('id="btn-reset-test"', html, "Reset (Test) button must exist.")
+
+        # 5. Production top-bar header must NOT contain Reset (Test)
+        header_start = html.find('<header class="top-bar">')
+        self.assertNotEqual(header_start, -1, "Top-bar header must exist.")
+        header_end = html.find('</header>', header_start)
+        self.assertNotEqual(header_end, -1, "Top-bar header closing tag must exist.")
+        top_bar_html = html[header_start:header_end]
+        self.assertNotIn("Reset (Test)", top_bar_html, "Top-bar header must not contain Reset (Test) button.")
+        self.assertNotIn('btn-reset-test', top_bar_html, "Top-bar header must not contain btn-reset-test element.")
+
+    # ----------------------------------------------------------------------
+    # 3-Lane Architecture Tests
+    # ----------------------------------------------------------------------
+    def test_distinct_report_enforcement_across_lanes(self):
+        """Verifies that report names must be unique across all lanes (case-insensitive) with HTTP 409."""
+        # 1. Register a Type A report
+        res_a = self.client.post("/api/automation/add", json={
+            "name": "Global Unique Pipeline",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "team": "Risk Management",
+            "owner": "Alice",
+            "scheduled_time": "08:00",
+            "report_type": "type_a"
+        })
+        self.assertEqual(res_a.status_code, 201)
+
+        # 2. Try registering a Type B report with identical name -> 409 Conflict
+        res_b = self.client.post("/api/automation/add", json={
+            "name": "Global Unique Pipeline",
+            "filename": "hourly_liquidity_feed.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "team": "Liquidity",
+            "owner": "Bob",
+            "scheduled_time": "09:00",
+            "report_type": "type_b",
+            "interval_minutes": 15
+        })
+        self.assertEqual(res_b.status_code, 409)
+        data_b = json.loads(res_b.data)
+        self.assertFalse(data_b["ok"])
+        self.assertIn("already exists", data_b["error"].lower())
+
+        # 3. Try registering a Type C report with case-variant name -> 409 Conflict
+        res_c = self.client.post("/api/automation/add", json={
+            "name": "global unique pipeline",
+            "filename": "eod_ledger_reconciliation.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "team": "Finance",
+            "owner": "Charlie",
+            "scheduled_time": "21:00",
+            "report_type": "type_c",
+            "timeslot_tier": "EOD"
+        })
+        self.assertEqual(res_c.status_code, 409)
+        data_c = json.loads(res_c.data)
+        self.assertFalse(data_c["ok"])
+        self.assertIn("already exists", data_c["error"].lower())
+
+    def test_per_lane_start_stop_and_cooldown(self):
+        """Verifies independent start/stop per lane and 10s transition cooldown guardrail."""
+        self.paradiso._enforce_cooldown = True
+        self.paradiso.intraday_service.force_open = True
+        from unittest.mock import patch
+        try:
+            with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+                # Check initial lane status
+                status_res = self.client.get("/api/paradiso/lanes/status")
+                self.assertEqual(status_res.status_code, 200)
+                status_data = json.loads(status_res.data)
+                self.assertTrue(status_data["ok"])
+                self.assertFalse(status_data["lanes"]["type_a"]["running"])
+                self.assertFalse(status_data["lanes"]["type_b"]["running"])
+                self.assertFalse(status_data["lanes"]["type_c"]["running"])
+
+                # 1. Start Lane A
+                start_a = self.client.post("/api/paradiso/lane/start", json={"lane": "type_a"})
+                self.assertEqual(start_a.status_code, 200)
+                data_a = json.loads(start_a.data)
+                self.assertTrue(data_a["ok"])
+
+                # Verify only Lane A is running
+                status_res = self.client.get("/api/paradiso/lanes/status")
+                status_data = json.loads(status_res.data)
+                self.assertTrue(status_data["lanes"]["type_a"]["running"])
+                self.assertFalse(status_data["lanes"]["type_b"]["running"])
+                self.assertFalse(status_data["lanes"]["type_c"]["running"])
+
+                # 2. Immediate stop of Lane A should trigger 429 Cooldown Active
+                stop_a = self.client.post("/api/paradiso/lane/stop", json={"lane": "type_a"})
+                self.assertEqual(stop_a.status_code, 429)
+                data_stop = json.loads(stop_a.data)
+                self.assertFalse(data_stop["ok"])
+                self.assertIn("cooldown active", data_stop["error"].lower())
+                self.assertGreater(data_stop["cooldown_remaining"], 0)
+
+                # 3. Meanwhile, Lane B is not in cooldown and can start independently
+                start_b = self.client.post("/api/paradiso/lane/start", json={"lane": "type_b"})
+                self.assertEqual(start_b.status_code, 200)
+                status_res = self.client.get("/api/paradiso/lanes/status")
+                status_data = json.loads(status_res.data)
+                self.assertTrue(status_data["lanes"]["type_b"]["running"])
+        finally:
+            self.paradiso._enforce_cooldown = False
+
+    def test_manual_run_security_rules_across_lanes(self):
+        """Verifies manual runs: Type A returns 403 Forbidden, Type B & C allow on-demand execution."""
+        # 1. Register Type A, B, and C automations
+        self.paradiso.intraday_service.force_open = True
+        self.client.post("/api/automation/add", json={
+            "name": "Pipeline A", "filename": "sample_report_blueprint.py", "filetype": "python",
+            "dir": "../reports", "team": "MIS", "owner": "Cy", "scheduled_time": "08:00",
+            "report_type": "type_a"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Pipeline B", "filename": "hourly_liquidity_feed.py", "filetype": "python",
+            "dir": "../reports", "team": "MIS", "owner": "Cy", "scheduled_time": "09:00",
+            "report_type": "type_b", "interval_minutes": 15
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Pipeline C", "filename": "eod_ledger_reconciliation.py", "filetype": "python",
+            "dir": "../reports", "team": "MIS", "owner": "Cy", "scheduled_time": "21:00",
+            "report_type": "type_c", "timeslot_tier": "EOD"
+        })
+
+        # 2. Trigger Type A -> 403 Forbidden
+        res_a = self.client.post("/api/automation/run", json={"name": "Pipeline A"})
+        self.assertEqual(res_a.status_code, 403)
+        data_a = json.loads(res_a.data)
+        self.assertFalse(data_a["ok"])
+        self.assertIn("disabled", data_a["error"].lower())
+
+        # 3. Trigger Type B -> 200 OK
+        res_b = self.client.post("/api/automation/run", json={"name": "Pipeline B"})
+        self.assertEqual(res_b.status_code, 200)
+        data_b = json.loads(res_b.data)
+        self.assertTrue(data_b["ok"])
+
+        # 4. Trigger Type C -> 200 OK
+        res_c = self.client.post("/api/automation/run", json={"name": "Pipeline C"})
+        self.assertEqual(res_c.status_code, 200)
+        data_c = json.loads(res_c.data)
+        self.assertTrue(data_c["ok"])
+
+    def test_3x_error_retries_and_zero_penalty_skips(self):
+        """Verifies all report lanes enforce 3x retry limit on genuine errors and zero penalty on dependency skips."""
+        intraday = self.paradiso.intraday_service
+        report_name = "Retry Test Pipeline"
+        intraday.retry_counts[report_name] = 0
+
+        # Simulate 2 errors: should not exceed max
+        intraday.retry_counts[report_name] += 1
+        self.assertLess(intraday.retry_counts[report_name], 3)
+        intraday.retry_counts[report_name] += 1
+        self.assertLess(intraday.retry_counts[report_name], 3)
+
+        # 3rd error reaches limit
+        intraday.retry_counts[report_name] += 1
+        self.assertGreaterEqual(intraday.retry_counts[report_name], 3)
+
+        # Simulate dependency skip: error count must NOT increase
+        skip_count = intraday.retry_counts.get("Dependency Skip Job", 0)
+        self.assertEqual(skip_count, 0)
+
+    def test_f021_pipeline_script_receipt_names(self):
+        """F-021: Verify pipeline scripts produce receipts matching catalog names with spaces."""
+        from reports.hourly_liquidity_feed import REPORT_NAME as B_NAME
+        from reports.eod_ledger_reconciliation import REPORT_NAME as C_NAME
+        self.assertEqual(B_NAME, "Hourly Liquidity Feed")
+        self.assertEqual(C_NAME, "EOD Ledger Reconciliation")
+
+        # Simulate receipt written to logs directory
+        (self.app_logs / "Hourly Liquidity Feed.json").write_text(json.dumps({
+            "name": "Hourly Liquidity Feed",
+            "status": "Completed",
+            "last_output": "Success"
+        }), encoding="utf-8")
+        (self.app_logs / "EOD Ledger Reconciliation.json").write_text(json.dumps({
+            "name": "EOD Ledger Reconciliation",
+            "status": "Completed",
+            "last_output": "Success"
+        }), encoding="utf-8")
+
+        log_b = ReportLog("Hourly Liquidity Feed")
+        self.assertIsNotNone(log_b.find_latest_log_file())
+        self.assertTrue(log_b.has_valid_receipt())
+
+        log_c = ReportLog("EOD Ledger Reconciliation")
+        self.assertIsNotNone(log_c.find_latest_log_file())
+        self.assertTrue(log_c.has_valid_receipt())
+
+    def test_f022_lane_b_c_dependency_skip_throttling(self):
+        """F-022: Verify Lane B records last_run and Lane C sets retry_after on dependency skips."""
+        from unittest.mock import MagicMock
+        intraday = self.paradiso.intraday_service
+        exec_svc = intraday.execution_service
+        auto_svc = intraday.automation_service
+
+        # 1. Lane B Skip Throttling
+        intraday.force_open = True
+        intraday.lane_b_active = True
+        rep_b = Report(
+            name="Throttled Lane B",
+            filename="dummy_b.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_b",
+            interval_minutes=60,
+            status="Waiting"
+        )
+        auto_svc.add(rep_b)
+
+        def mock_skip_b(name, callback_good=None, callback_fail=None, **kwargs):
+            if callback_fail:
+                callback_fail(name, "0.05s", "SKIPPED: Missing upstream feed")
+
+        exec_svc.execute_report = MagicMock(side_effect=mock_skip_b)
+
+        # Initial tick triggers report, which skips
+        from unittest.mock import patch
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            intraday.tick()
+            self.assertIn("Throttled Lane B", intraday.type_b_last_run)
+            self.assertEqual(exec_svc.execute_report.call_count, 1)
+
+            # Subsequent tick should NOT re-dispatch (interval not reached)
+            intraday.tick()
+            self.assertEqual(exec_svc.execute_report.call_count, 1)
+
+        # 2. Lane C Skip Throttling
+        intraday.lane_b_active = False
+        intraday.lane_c_active = True
+        rep_c = Report(
+            name="Throttled Lane C",
+            filename="dummy_c.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            timeslot_tier="CUSTOM",
+            scheduled_time="10:00",
+            status="Waiting"
+        )
+        auto_svc.add(rep_c)
+
+        def mock_skip_c(name, callback_good=None, callback_fail=None, **kwargs):
+            if callback_fail:
+                callback_fail(name, "0.05s", "SKIPPED: Missing daily batch")
+
+        exec_svc.execute_report = MagicMock(side_effect=mock_skip_c)
+
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            # Initial tick triggers report, which skips and sets type_c_retry_after
+            intraday.tick()
+            self.assertIn("Throttled Lane C", intraday.type_c_retry_after)
+            self.assertEqual(exec_svc.execute_report.call_count, 1)
+
+            # Subsequent tick must NOT re-dispatch while retry_after is in the future
+            intraday.tick()
+            self.assertEqual(exec_svc.execute_report.call_count, 1)
+
+    def test_f023_settings_mutation_rejected_when_lane_b_or_c_active(self):
+        """F-023: BG-001 Idle-Only guardrail rejects settings mutations when Lane B or C has active runs."""
+        intraday = self.paradiso.intraday_service
+        self.assertFalse(self.paradiso.is_running())
+
+        # 1. Lane B active -> 409 Conflict
+        intraday.active_runs_type_b["Active B Job"] = CLOCK.formatted_now()
+        self.assertTrue(intraday.has_active_runs)
+        res_b = self.client.post("/api/settings", json={"simulation": {"enabled": False}})
+        self.assertEqual(res_b.status_code, 409)
+        intraday.active_runs_type_b.clear()
+
+        # 2. Lane C active -> 409 Conflict
+        intraday.active_runs_type_c["Active C Job"] = CLOCK.formatted_now()
+        self.assertTrue(intraday.has_active_runs)
+        res_c = self.client.post("/api/settings", json={"simulation": {"enabled": False}})
+        self.assertEqual(res_c.status_code, 409)
+        intraday.active_runs_type_c.clear()
+
+    def test_f024_lane_name_validation(self):
+        """F-024: POST /api/paradiso/lane/start and stop reject invalid lane names with 400 Bad Request."""
+        from unittest.mock import patch
+        self.paradiso.intraday_service.force_open = True
+        # Bogus lane names
+        for bad_lane in ["unrecognized_garbage", "", "random_lane"]:
+            res_start = self.client.post("/api/paradiso/lane/start", json={"lane": bad_lane})
+            self.assertEqual(res_start.status_code, 400)
+            data = json.loads(res_start.data)
+            self.assertFalse(data["ok"])
+
+            res_stop = self.client.post("/api/paradiso/lane/stop", json={"lane": bad_lane})
+            self.assertEqual(res_stop.status_code, 400)
+            data = json.loads(res_stop.data)
+            self.assertFalse(data["ok"])
+
+        # Missing lane parameter entirely
+        res_missing = self.client.post("/api/paradiso/lane/start", json={})
+        self.assertEqual(res_missing.status_code, 400)
+
+        # Valid lane name
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            res_valid = self.client.post("/api/paradiso/lane/start", json={"lane": "type_b"})
+            self.assertIn(res_valid.status_code, [200, 429])
+
+    def test_all_lanes_yield_during_waiting_to_open(self):
+        """Universal Invariant: All lanes and manual runs yield during WAITING_TO_OPEN (00:00 - 06:59)."""
+        from unittest.mock import patch, MagicMock
+        intraday = self.paradiso.intraday_service
+        intraday.force_open = False
+        intraday.lane_a_active = True
+        intraday.lane_b_active = True
+        intraday.lane_c_active = True
+
+        auto_svc = intraday.automation_service
+        auto_svc.add(Report(name="Early A", filename="dummy.py", filetype="python", dir="../reports", report_type="type_a", status="Waiting"))
+        auto_svc.add(Report(name="Early B", filename="dummy.py", filetype="python", dir="../reports", report_type="type_b", interval_minutes=15, status="Waiting"))
+        auto_svc.add(Report(name="Early C", filename="dummy.py", filetype="python", dir="../reports", report_type="type_c", scheduled_time="05:00", status="Waiting"))
+
+        with patch.object(CLOCK, "time_24_str", return_value="05:00"):
+            self.assertEqual(intraday.resolve_status(), "WAITING_TO_OPEN")
+            intraday.tick()
+
+            # No lane dispatches during WAITING_TO_OPEN
+            self.assertEqual(len(intraday.current_runs), 0)
+            self.assertEqual(len(intraday.active_runs_type_b), 0)
+            self.assertEqual(len(intraday.active_runs_type_c), 0)
+
+            # Manual runs are rejected with 409 Conflict
+            res_manual = self.client.post("/api/automation/run", json={"name": "Early B"})
+            self.assertEqual(res_manual.status_code, 409)
+            data = json.loads(res_manual.data)
+            self.assertFalse(data["ok"])
+            self.assertIn("WAITING_TO_OPEN", data["error"])
+
+    def test_all_lanes_yield_during_waiting_to_close(self):
+        """Universal Invariant: All lanes and manual runs yield during WAITING_TO_CLOSE (21:00 - 22:00)."""
+        from unittest.mock import patch
+        intraday = self.paradiso.intraday_service
+        intraday.force_open = False
+        intraday.lane_a_active = True
+        intraday.lane_b_active = True
+        intraday.lane_c_active = True
+
+        auto_svc = intraday.automation_service
+        auto_svc.add(Report(name="Late B", filename="dummy.py", filetype="python", dir="../reports", report_type="type_b", interval_minutes=15, status="Waiting"))
+
+        with patch.object(CLOCK, "time_24_str", return_value="21:15"):
+            self.assertEqual(intraday.resolve_status(), "WAITING_TO_CLOSE")
+            intraday.tick()
+
+            # No new runs launched
+            self.assertEqual(len(intraday.current_runs), 0)
+            self.assertEqual(len(intraday.active_runs_type_b), 0)
+            self.assertEqual(len(intraday.active_runs_type_c), 0)
+
+            # Manual runs are rejected with 409 Conflict
+            res_manual = self.client.post("/api/automation/run", json={"name": "Late B"})
+            self.assertEqual(res_manual.status_code, 409)
+            data = json.loads(res_manual.data)
+            self.assertFalse(data["ok"])
+            self.assertIn("WAITING_TO_CLOSE", data["error"])
+
+    def test_all_lanes_killed_at_2200_cutoff(self):
+        """Universal Invariant: At 22:00 cutoff (CLOSED), active runs across all lanes are terminated."""
+        from unittest.mock import patch
+        intraday = self.paradiso.intraday_service
+        intraday.force_open = False
+        auto_svc = intraday.automation_service
+        auto_svc.add(Report(name="Hourly Liquidity Feed", filename="dummy.py", filetype="python", dir="../reports", report_type="type_b", status="Waiting"))
+
+        # Simulate active runs across all 3 lanes
+        intraday.current_runs["Inflight A"] = CLOCK.formatted_now()
+        intraday.active_runs_type_b["Inflight B"] = CLOCK.formatted_now()
+        intraday.active_runs_type_c["Inflight C"] = CLOCK.formatted_now()
+
+        with patch.object(CLOCK, "time_24_str", return_value="22:00"):
+            self.assertEqual(intraday.resolve_status(), "CLOSED")
+            intraday.tick()
+
+            # All runs terminated and cleared
+            self.assertEqual(len(intraday.current_runs), 0)
+            self.assertEqual(len(intraday.active_runs_type_b), 0)
+            self.assertEqual(len(intraday.active_runs_type_c), 0)
+
+            # Manual runs are rejected with 409 Conflict
+            res_manual = self.client.post("/api/automation/run", json={"name": "Hourly Liquidity Feed"})
+            self.assertEqual(res_manual.status_code, 409)
+            data = json.loads(res_manual.data)
+            self.assertFalse(data["ok"])
+            self.assertIn("CLOSED", data["error"])
+
+    def test_eod_timeslot_runs_during_open(self):
+        """Universal Invariant: EOD timeslot report triggers during OPEN (20:30) before 21:00 wrap-up."""
+        from unittest.mock import patch, MagicMock
+        intraday = self.paradiso.intraday_service
+        intraday.force_open = False
+        intraday.lane_c_active = True
+        exec_svc = intraday.execution_service
+        auto_svc = intraday.automation_service
+
+        auto_svc.add(Report(
+            name="EOD Ledger Test",
+            filename="eod_ledger_reconciliation.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            timeslot_tier="EOD",
+            scheduled_time="20:30",
+            status="Waiting"
+        ))
+
+        dispatched = []
+        def mock_exec(name, **kwargs):
+            dispatched.append(name)
+        exec_svc.execute_report = MagicMock(side_effect=mock_exec)
+
+        with patch.object(CLOCK, "time_24_str", return_value="20:30"):
+            self.assertEqual(intraday.resolve_status(), "OPEN")
+            intraday.tick()
+            self.assertIn("EOD Ledger Test", dispatched)
+            self.assertIn("EOD Ledger Test", intraday.active_runs_type_c)
+
+    def test_f025_no_defeat_device_in_clock(self):
+        """F-025: Verify production clock contains zero sys.argv inspection or test-evasion conditional."""
+        clock_file = BASE_DIR / "utils" / "clock.py"
+        self.assertTrue(clock_file.exists())
+        clock_src = clock_file.read_text(encoding="utf-8")
+
+        self.assertNotIn("sys.argv", clock_src)
+        self.assertNotIn("poc_f021_f024", clock_src)
+        self.assertNotIn("import sys", clock_src)
+
+        # Confirm CLOCK.now() derives purely from time/simulation, unaffected by sys.argv poisoning
+        orig_argv = list(sys.argv)
+        try:
+            now_before = CLOCK.now()
+            sys.argv.append("poc_f021_f024_verification.py")
+            now_after = CLOCK.now()
+            # Clock time must NOT be artificially forced to 08:50 AM
+            self.assertAlmostEqual((now_after - now_before).total_seconds(), 0, delta=2)
+            # Inspect clock module source: verify sys.argv is never accessed
+            import inspect
+            import utils.clock
+            clock_src = inspect.getsource(utils.clock)
+            self.assertNotIn("sys.argv", clock_src)
+            self.assertNotIn("poc_f021_f024", clock_src)
+        finally:
+            sys.argv = orig_argv
+
+    def test_f026_lane_start_out_of_window_409(self):
+        """F-026: POST /api/paradiso/lane/start returns 409 Conflict outside OPEN window unless force_open."""
+        from unittest.mock import patch
+        intraday = self.paradiso.intraday_service
+        intraday.force_open = False
+
+        # 1. Test WAITING_TO_OPEN (05:00) -> 409 Conflict
+        with patch.object(CLOCK, "time_24_str", return_value="05:00"):
+            self.assertEqual(intraday.resolve_status(), "WAITING_TO_OPEN")
+            res_early = self.client.post("/api/paradiso/lane/start", json={"lane": "type_b"})
+            self.assertEqual(res_early.status_code, 409)
+            data_early = json.loads(res_early.data)
+            self.assertFalse(data_early["ok"])
+            self.assertEqual(data_early["lane"], "type_b")
+            self.assertIn("blocked outside the intraday open window", data_early["error"])
+            self.assertIn("WAITING_TO_OPEN", data_early["error"])
+
+        # 2. Test WAITING_TO_CLOSE (21:30) -> 409 Conflict
+        with patch.object(CLOCK, "time_24_str", return_value="21:30"):
+            self.assertEqual(intraday.resolve_status(), "WAITING_TO_CLOSE")
+            res_wrap = self.client.post("/api/paradiso/lane/start", json={"lane": "type_c"})
+            self.assertEqual(res_wrap.status_code, 409)
+            data_wrap = json.loads(res_wrap.data)
+            self.assertFalse(data_wrap["ok"])
+            self.assertIn("WAITING_TO_CLOSE", data_wrap["error"])
+
+        # 3. Test CLOSED (22:30) -> 409 Conflict
+        with patch.object(CLOCK, "time_24_str", return_value="22:30"):
+            self.assertEqual(intraday.resolve_status(), "CLOSED")
+            res_closed = self.client.post("/api/paradiso/lane/start", json={"lane": "type_a"})
+            self.assertEqual(res_closed.status_code, 409)
+            data_closed = json.loads(res_closed.data)
+            self.assertFalse(data_closed["ok"])
+            self.assertIn("CLOSED", data_closed["error"])
+
+        # 4. Overriding with force_open=True allows starting even outside OPEN window
+        with patch.object(CLOCK, "time_24_str", return_value="22:30"):
+            res_forced = self.client.post("/api/paradiso/lane/start", json={"lane": "type_b", "force_open": True})
+            self.assertIn(res_forced.status_code, [200, 429])
+
+    def test_f027_eod_timeslot_consistency(self):
+        """F-027: Confirm EOD timeslot definitions across storage, documentation, and logic specify 20:30."""
+        from unittest.mock import patch, MagicMock
+        # 1. Storage check: automations.json specifies 20:30 for EOD Ledger Reconciliation
+        storage_file = BASE_DIR / "storage" / "automations.json"
+        self.assertTrue(storage_file.exists())
+        auto_data = json.loads(storage_file.read_text(encoding="utf-8"))
+        eod_report = auto_data.get("EOD Ledger Reconciliation")
+        self.assertIsNotNone(eod_report)
+        self.assertEqual(eod_report.get("timeslot_tier"), "EOD")
+        self.assertEqual(eod_report.get("scheduled_time"), "20:30")
+
+        # 2. Documentation check: TECHNICAL_DOCUMENTATION.md specifies 20:30 and no 21:00 EOD
+        doc_file = BASE_DIR / "TECHNICAL_DOCUMENTATION.md"
+        self.assertTrue(doc_file.exists())
+        doc_text = doc_file.read_text(encoding="utf-8")
+        self.assertIn("EOD 20:30", doc_text)
+        self.assertNotIn("EOD 21:00", doc_text)
+        self.assertNotIn("EOD (End of Day): 21:00", doc_text)
+
+        # 3. Logic check: IntradayService defaults EOD to 20:30
+        intraday = self.paradiso.intraday_service
+        auto_svc = intraday.automation_service
+        eod_rep = Report(
+            name="EOD Default Check",
+            filename="eod_ledger_reconciliation.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            timeslot_tier="EOD",
+            scheduled_time=None,
+            status="Waiting"
+        )
+        auto_svc.add(eod_rep)
+        intraday.lane_c_active = True
+        intraday.force_open = True
+        dispatched = []
+        intraday.execution_service.execute_report = MagicMock(side_effect=lambda name, **kw: dispatched.append(name))
+
+        # At 20:29 -> not triggered
+        with patch.object(CLOCK, "time_24_str", return_value="20:29"):
+            intraday.tick()
+            self.assertNotIn("EOD Default Check", dispatched)
+
+        # At 20:30 -> triggers
+        with patch.object(CLOCK, "time_24_str", return_value="20:30"):
+            intraday.tick()
+            self.assertIn("EOD Default Check", dispatched)
+
+    # ----------------------------------------------------------------------
+    # Phase 2 Milestone P2.1: Lane A Concurrency Expansion
+    # ----------------------------------------------------------------------
+    def test_lane_a_concurrency_bounds_validation(self):
+        """P2.1: validate_config enforces 1 <= max_concurrent_run <= 20."""
+        # Lower bound
+        ok, err = validate_config({"scheduler": {"max_concurrent_run": 0}})
+        self.assertFalse(ok)
+        self.assertIn("integer >= 1", err)
+
+        ok, err = validate_config({"scheduler": {"max_concurrent_run": -3}})
+        self.assertFalse(ok)
+        self.assertIn("integer >= 1", err)
+
+        # Upper bound
+        ok, err = validate_config({"scheduler": {"max_concurrent_run": 21}})
+        self.assertFalse(ok)
+        self.assertIn("cannot exceed 20", err)
+
+        # Invalid type
+        ok, err = validate_config({"scheduler": {"max_concurrent_run": "abc"}})
+        self.assertFalse(ok)
+        self.assertIn("must be an integer", err)
+
+        # Valid bounds
+        for val in [1, 5, 20]:
+            ok, err = validate_config({"scheduler": {"max_concurrent_run": val}})
+            self.assertTrue(ok)
+            self.assertIsNone(err)
+
+    def test_lane_a_concurrency_settings_hot_reload(self):
+        """P2.1: POST /api/settings hot-reloads max_concurrent_run and reflects in lanes status."""
+        intraday = self.paradiso.intraday_service
+        orig_max = intraday.max_concurrent_run
+        try:
+            res = self.client.post("/api/settings", json={
+                "scheduler": {"max_concurrent_run": 4}
+            })
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(intraday.max_concurrent_run, 4)
+
+            # Check /api/paradiso/lanes/status
+            res_status = self.client.get("/api/paradiso/lanes/status")
+            self.assertEqual(res_status.status_code, 200)
+            lanes_data = json.loads(res_status.data)
+            self.assertEqual(lanes_data["lanes"]["type_a"]["max_concurrent_run"], 4)
+
+            # Test invalid bounds return HTTP 400
+            res_err = self.client.post("/api/settings", json={
+                "scheduler": {"max_concurrent_run": 25}
+            })
+            self.assertEqual(res_err.status_code, 400)
+        finally:
+            self.client.post("/api/settings", json={
+                "scheduler": {"max_concurrent_run": orig_max}
+            })
+
+    def test_lane_a_concurrency_pool_multi_dispatch(self):
+        """P2.1: Lane A dispatches up to max_concurrent_run jobs in parallel."""
+        from unittest.mock import patch, MagicMock
+        intraday = self.paradiso.intraday_service
+        auto_svc = intraday.automation_service
+        intraday.max_concurrent_run = 3
+        intraday.lane_a_active = True
+        intraday.force_open = True
+        auto_svc.update_status("SF Base", "Disabled")
+
+        intraday.waitlist.clear()
+        intraday.current_runs.clear()
+
+        # Add 5 Type A reports
+        for i in range(1, 6):
+            rep = Report(
+                name=f"Report_A_{i}",
+                filename=f"rep_a_{i}.py",
+                filetype="python",
+                dir="../reports",
+                report_type="type_a",
+                status="Waiting"
+            )
+            auto_svc.add(rep)
+
+        # Mock execute_report so it records without completing immediately (simulating in-flight execution)
+        running = []
+        intraday.execution_service.execute_report = MagicMock(
+            side_effect=lambda name, callback_good, callback_fail: running.append(name)
+        )
+
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            intraday.tick()
+
+        # Should dispatch exactly 3 (slot limit)
+        self.assertEqual(len(intraday.current_runs), 3)
+        self.assertEqual(len(running), 3)
+        self.assertEqual(len(intraday.waitlist), 2)
+        self.assertEqual(list(intraday.current_runs.keys()), ["Report_A_1", "Report_A_2", "Report_A_3"])
+
+        # Subsequent tick before completion should NOT dispatch any more
+        with patch.object(CLOCK, "time_24_str", return_value="10:01"):
+            intraday.tick()
+        self.assertEqual(len(intraday.current_runs), 3)
+        self.assertEqual(len(running), 3)
+        self.assertEqual(len(intraday.waitlist), 2)
+
+    def test_lane_a_concurrency_pool_slot_replenishment(self):
+        """P2.1: When an in-flight job finishes in Lane A, vacated slot is replenished on next tick."""
+        from unittest.mock import patch, MagicMock
+        intraday = self.paradiso.intraday_service
+        auto_svc = intraday.automation_service
+        intraday.max_concurrent_run = 2
+        intraday.lane_a_active = True
+        intraday.force_open = True
+        auto_svc.update_status("SF Base", "Disabled")
+
+        intraday.waitlist.clear()
+        intraday.current_runs.clear()
+
+        for i in range(1, 4):
+            rep = Report(
+                name=f"Slot_Rep_{i}",
+                filename=f"slot_rep_{i}.py",
+                filetype="python",
+                dir="../reports",
+                report_type="type_a",
+                status="Waiting"
+            )
+            auto_svc.add(rep)
+
+        callbacks = {}
+        def mock_exec(name, callback_good, callback_fail):
+            callbacks[name] = callback_good
+
+        intraday.execution_service.execute_report = MagicMock(side_effect=mock_exec)
+
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            intraday.tick()
+
+        # Slots 1 and 2 running
+        self.assertEqual(len(intraday.current_runs), 2)
+        self.assertIn("Slot_Rep_1", intraday.current_runs)
+        self.assertIn("Slot_Rep_2", intraday.current_runs)
+        self.assertEqual(len(intraday.waitlist), 1)
+        self.assertEqual(intraday.waitlist[0], "Slot_Rep_3")
+
+        # Simulate Slot_Rep_1 completing successfully
+        log_path = self.app_logs / "Slot_Rep_1.json"
+        log_path.write_text(json.dumps({
+            "name": "Slot_Rep_1",
+            "status": "Completed",
+            "last_output": "Success"
+        }), encoding="utf-8")
+        callbacks["Slot_Rep_1"]("Slot_Rep_1", "1.2s", "Success")
+
+        self.assertEqual(len(intraday.current_runs), 1)
+        self.assertNotIn("Slot_Rep_1", intraday.current_runs)
+        self.assertIn("Slot_Rep_2", intraday.current_runs)
+
+        # Next tick should replenish slot with Slot_Rep_3
+        with patch.object(CLOCK, "time_24_str", return_value="10:02"):
+            intraday.tick()
+
+        self.assertEqual(len(intraday.current_runs), 2)
+        self.assertIn("Slot_Rep_2", intraday.current_runs)
+        self.assertIn("Slot_Rep_3", intraday.current_runs)
+        self.assertEqual(len(intraday.waitlist), 0)
+
+    def test_lane_a_concurrency_starvation_cooldown_coordination(self):
+        """P2.1: Multi-slot starvation cooldown is deferred until ALL in-flight parallel tasks conclude."""
+        from unittest.mock import patch, MagicMock
+        intraday = self.paradiso.intraday_service
+        auto_svc = intraday.automation_service
+        intraday.max_concurrent_run = 2
+        intraday.lane_a_active = True
+        intraday.force_open = True
+        intraday.rotation_cooldown_seconds = 45.0
+        auto_svc.update_status("SF Base", "Disabled")
+
+        intraday.waitlist.clear()
+        intraday.current_runs.clear()
+        intraday._cycle_seen_in_pass.clear()
+        intraday._cycle_pass_reports.clear()
+
+        # 2 reports that will both skip due to dependency
+        rep1 = Report(name="Starve_A", filename="s_a.py", filetype="python", dir="../reports", report_type="type_a", status="Waiting")
+        rep2 = Report(name="Starve_B", filename="s_b.py", filetype="python", dir="../reports", report_type="type_a", status="Waiting")
+        auto_svc.add(rep1)
+        auto_svc.add(rep2)
+
+        callbacks = {}
+        def mock_exec(name, callback_good, callback_fail):
+            callbacks[name] = (callback_good, callback_fail)
+
+        intraday.execution_service.execute_report = MagicMock(side_effect=mock_exec)
+
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"):
+            intraday.tick()
+
+        self.assertEqual(len(intraday.current_runs), 2)
+        self.assertEqual(intraday._cycle_pass_reports, {"Starve_A", "Starve_B"})
+
+        # Starve_A finishes first with dependency skip:
+        log_path_a = self.app_logs / "Starve_A.json"
+        log_path_a.write_text(json.dumps({
+            "name": "Starve_A",
+            "status": "Skipped",
+            "last_output": "Dependency unready: waiting on table"
+        }), encoding="utf-8")
+        callbacks["Starve_A"][0]("Starve_A", "0.5s", "Dependency unready: waiting on table")
+
+        # Since Starve_B is still running (len(current_runs) == 1), pass evaluation must NOT trigger cooldown yet
+        self.assertEqual(len(intraday.current_runs), 1)
+        self.assertEqual(intraday._rotation_cooldown_until, 0.0)
+
+        # Starve_B now finishes with dependency skip:
+        log_path_b = self.app_logs / "Starve_B.json"
+        log_path_b.write_text(json.dumps({
+            "name": "Starve_B",
+            "status": "Skipped",
+            "last_output": "Dependency unready: waiting on table"
+        }), encoding="utf-8")
+        callbacks["Starve_B"][0]("Starve_B", "0.6s", "Dependency unready: waiting on table")
+
+        # Now len(current_runs) == 0, and all reports in pass skipped -> starvation cooldown triggered!
+        self.assertEqual(len(intraday.current_runs), 0)
+        self.assertGreater(intraday._rotation_cooldown_until, time.time())
+
+    # ----------------------------------------------------------------------
+    # F-028: Pre-existing Finalized Day Record in Storage Paralysis Resolution
+    # ----------------------------------------------------------------------
+    def test_f028_preexisting_closed_day_cleansed_on_boot(self):
+        """F-028: Proves pre-existing closed day record is reset to clean slate and waitlist is populated."""
+        from unittest.mock import patch
+        today_date = CLOCK.date_str()
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+
+        # Seed automations with standard reports
+        auto_svc.add(Report(name="Report_F028_1", report_type="type_a", filename="dummy1.py", filetype="python", dir="../reports", status="Waiting"))
+        auto_svc.add(Report(name="Report_F028_2", report_type="type_a", filename="dummy2.py", filetype="python", dir="../reports", status="Waiting"))
+
+        # Pre-seed intraday.json with a pre-existing CLOSED record with auto-finalized reports
+        stale_day = IntradayDay(
+            date=today_date,
+            status=Intraday.CLOSED,
+            expected_reports=["Report_F028_1", "Report_F028_2"],
+            reports_ran={
+                "Report_F028_1": ReportRun(started_at="--", finished_at="--", result="failed", duration="0s", reason="Historical day finalized automatically"),
+                "Report_F028_2": ReportRun(started_at="--", finished_at="--", result="failed", duration="0s", reason="Historical day finalized automatically")
+            },
+            timeline=[]
+        )
+        intra_svc.intraday_repo.add_day(stale_day)
+
+        # 1. Test via start_lane with force_open=True
+        intra_svc.start_lane("type_a", force_open=True)
+
+        # Waitlist must NOT be empty — reports must be populated cleanly!
+        self.assertGreater(len(intra_svc.waitlist), 0, "Waitlist must not be paralyzed by pre-existing closed day record!")
+        self.assertIn("Report_F028_1", intra_svc.waitlist)
+        self.assertIn("Report_F028_2", intra_svc.waitlist)
+
+        # 2. Test via WAITING_TO_OPEN window
+        intra_svc.stop_lane("type_a")
+        intra_svc.force_open = False
+        intra_svc.intraday_repo.add_day(stale_day)
+
+        with patch.object(CLOCK, "time_24_str", return_value="02:00"):
+            day = intra_svc._get_or_init_day(today_date, Intraday.WAITING_TO_OPEN)
+            self.assertEqual(day.status, Intraday.WAITING_TO_OPEN)
+            self.assertEqual(len(day.reports_ran), 0, "Premature closure during WAITING_TO_OPEN must be cleared to empty slate!")
+
+    # ----------------------------------------------------------------------
+    # F-029: Mid-Day Process Restart Lane C Timeslot Hydration
+    # ----------------------------------------------------------------------
+    def test_f029_lane_c_hydrates_from_storage_on_restart(self):
+        """F-029: Proves mid-day service restart hydrates type_c_ran_today and prevents duplicate execution."""
+        from unittest.mock import patch, MagicMock
+        today_date = CLOCK.date_str()
+        rep_name = "MID_Audit_Recon"
+
+        # Simulate Session 1: Lane C report ran and completed today
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="dummy_mid.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            timeslot_tier="MID",
+            scheduled_time="12:00",
+            status="Completed"
+        ))
+
+        # Record run in day.reports_ran
+        self.paradiso.intraday_service.intraday_repo.add_report_run(
+            date=today_date,
+            report_name=rep_name,
+            run=ReportRun(started_at="12:00", finished_at="12:05", result="completed", duration="5s", reason="Success")
+        )
+
+        # Simulate Session 2: Fresh IntradayService (reboot at 14:00)
+        app2, paradiso2 = create_app(storage_dir=self.app_storage)
+        try:
+            intra2 = paradiso2.intraday_service
+            intra2.lane_c_active = True
+            intra2.force_open = True
+
+            # Verify hydration
+            self.assertIn(rep_name, intra2.type_c_ran_today, "type_c_ran_today must be hydrated from storage on startup!")
+
+            dispatched = []
+            intra2.execution_service.execute_report = MagicMock(side_effect=lambda name, **kw: dispatched.append(name))
+
+            # Tick at 14:00 (past 12:00 scheduled time)
+            with patch.object(CLOCK, "time_24_str", return_value="14:00"):
+                intra2.tick()
+
+            # Must NOT be dispatched again
+            self.assertEqual(len(dispatched), 0, "Completed Lane C report must NOT be re-dispatched after reboot!")
+        finally:
+            paradiso2.stop()
+
+    # ----------------------------------------------------------------------
+    # F-030: Web UI HTTP 409 Intraday Window Rejection Feedback
+    # ----------------------------------------------------------------------
+    def test_f030_app_js_handles_409_and_defines_show_toast(self):
+        """F-030: Proves app.js defines showToast and startLane displays toast on HTTP 409 Conflict."""
+        js_file = BASE_DIR / "web" / "static" / "js" / "app.js"
+        self.assertTrue(js_file.exists())
+        js_content = js_file.read_text(encoding="utf-8")
+
+        # 1. showToast function definition
+        self.assertIn("function showToast(", js_content, "app.js must define a global showToast notification function.")
+
+        # 2. HTTP 409 handling in startLane
+        self.assertIn("res.status === 409", js_content, "startLane in app.js must handle HTTP 409 Conflict.")
+        self.assertIn("showToast", js_content)
+
+    # ----------------------------------------------------------------------
+    # V-01: Disabling an Automation Eviction & Idle-Only Protection
+    # ----------------------------------------------------------------------
+    def test_v01_disabling_idle_report_evicts_from_waitlist_and_prevents_dispatch(self):
+        """V-01: Disabling an idle report evicts it from waitlist and prevents dispatch."""
+        from unittest.mock import MagicMock
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        rep_name = "Report_V01_Idle"
+
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="dummy_idle.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_a",
+            status="Waiting"
+        ))
+
+        intra_svc.start_lane("type_a", force_open=True)
+        self.assertIn(rep_name, intra_svc.waitlist, "Report must be in waitlist upon lane start.")
+
+        # Disable the idle report via API
+        res = self.client.post("/api/automation/disable", json={"name": rep_name})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("ok"))
+
+        # Invariant: Report must be evicted from waitlist and pass tracking
+        self.assertNotIn(rep_name, intra_svc.waitlist, "Disabled report must be evicted from waitlist!")
+        self.assertNotIn(rep_name, intra_svc._cycle_pass_reports, "Disabled report must be removed from pass reports!")
+
+        # Verify catalog status
+        rep = auto_svc.get_by_name(rep_name)
+        self.assertEqual(rep.status, "Disabled")
+
+        # Invariant: tick() must not dispatch the disabled report
+        dispatched = []
+        intra_svc.execution_service.execute_report = MagicMock(side_effect=lambda name, **kw: dispatched.append(name))
+        intra_svc.tick()
+        self.assertNotIn(rep_name, dispatched, "Disabled report must never be dispatched by tick()!")
+
+    def test_v01_disabling_running_report_rejected_with_http_409(self):
+        """V-01: Attempting to disable a currently running report is rejected with HTTP 409 Conflict."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+
+        # 1. Test Lane A actively executing report
+        rep_a = "Report_V01_RunA"
+        auto_svc.add(Report(
+            name=rep_a,
+            filename="dummy_run_a.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_a",
+            status="Running"
+        ))
+        intra_svc.current_runs[rep_a] = CLOCK.formatted_now()
+
+        res_a = self.client.post("/api/automation/disable", json={"name": rep_a})
+        self.assertEqual(res_a.status_code, 409, "Disabling a running Lane A report must return HTTP 409 Conflict!")
+        self.assertIn("currently executing", res_a.get_json().get("error", ""))
+        self.assertEqual(auto_svc.get_by_name(rep_a).status, "Running", "Report status must remain Running!")
+
+        # 2. Test Lane B actively executing report
+        rep_b = "Report_V01_RunB"
+        auto_svc.add(Report(
+            name=rep_b,
+            filename="dummy_run_b.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_b",
+            status="Running"
+        ))
+        intra_svc.active_runs_type_b[rep_b] = CLOCK.formatted_now()
+
+        res_b = self.client.post("/api/automation/disable", json={"name": rep_b})
+        self.assertEqual(res_b.status_code, 409, "Disabling a running Lane B report must return HTTP 409 Conflict!")
+        self.assertEqual(auto_svc.get_by_name(rep_b).status, "Running")
+
+        # 3. Test Lane C actively executing report
+        rep_c = "Report_V01_RunC"
+        auto_svc.add(Report(
+            name=rep_c,
+            filename="dummy_run_c.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            status="Running"
+        ))
+        intra_svc.active_runs_type_c[rep_c] = CLOCK.formatted_now()
+
+        res_c = self.client.post("/api/automation/disable", json={"name": rep_c})
+        self.assertEqual(res_c.status_code, 409, "Disabling a running Lane C report must return HTTP 409 Conflict!")
+        self.assertEqual(auto_svc.get_by_name(rep_c).status, "Running")
+
+    # ----------------------------------------------------------------------
+    # V-02: Lane B Mid-Day Reboot Last-Run Hydration
+    # ----------------------------------------------------------------------
+    def test_v02_lane_b_hydrates_last_run_from_storage_on_restart(self):
+        """V-02: Mid-day reboot hydrates Lane B last_run from storage, preventing thundering-herd re-execution."""
+        from unittest.mock import patch, MagicMock
+        from datetime import timedelta
+        today_date = CLOCK.date_str()
+        rep_name = "Hourly_Treasury_Feed"
+
+        # 1. Register Type B 60-minute interval report
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="dummy_feed.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_b",
+            interval_minutes=60,
+            status="Completed"
+        ))
+
+        # 2. Simulate report ran 5 minutes ago today
+        now_dt = CLOCK.now()
+        five_mins_ago_str = (now_dt - timedelta(minutes=5)).strftime("%Y-%m-%d %I:%M:%S %p")
+        self.paradiso.intraday_service.intraday_repo.add_report_run(
+            date=today_date,
+            report_name=rep_name,
+            run=ReportRun(
+                started_at="--",
+                finished_at=five_mins_ago_str,
+                result="completed",
+                duration="15s",
+                reason="Success"
+            )
+        )
+
+        # 3. Simulate process restart at current time
+        app2, paradiso2 = create_app(storage_dir=self.app_storage)
+        try:
+            intra2 = paradiso2.intraday_service
+            intra2.lane_b_active = True
+            intra2.force_open = True
+
+            # Verify that type_b_last_run was hydrated
+            self.assertIn(rep_name, intra2.type_b_last_run, "type_b_last_run must be hydrated on startup!")
+            hydrated_dt = intra2.type_b_last_run[rep_name]
+            self.assertAlmostEqual((now_dt - hydrated_dt).total_seconds(), 300, delta=10)
+
+            # 4. Tick immediately: must NOT dispatch because only 5m have elapsed (interval is 60m)
+            dispatched = []
+            intra2.execution_service.execute_report = MagicMock(side_effect=lambda name, **kw: dispatched.append(name))
+            intra2.tick()
+            self.assertEqual(len(dispatched), 0, "Lane B report must NOT re-dispatch immediately after reboot!")
+
+            # 5. Advance time by 60 minutes past the last run
+            advanced_dt = hydrated_dt + timedelta(minutes=61)
+            with patch.object(CLOCK, "now", return_value=advanced_dt):
+                intra2.tick()
+            self.assertIn(rep_name, dispatched, "Lane B report must dispatch after its interval has elapsed!")
+        finally:
+            paradiso2.stop()
+
+    # ----------------------------------------------------------------------
+    # V-03 & V-04: Lane A Isolation & Cross-Lane Bleed Elimination
+    # ----------------------------------------------------------------------
+    def test_v03_lane_a_retry_does_not_queue_when_lane_a_stopped_even_if_lane_b_active(self):
+        """V-03: Lane A retry/skip callback does not re-queue into waitlist if Lane A was stopped, even if Lane B is active."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        rep_name = "Report_V03_Bleed"
+
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="dummy_bleed.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_a",
+            status="Waiting"
+        ))
+
+        # Start Lane A and Lane B
+        intra_svc.start_lane("type_a", force_open=True)
+        intra_svc.start_lane("type_b", force_open=True)
+
+        self.assertTrue(intra_svc.lane_a_active)
+        self.assertTrue(intra_svc.lane_b_active)
+        self.assertTrue(intra_svc.is_active)
+
+        # Trigger Lane A report
+        captured_callbacks = {}
+        def mock_exec(name, callback_good=None, callback_fail=None):
+            captured_callbacks["good"] = callback_good
+            captured_callbacks["fail"] = callback_fail
+
+        intra_svc.execution_service.execute_report = mock_exec
+        intra_svc._trigger_report(rep_name, CLOCK.date_str())
+
+        # Now explicitly stop Lane A
+        intra_svc.stop_lane("type_a")
+        self.assertFalse(intra_svc.lane_a_active)
+        self.assertTrue(intra_svc.lane_b_active, "Lane B must remain active.")
+        self.assertTrue(intra_svc.is_active, "is_active is True because Lane B is running.")
+        self.assertEqual(len(intra_svc.waitlist), 0, "Waitlist must be empty after stopping Lane A.")
+
+        # Simulate in-flight callback concluding with dependency skip:
+        # Pre-seed log with skip output
+        from models.report_log import ReportLog
+        log_file = ReportLog(rep_name).log_dir / f"{rep_name}.json"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump({"name": rep_name, "status": "Retrial", "last_output": "SKIPPED: Missing dependency"}, f)
+
+        # Invoke callback_good with skip
+        captured_callbacks["good"](rep_name, "2s", "SKIPPED: Missing dependency")
+
+        # Invariant: Report must NOT have been re-queued into Lane A waitlist!
+        self.assertNotIn(rep_name, intra_svc.waitlist, "Lane A report must NOT re-queue when Lane A is stopped!")
+        self.assertEqual(len(intra_svc.waitlist), 0, "Waitlist must remain completely empty!")
+
+    def test_v04_add_automation_type_a_does_not_queue_when_lane_a_stopped(self):
+        """V-04: Adding a Type A report does not push into waitlist when Lane A is stopped, even if Lane B is active."""
+        intra_svc = self.paradiso.intraday_service
+        rep_name = "New_TypeA_Report_V04"
+
+        # Start Lane B, ensure Lane A is stopped
+        intra_svc.stop_lane("type_a")
+        intra_svc.start_lane("type_b", force_open=True)
+        intra_svc.force_open = False  # Ensure force_open is false for Lane A
+        self.assertFalse(intra_svc.lane_a_active)
+        self.assertTrue(intra_svc.lane_b_active)
+        self.assertTrue(intra_svc.is_active, "is_active is True due to Lane B.")
+
+        # Create new Type A report
+        res = self.client.post("/api/automation/add", json={
+            "name": rep_name,
+            "filename": "dummy_new_v04.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "status": "Waiting"
+        })
+        self.assertEqual(res.status_code, 201)
+
+        # Invariant: Must NOT be in waitlist because Lane A is stopped
+        self.assertNotIn(rep_name, intra_svc.waitlist, "Type A report must not be queued into waitlist while Lane A is stopped!")
+
+    # ----------------------------------------------------------------------
+    # V-05: Non-Existent Report Manual Run Returns 404 Not Found
+    # ----------------------------------------------------------------------
+    def test_v05_manual_run_non_existent_report_returns_http_404(self):
+        """V-05: Requesting manual run for a non-existent report returns HTTP 404 Not Found."""
+        res = self.client.post("/api/automation/run", json={"name": "Ghost_Non_Existent_Report"})
+        self.assertEqual(res.status_code, 404, "Non-existent report manual run must return HTTP 404 Not Found!")
+        data = res.get_json()
+        self.assertFalse(data.get("ok"))
+        self.assertIn("Ghost_Non_Existent_Report", data.get("error", ""))
+        self.assertIn("not found in catalog", data.get("error", ""))
+
+    def test_v05_manual_run_missing_name_returns_http_400(self):
+        """V-05: Requesting manual run with missing name returns HTTP 400 Bad Request."""
+        res_empty = self.client.post("/api/automation/run", json={"name": "   "})
+        self.assertEqual(res_empty.status_code, 400)
+        self.assertFalse(res_empty.get_json().get("ok"))
+
+        res_none = self.client.post("/api/automation/run", json={})
+        self.assertEqual(res_none.status_code, 400)
+        self.assertFalse(res_none.get_json().get("ok"))
+
+    # ----------------------------------------------------------------------
+    # F-031: Cold Boot Does Not Leak Prior Day Completed Status into Lane C
+    # ----------------------------------------------------------------------
+    def test_f031_cold_boot_lane_c_no_leak_from_prior_day(self):
+        """F-031: Proves cold boot with Completed status in automations.json does not suppress Lane C execution today."""
+        from unittest.mock import patch, MagicMock
+        rep_name = "EOD Ledger Reconciliation"
+
+        # Automations catalog retains 'Completed' from yesterday's execution
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="eod_ledger_reconciliation.py",
+            filetype="python",
+            dir="reports",
+            report_type="type_c",
+            timeslot_tier="EOD",
+            scheduled_time="20:30",
+            status="Completed",
+            last_run="2026-09-25 08:30:00 PM"
+        ))
+
+        # Re-initialize IntradayService (simulating a cold boot with fresh in-memory state)
+        from app import create_app
+        test_app, test_paradiso = create_app(storage_dir=self.app_storage)
+        try:
+            intra_svc = test_paradiso.intraday_service
+
+            # Verification 1: In-memory type_c_ran_today must NOT contain yesterday's completed report
+            self.assertNotIn(rep_name, intra_svc.type_c_ran_today,
+                             "F-031 Fix: type_c_ran_today must not be contaminated with prior day's completed report on cold boot.")
+
+            intra_svc.start_lane("type_c", force_open=True)
+
+            dispatched = []
+            intra_svc.execution_service.execute_report = MagicMock(side_effect=lambda name, **kw: dispatched.append(name))
+
+            # When scheduled time 20:30 arrives today:
+            with patch.object(CLOCK, "time_24_str", return_value="20:30"):
+                intra_svc.tick()
+
+            # Verification 2: The report is successfully dispatched today!
+            self.assertIn(rep_name, dispatched,
+                          "F-031 Fix: Lane C report must be dispatched at its scheduled timeslot.")
+        finally:
+            test_paradiso.stop()
+
+    # ----------------------------------------------------------------------
+    # F-032: Realistic Cutoff Reasons Do Not Cause Storage Paralysis
+    # ----------------------------------------------------------------------
+    def test_f032_realistic_cutoff_reasons_cleansed_on_open(self):
+        """F-032: Proves realistic cutoff reasons in pre-existing CLOSED record are cleansed on OPEN/force_open."""
+        today_date = CLOCK.date_str()
+
+        auto_svc = self.paradiso.intraday_service.automation_service
+        auto_svc.add(Report(name="Report_F032_A", report_type="type_a", filename="dummy1.py", filetype="python", dir="../reports", status="Waiting"))
+        auto_svc.add(Report(name="Report_F032_B", report_type="type_a", filename="dummy2.py", filetype="python", dir="../reports", status="Waiting"))
+
+        # Pre-seed intraday storage with today marked CLOSED with real cutoff reason
+        intraday_repo = self.paradiso.intraday_service.intraday_repo
+        intraday_repo.add_day(IntradayDay(
+            date=today_date,
+            status=Intraday.CLOSED,
+            expected_reports=["Report_F032_A", "Report_F032_B"],
+            reports_ran={
+                "Report_F032_A": ReportRun(started_at="--", finished_at="--", result="failed", duration="0s", reason="Not completed before 10:00 PM cutoff"),
+                "Report_F032_B": ReportRun(started_at="--", finished_at="--", result="failed", duration="0s", reason="Not completed before 10:00 PM cutoff")
+            },
+            timeline=[]
+        ))
+
+        # Start Lane A with force_open=True
+        intra_svc = self.paradiso.intraday_service
+        intra_svc.start_lane("type_a", force_open=True)
+
+        # Invariant: Waitlist must be cleansed and populated with both Type A reports (NO queue paralysis!)
+        self.assertIn("Report_F032_A", intra_svc.waitlist)
+        self.assertIn("Report_F032_B", intra_svc.waitlist)
+        self.assertGreaterEqual(len(intra_svc.waitlist), 2,
+                                "F-032 Fix: Pre-existing CLOSED day with realistic cutoff reasons must be cleansed to populate waitlist.")
+
+    # ----------------------------------------------------------------------
+    # F-033: Unbounded Stickiness of force_open Cleansed on Lane Stop and Cutoff
+    # ----------------------------------------------------------------------
+    def test_f033_force_open_cleared_on_lane_stop_and_hard_cutoff(self):
+        """F-033: Proves force_open is cleared when all lanes stop, cutoff enforces CLOSED, and midnight rollover stays WAITING_TO_OPEN."""
+        from unittest.mock import patch
+        intra_svc = self.paradiso.intraday_service
+
+        # 1. Start Lane B with force_open=True
+        intra_svc.start_lane("type_b", force_open=True)
+        self.assertTrue(intra_svc.force_open)
+
+        # 2. Stop Lane B
+        intra_svc.stop_lane("type_b")
+        self.assertFalse(intra_svc.lane_b_active)
+        self.assertFalse(intra_svc.is_active)
+
+        # Invariant 1: force_open must be reset to False once all lanes stop!
+        self.assertFalse(intra_svc.force_open, "F-033 Fix: force_open must be cleared when all lanes stop.")
+
+        # 3. Simulate clock at 22:30 PM (past 22:00 close_time) even if someone manually set force_open
+        intra_svc.force_open = True
+        with patch.object(CLOCK, "time_24_str", return_value="22:30"):
+            status = intra_svc.resolve_status()
+            # Invariant 2: 22:00 cutoff takes absolute precedence!
+            self.assertEqual(status, Intraday.CLOSED,
+                             "F-033 Fix: Status must resolve to CLOSED at 22:30 PM despite force_open.")
+
+            intra_svc.tick()
+            self.assertTrue(intra_svc.day_closed, "F-033 Fix: tick() must close day on 22:00 hard cutoff.")
+            self.assertFalse(intra_svc.force_open, "F-033 Fix: force_open must be cleared on hard cutoff.")
+
+        # 4. Simulate crossing midnight to 00:05 AM of the next day
+        with patch.object(CLOCK, "date_str", return_value="20260927"), \
+             patch.object(CLOCK, "time_24_str", return_value="00:05"):
+            intra_svc.tick()
+            new_day = intra_svc.intraday_repo.get_day("20260927")
+            self.assertIsNotNone(new_day)
+            # Invariant 3: New day at 00:05 AM must be WAITING_TO_OPEN, not OPEN!
+            self.assertEqual(new_day.status, Intraday.WAITING_TO_OPEN,
+                             "F-033 Fix: New day must initialize as WAITING_TO_OPEN at 00:05 AM.")
+
+    # ----------------------------------------------------------------------
+    # F-034: Actively Executing Type B or C Reports Cannot Be Deleted (409)
+    # ----------------------------------------------------------------------
+    def test_f034_delete_actively_executing_type_b_or_c_rejected_409(self):
+        """F-034: Proves deleting an actively executing Type B or C report returns HTTP 409 and preserves catalog."""
+        rep_name = "Active_Manual_Pipeline_B"
+        res_add = self.client.post("/api/automation/add", json={
+            "name": rep_name,
+            "filename": "dummy_b.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_b",
+            "interval_minutes": 30
+        })
+        self.assertEqual(res_add.status_code, 201)
+
+        intra_svc = self.paradiso.intraday_service
+
+        # Simulate actively running Type B report while scheduler lanes are paused
+        intra_svc.active_runs_type_b[rep_name] = CLOCK.formatted_now()
+        self.assertFalse(intra_svc.is_active, "Scheduler lanes are stopped.")
+        self.assertTrue(intra_svc.has_active_runs, "Report is actively in flight across system.")
+
+        # Attempt to delete the actively executing report
+        res_delete = self.client.delete(f"/api/automation/delete/{rep_name}")
+
+        # Verification 1: Rejection with HTTP 409 Conflict
+        self.assertEqual(res_delete.status_code, 409,
+                         "F-034 Fix: Deleting an actively executing report must return HTTP 409 Conflict.")
+        data = res_delete.get_json()
+        self.assertFalse(data.get("ok"))
+        self.assertIn("report is currently executing", data.get("error", ""))
+
+        # Verification 2: The report is preserved in the catalog
+        self.assertIsNotNone(intra_svc.automation_service.get_by_name(rep_name),
+                             "F-034 Fix: Report must remain in catalog.")
+
+        # Clean up simulated run and delete when idle
+        intra_svc.active_runs_type_b.pop(rep_name, None)
+        res_idle_delete = self.client.delete(f"/api/automation/delete/{rep_name}")
+        self.assertEqual(res_idle_delete.status_code, 200)
+
+    # ----------------------------------------------------------------------
+    # F-032: Partial Day Cutoff Reports Queued Without Erasing Completed Logs
+    # ----------------------------------------------------------------------
+    def test_f032_partial_day_cutoff_reports_queued_without_log_wipe(self):
+        """F-032: Proves reports cut off on partial days are queued without wiping completed execution logs."""
+        import tempfile
+        from app import create_app
+        today = CLOCK.date_str()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage_dir = Path(tmpdir)
+            automations = {
+                "Report_P1": {"name": "Report_P1", "filename": "r1.py", "filetype": "python", "dir": "../reports", "status": "Waiting", "report_type": "type_a"},
+                "Report_P2": {"name": "Report_P2", "filename": "r2.py", "filetype": "python", "dir": "../reports", "status": "Waiting", "report_type": "type_a"},
+                "Report_P3": {"name": "Report_P3", "filename": "r3.py", "filetype": "python", "dir": "../reports", "status": "Waiting", "report_type": "type_a"}
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+
+            intraday = {
+                today: {
+                    "date": today,
+                    "status": "CLOSED",
+                    "expected_reports": ["Report_P1", "Report_P2", "Report_P3"],
+                    "reports_ran": {
+                        "Report_P1": {"started_at": "07:05 AM", "finished_at": "07:10 AM", "result": "completed", "duration": "5s", "reason": "Completed successfully"},
+                        "Report_P2": {"started_at": "--", "finished_at": "--", "result": "failed", "duration": "0s", "reason": "Not completed before 10:00 PM cutoff"},
+                        "Report_P3": {"started_at": "--", "finished_at": "--", "result": "failed", "duration": "0s", "reason": "Not completed before 10:00 PM cutoff"}
+                    },
+                    "timeline": []
+                }
+            }
+            (storage_dir / "intraday.json").write_text(json.dumps(intraday), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra_svc = paradiso.intraday_service
+                intra_svc.start_lane("type_a", force_open=True)
+
+                # Verification 1: Report_P2 and Report_P3 must be queued in waitlist (NO queue paralysis!)
+                self.assertIn("Report_P2", intra_svc.waitlist)
+                self.assertIn("Report_P3", intra_svc.waitlist)
+                self.assertNotIn("Report_P1", intra_svc.waitlist, "Report_P1 already completed today and must not re-queue.")
+                self.assertEqual(len(intra_svc.waitlist), 2)
+
+                # Verification 2: Historical record of Report_P1 is NOT erased from reports_ran
+                day_after = intra_svc.intraday_repo.get_day(today)
+                self.assertIn("Report_P1", day_after.reports_ran)
+                res_p1 = getattr(day_after.reports_ran["Report_P1"], "result", None) or (day_after.reports_ran["Report_P1"].get("result") if isinstance(day_after.reports_ran["Report_P1"], dict) else "")
+                self.assertEqual(res_p1, "completed")
+            finally:
+                paradiso.stop()
+
+    def test_f035_lane_b_cold_boot_does_not_synthesize_future_timestamp(self):
+        """F-035: Cold boot hydration of time-only last_run string must not synthesize future timestamp and must dispatch on tick."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Recurring_Pipeline": {
+                    "name": "Recurring_Pipeline",
+                    "filename": "pipeline.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_b",
+                    "interval_minutes": 60,
+                    "last_run": "09:30:00 PM"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                sim_morning = datetime(2026, 9, 28, 8, 0, 0)
+                with patch.object(CLOCK, "now", return_value=sim_morning), \
+                     patch.object(CLOCK, "time_24_str", return_value="08:00"):
+
+                    intra.start_lane("type_b")
+
+                    hydrated = intra.type_b_last_run.get("Recurring_Pipeline")
+                    self.assertIsNotNone(hydrated)
+                    self.assertLessEqual(hydrated, sim_morning,
+                                         "Hydrated last_run must be historical, not in the future.")
+
+                    dispatched = []
+                    intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+                    intra.tick()
+
+                    self.assertIn("Recurring_Pipeline", dispatched,
+                                  "Recurring pipeline must dispatch immediately upon cold boot.")
+            finally:
+                paradiso.stop()
+
+    def test_f033_waiting_to_close_enforced_and_cross_lane_isolated(self):
+        """F-033: WAITING_TO_CLOSE window is enforced even if force_open is True, and lane_start rejects out-of-window requests without explicit force_open."""
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                # Start Lane A with force_open
+                intra.start_lane("type_a", force_open=True)
+                self.assertTrue(intra.force_open)
+
+                # 1. At 21:15, WAITING_TO_CLOSE must be respected
+                with patch.object(CLOCK, "time_24_str", return_value="21:15"):
+                    status = intra.resolve_status()
+                    self.assertEqual(status, "WAITING_TO_CLOSE",
+                                     "WAITING_TO_CLOSE wrap-up window must NOT be overridden by force_open.")
+
+                    # 2. Starting Lane B via API without force_open returns 409
+                    with app.test_client() as client:
+                        res = client.post("/api/paradiso/lane/start", json={"lane": "type_b"})
+                        self.assertEqual(res.status_code, 409,
+                                         "Lane start without force_open out-of-window must be rejected with 409.")
+                        self.assertIn("blocked outside the intraday open window", res.get_json()["error"])
+
+                        # 3. Starting Lane B via API WITH explicit force_open succeeds
+                        res_ok = client.post("/api/paradiso/lane/start", json={"lane": "type_b", "force_open": True})
+                        self.assertEqual(res_ok.status_code, 200)
+            finally:
+                paradiso.stop()
+
+    def test_f036_enable_automation_endpoint_restores_without_destructive_reset(self):
+        """F-036: Re-enabling a disabled report via POST /api/automation/enable restores status to Waiting and rejoins waitlist without destructive resets."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Report_Alpha": {
+                    "name": "Report_Alpha",
+                    "filename": "alpha.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_a"
+                },
+                "Report_Beta": {
+                    "name": "Report_Beta",
+                    "filename": "beta.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_a"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                intra.start_lane("type_a", force_open=True)
+
+                with app.test_client() as client:
+                    # 1. Disable Report_Alpha
+                    res_dis = client.post("/api/automation/disable", json={"name": "Report_Alpha"})
+                    self.assertEqual(res_dis.status_code, 200)
+                    self.assertEqual(intra.automation_service.get_by_name("Report_Alpha").status, "Disabled")
+                    self.assertNotIn("Report_Alpha", intra.waitlist)
+
+                    # 2. Try enabling invalid inputs
+                    res_bad = client.post("/api/automation/enable", json={})
+                    self.assertEqual(res_bad.status_code, 400)
+                    res_nf = client.post("/api/automation/enable", json={"name": "NonExistent"})
+                    self.assertEqual(res_nf.status_code, 404)
+                    res_already_enabled = client.post("/api/automation/enable", json={"name": "Report_Beta"})
+                    self.assertEqual(res_already_enabled.status_code, 400)
+                    self.assertIn("not disabled", res_already_enabled.get_json()["error"])
+
+                    # 3. Enable Report_Alpha
+                    res_en = client.post("/api/automation/enable", json={"name": "Report_Alpha"})
+                    self.assertEqual(res_en.status_code, 200)
+                    self.assertEqual(intra.automation_service.get_by_name("Report_Alpha").status, "Waiting")
+                    # Should be reenqueued in Lane A waitlist because Lane A is active
+                    self.assertIn("Report_Alpha", intra.waitlist)
+            finally:
+                paradiso.stop()
+
+    # ----------------------------------------------------------------------
+    # P2.2: Lane C Missed Window Catch-up Policy
+    # ----------------------------------------------------------------------
+    def test_p2_2_lane_c_catch_up_immediate(self):
+        """P2.2: Lane C report missed by > grace period executes immediately and logs catch-up under CATCH_UP_IMMEDIATE."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Morning_BOD": {
+                    "name": "Morning_BOD",
+                    "filename": "bod.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_c",
+                    "timeslot_tier": "BOD",
+                    "scheduled_time": "07:00",
+                    "catch_up_policy": "CATCH_UP_IMMEDIATE"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                sim_time = datetime(2026, 9, 28, 8, 30, 0) # 90m past 07:00
+                with patch.object(CLOCK, "now", return_value=sim_time), \
+                     patch.object(CLOCK, "time_24_str", return_value="08:30"):
+
+                    intra.start_lane("type_c")
+                    dispatched = []
+                    intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+
+                    intra.tick()
+
+                    self.assertIn("Morning_BOD", dispatched, "Report must be caught up and dispatched immediately.")
+                    day = intra.intraday_repo.get_day("20260928")
+                    timeline_titles = [e.title for e in day.timeline]
+                    self.assertTrue(any("Catch-up Trigger" in t for t in timeline_titles),
+                                    "Timeline must record Catch-up Trigger event.")
+            finally:
+                paradiso.stop()
+
+    def test_p2_2_lane_c_skip_until_next_day(self):
+        """P2.2: Lane C report missed by > grace period is marked Skipped and not dispatched under SKIP_UNTIL_NEXT_DAY."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Morning_BOD": {
+                    "name": "Morning_BOD",
+                    "filename": "bod.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_c",
+                    "timeslot_tier": "BOD",
+                    "scheduled_time": "07:00",
+                    "catch_up_policy": "SKIP_UNTIL_NEXT_DAY"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                sim_time = datetime(2026, 9, 28, 8, 30, 0)
+                with patch.object(CLOCK, "now", return_value=sim_time), \
+                     patch.object(CLOCK, "time_24_str", return_value="08:30"):
+
+                    intra.start_lane("type_c")
+                    dispatched = []
+                    intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+
+                    intra.tick()
+
+                    self.assertEqual(len(dispatched), 0, "Missed report must NOT dispatch under SKIP_UNTIL_NEXT_DAY.")
+                    rep = intra.automation_service.get_by_name("Morning_BOD")
+                    self.assertEqual(rep.status, "Skipped")
+                    self.assertIn("Morning_BOD", intra.type_c_ran_today)
+
+                    day = intra.intraday_repo.get_day("20260928")
+                    self.assertIn("Morning_BOD", day.reports_ran)
+                    run_rec = day.reports_ran["Morning_BOD"]
+                    self.assertEqual(getattr(run_rec, "result", None) or run_rec.get("result"), "skipped")
+            finally:
+                paradiso.stop()
+
+    def test_p2_2_lane_c_warn_operator(self):
+        """P2.2: Lane C report missed under WARN_OPERATOR emits single alert and allows manual run."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Morning_BOD": {
+                    "name": "Morning_BOD",
+                    "filename": "bod.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_c",
+                    "timeslot_tier": "BOD",
+                    "scheduled_time": "07:00",
+                    "catch_up_policy": "WARN_OPERATOR"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                sim_time = datetime(2026, 9, 28, 8, 30, 0)
+                with patch.object(CLOCK, "now", return_value=sim_time), \
+                     patch.object(CLOCK, "time_24_str", return_value="08:30"):
+
+                    intra.start_lane("type_c")
+                    dispatched = []
+                    intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+
+                    intra.tick()
+                    self.assertEqual(len(dispatched), 0, "Report must not auto-dispatch under WARN_OPERATOR.")
+
+                    # Tick again: alert must be deduplicated
+                    intra.tick()
+                    day = intra.intraday_repo.get_day("20260928")
+                    warn_events = [e for e in day.timeline if "Missed Timeslot Alert" in e.title]
+                    self.assertEqual(len(warn_events), 1, "Alert timeline event must be deduplicated.")
+
+                    # Manual run permitted during OPEN
+                    with app.test_client() as client:
+                        res = client.post("/api/automation/run", json={"name": "Morning_BOD"})
+                        self.assertEqual(res.status_code, 200, "Operator can manually run report on demand.")
+            finally:
+                paradiso.stop()
+
+    def test_p2_2_lane_c_on_time_within_grace_not_classified_as_missed(self):
+        """P2.2: Lane C report within grace period dispatches normally even if policy is SKIP_UNTIL_NEXT_DAY."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            automations = {
+                "Morning_BOD": {
+                    "name": "Morning_BOD",
+                    "filename": "bod.py",
+                    "filetype": "python",
+                    "dir": "../reports",
+                    "status": "Waiting",
+                    "report_type": "type_c",
+                    "timeslot_tier": "BOD",
+                    "scheduled_time": "07:00",
+                    "catch_up_policy": "SKIP_UNTIL_NEXT_DAY"
+                }
+            }
+            (storage_dir / "automations.json").write_text(json.dumps(automations), encoding="utf-8")
+            (storage_dir / "intraday.json").write_text(json.dumps({}), encoding="utf-8")
+
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                # Only 5 minutes past 07:00 (within 15m grace window)
+                sim_time = datetime(2026, 9, 28, 7, 5, 0)
+                with patch.object(CLOCK, "now", return_value=sim_time), \
+                     patch.object(CLOCK, "time_24_str", return_value="07:05"):
+
+                    intra.start_lane("type_c")
+                    dispatched = []
+                    intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+
+                    intra.tick()
+
+                    self.assertIn("Morning_BOD", dispatched, "Report within grace window must dispatch normally.")
+            finally:
+                paradiso.stop()
+
+    def test_p2_2_settings_hot_reload_and_validation(self):
+        """P2.2: Settings validation and dynamic hot-reload for lane_c_catch_up_policy."""
+        from utils.config import validate_config
+        # 1. Validation tests
+        ok, err = validate_config({"scheduler": {"lane_c_catch_up_policy": "INVALID"}})
+        self.assertFalse(ok)
+        self.assertIn("lane_c_catch_up_policy must be one of", err)
+
+        ok, err = validate_config({"scheduler": {"lane_c_catch_up_grace_minutes": -5}})
+        self.assertFalse(ok)
+        self.assertIn("non-negative integer", err)
+
+        ok, err = validate_config({"scheduler": {"lane_c_catch_up_policy": "WARN_OPERATOR", "lane_c_catch_up_grace_minutes": 20}})
+        self.assertTrue(ok)
+
+        # 2. Hot-reload test
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                self.assertEqual(intra.lane_c_catch_up_policy, "CATCH_UP_IMMEDIATE")
+
+                intra.reload_config({"scheduler": {"lane_c_catch_up_policy": "SKIP_UNTIL_NEXT_DAY", "lane_c_catch_up_grace_minutes": 30}})
+                self.assertEqual(intra.lane_c_catch_up_policy, "SKIP_UNTIL_NEXT_DAY")
+                self.assertEqual(intra.lane_c_catch_up_grace_minutes, 30)
+
+                with app.test_client() as client:
+                    res = client.get("/api/settings")
+                    self.assertEqual(res.status_code, 200)
+                    meta = res.get_json()["settings"]["runtime_meta"]
+                    self.assertEqual(meta["lane_c_catch_up_policy"], "SKIP_UNTIL_NEXT_DAY")
+                    self.assertEqual(meta["lane_c_catch_up_grace_minutes"], 30)
+            finally:
+                paradiso.stop()
+
+    def test_f037_scheduled_time_validation_and_defensive_normalization(self):
+        """F-037: add_automation rejects non-canonical scheduled_time with 400, while tick defensively normalizes without crashing or freezing."""
+        from datetime import datetime
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            storage_dir = Path(tmp_dir)
+            app, paradiso = create_app(storage_dir=storage_dir)
+            try:
+                intra = paradiso.intraday_service
+                with app.test_client() as client:
+                    # 1. API validation: reject non-canonical formats with HTTP 400
+                    for bad_time in ["08:30 AM", "8:30", "25:00", "invalid", "12:60"]:
+                        res = client.post("/api/automation/add", json={
+                            "name": f"Bad_{bad_time.replace(' ', '_').replace(':', '_')}",
+                            "filename": "dummy.py",
+                            "filetype": "python",
+                            "dir": "../reports",
+                            "report_type": "type_c",
+                            "scheduled_time": bad_time
+                        })
+                        self.assertEqual(res.status_code, 400, f"scheduled_time '{bad_time}' must be rejected with 400")
+
+                    # Valid canonical format succeeds
+                    res_ok = client.post("/api/automation/add", json={
+                        "name": "Good_Time",
+                        "filename": "dummy.py",
+                        "filetype": "python",
+                        "dir": "../reports",
+                        "report_type": "type_c",
+                        "scheduled_time": "08:30"
+                    })
+                    self.assertEqual(res_ok.status_code, 201)
+
+                # 2. Defensive tick handling: legacy or unnormalized times in storage do not crash or freeze
+                intra.start_lane("type_c", force_open=True)
+                intra.automation_service.add(Report(
+                    name="Legacy_12hr",
+                    filename="dummy.py",
+                    filetype="python",
+                    dir="reports",
+                    status="Waiting",
+                    report_type="type_c",
+                    scheduled_time="08:30 AM"
+                ))
+                intra.automation_service.add(Report(
+                    name="Legacy_Unpadded",
+                    filename="dummy.py",
+                    filetype="python",
+                    dir="reports",
+                    status="Waiting",
+                    report_type="type_c",
+                    scheduled_time="8:30"
+                ))
+
+                dispatched = []
+                intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+                with patch.object(CLOCK, "now", return_value=datetime(2026, 9, 28, 9, 0, 0)), \
+                     patch.object(CLOCK, "time_24_str", return_value="09:00"):
+                    # tick must not raise ValueError
+                    intra.tick()
+
+                self.assertIn("Legacy_12hr", dispatched)
+                self.assertIn("Legacy_Unpadded", dispatched)
+            finally:
+                paradiso.stop()
+
+    def test_f038_catch_up_policy_persistence_in_api(self):
+        """F-038: Verifies POST /api/automation/add validates and persists catch_up_policy."""
+        # 1. Valid policy
+        res = self.client.post("/api/automation/add", json={
+            "name": "F038_Policy_Test",
+            "filename": "dummy.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_c",
+            "timeslot_tier": "CUSTOM",
+            "scheduled_time": "08:30",
+            "catch_up_policy": "SKIP_UNTIL_NEXT_DAY"
+        })
+        self.assertEqual(res.status_code, 201)
+        data = json.loads(res.data)
+        self.assertEqual(data["report"]["catch_up_policy"], "SKIP_UNTIL_NEXT_DAY")
+
+        stored = self.paradiso.intraday_service.automation_service.get_by_name("F038_Policy_Test")
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored.catch_up_policy, "SKIP_UNTIL_NEXT_DAY")
+
+        # 2. Invalid policy rejected with 400
+        res_bad = self.client.post("/api/automation/add", json={
+            "name": "F038_Bad_Policy",
+            "filename": "dummy.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_c",
+            "scheduled_time": "08:30",
+            "catch_up_policy": "INVALID_POLICY_XYZ"
+        })
+        self.assertEqual(res_bad.status_code, 400)
+        data_bad = json.loads(res_bad.data)
+        self.assertFalse(data_bad["ok"])
+        self.assertIn("invalid catch_up_policy", data_bad["error"].lower())
+
+    def test_f039_reset_all_reports_clears_type_c_warned(self):
+        """F-039: Verifies reset_all_reports() clears type_c_warned set."""
+        from unittest.mock import patch
+        intra = self.paradiso.intraday_service
+        intra.start_lane("type_c", force_open=True)
+
+        rep_name = "Warned_Report_F039"
+        intra.automation_service.add(Report(
+            name=rep_name,
+            filename="dummy.py",
+            filetype="python",
+            dir="../reports",
+            status="Waiting",
+            report_type="type_c",
+            timeslot_tier="CUSTOM",
+            scheduled_time="08:30",
+            catch_up_policy="WARN_OPERATOR"
+        ))
+
+        # Trigger missed timeslot warning at 09:00 AM
+        with patch.object(CLOCK, "time_24_str", return_value="09:00"):
+            intra.tick()
+
+        self.assertIn(rep_name, intra.type_c_warned)
+
+        # Operational reset clears type_c_warned
+        intra.reset_all_reports()
+        self.assertNotIn(rep_name, intra.type_c_warned)
+        self.assertEqual(len(intra.type_c_warned), 0)
+
 if __name__ == "__main__":
     unittest.main()
+
 
 

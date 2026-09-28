@@ -1,104 +1,80 @@
 # AUDITOR SESSION CONTEXT & HANDOVER
 
 **Role:** Independent Adversarial Auditor  
-**Target System:** Paradiso Daemon Scheduling Engine & Web UI  
+**Target System:** Paradiso Daemon Scheduling Engine & Web UI (3-Lane Architecture)  
 **Audit Mandate Reference:** [`artifacts/audits/AUDITOR.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/AUDITOR.md)  
-**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20260922_0054.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260922_0054.md)  
+**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20260928_1945.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260928_1945.md)  
 **Outstanding Findings Dossier:** [`artifacts/audits/ongoing/outstanding_findings.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/outstanding_findings.md)  
 **Resolved Findings Registry:** [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md)  
 **Builder Context Reference:** [`artifacts/dev/dev_session_context.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/dev/dev_session_context.md)  
-**Last Updated:** 2026-09-23 23:30 (Local Time)
+**Last Updated:** 2026-09-28 20:05 (Local Time)  
+**Current Operating Window State:** `OPEN` (Intraday Active Hours: 07:00 – 20:59)
 
 ---
 
 ## 1. Operating Rules & Constraints Summary
 
-1. **Read-Only Auditor:** The Auditor observes, gathers evidence, breaks assumptions, and writes verification scripts. The Auditor **never** modifies production code, application configs, tests in `tests/`, or live storage files.
+All incoming and active auditors must strictly adhere to the operational directives established in [`artifacts/audits/AUDITOR.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/AUDITOR.md):
+
+1. **Strictly Read-Only Auditor:** The Auditor observes, hypothesizes, gathers evidence, breaks assumptions, and writes isolated verification scripts. The Auditor **NEVER** modifies production application code, configuration files (`config.yaml`), production test suites (`tests/`), or live production storage/log files (`paradiso/storage/`, `paradiso/logs/`).
 2. **Authorized Write Paths:**
-   - `artifacts/audits/ongoing/` (active audit reports and outstanding findings dossier)
-   - `artifacts/audits/resolved/` (archived reports and resolved findings registry)
-   - `artifacts/audits/poc/` (proof-of-concept and adversarial verification scripts)
-   - `artifacts/audits/auditor_session_context.md` (this handover tracking document)
-3. **Execution Isolation:** Reproductions and verification scripts must run in isolated memory or against temporary test data. Never mutate `storage/automations.json`, `storage/intraday.json`, or live logs.
-4. **Standard Triad:** All findings must strictly follow `OBSERVATION -> EVIDENCE -> CONSEQUENCE -> VERIFICATION CRITERION`. **Never prescribe solutions, patches, diffs, or code implementations to Builder.**
+   - `artifacts/audits/ongoing/` (active baseline reports and outstanding findings dossiers)
+   - `artifacts/audits/resolved/` (archived reports and resolved findings registries)
+   - `artifacts/audits/poc/` (proof-of-concept and adversarial regression scripts)
+   - `artifacts/audits/auditor_session_context.md` (this central handover tracking document)
+3. **Execution Isolation (Zero Test Contamination):** Reproduction and verification scripts must run in isolated memory or against temporary directories (`tempfile.TemporaryDirectory`). Always configure `os.environ["PARADISO_STORAGE_DIR"]` and `os.environ["PARADISO_LOGS_DIR"]`. Never mutate `storage/automations.json`, `storage/intraday.json`, or live logs.
+4. **Standard Triad Mandate:** Every finding must be structured strictly as:
+   $$\text{OBSERVATION} \longrightarrow \text{EVIDENCE} \longrightarrow \text{CONSEQUENCE} \longrightarrow \text{VERIFICATION CRITERION}$$
+   **Never prescribe solutions, patches, diffs, or code implementations to the Builder.** The Auditor defines *what* invariant broke and *how* to verify resolution; the Builder designs and implements the fix.
 
 ---
 
-## 2. Invariants Registry
+## 2. Invariants Registry & Threat Surface
 
-Treat each invariant as a target to attack and verify:
-
-- **I-1: Single-Flight Execution:** At most one report runs during intraday. `len(current_runs) == 0` must hold before any launch.
-- **I-2: Dependency Wait vs. Error Retry:** Dependency skips (`SKIPPED: Missing dependency 'X'`) must rotate to back of `waitlist` without incrementing retry counter. Genuine errors increment retries.
-- **I-3: State Machine & Window Rules:** Strict window sequencing (`WAITING_TO_OPEN` -> `OPEN` -> `WAITING_TO_CLOSE` -> `CLOSED`). No launches past idle cutoff.
-- **I-4: Midnight & Cold Boot:** Consistent state reset across storage files. Cold boot never leaks prior day completion or leaves orphaned running jobs.
-- **I-5: Intentional Kills are Silent:** Stop, reset, and cutoff terminations must not invoke failure callbacks or penalize retry counts.
-- **I-6: Storage Atomicity & Durability:** Atomic read-modify-write under transaction locks; corrupted files raise `StorageCorruptionError` and emit a deduplicated `.bak` without zeroing state.
-- **I-7: Honest API:** Endpoints never return `{"ok": true}` if dispatch/persistence failed. Proper HTTP error codes (400, 403, 404, 409, 429, 500).
-- **I-8: Queue / Storage / Memory Convergence:** `waitlist`, `current_runs`, `retry_counts`, `automations.json`, and `intraday.json` must remain synchronized.
-- **I-9: Security Boundaries:** Path traversal blocked, arbitrary binary execution prevented, secrets masked, safe subprocess invocation.
-- **I-10: Hot-Reload Safety:** Settings changes apply cleanly without deadlock or inconsistent state.
-- **I-11: Deadlock Freedom:** Strict lock hierarchy across `IntradayService`, `StorageBase._global_lock`, `Runner._proc_lock`, and `Clock`.
-
----
-
-## 3. Findings & Resolution Status Matrix
-
-| ID | Severity | Confidence | Category | Invariant | Current Status | Description & Verification Summary |
-|---|---|---|---|---|---|---|
-| **F-001** | CRITICAL | CONFIRMED | QUEUE | I-1, I-8 | **RESOLVED** | Deleting executing report caused queue deadlock. Resolved via 409 guard in `AutomationController` and fail callback cleanup in `ExecutionService`. Verified with `poc_f001_verification.py`. |
-| **F-002** | CRITICAL | CONFIRMED | SECURITY | I-9 | **RESOLVED** | Arbitrary script execution via unsanitized `dir`/`filename` in `/api/automation/add`. Resolved with `ALLOWED_DIRS` whitelist and traversal guards. Verified with `poc_f002_verification.py`. |
-| **F-003** | HIGH | CONFIRMED | SECURITY | I-9 | **RESOLVED** | Unvalidated interpreter paths in `/api/settings` permitted arbitrary binary execution. Resolved via regex filename validation (`python*`, `rscript*`) and `is_file()` checks in `validate_config()` + `Runner` fallback. Verified with `poc_f003_verification.py`. |
-| **F-004** | HIGH | CONFIRMED | QUEUE | I-2, I-8 | **RESOLVED** | Established Section 12 Receipt Contract in `TECHNICAL_DOCUMENTATION.md`. Script-dumped receipts in `paradiso/logs` preserved; zero retry penalty on dependency skips; invalid outputs fail gracefully. Verified with `poc_f004_verification.py` (4 passing tests). |
-| **F-005** | HIGH | CONFIRMED | QUEUE | I-2, I-6 | **RESOLVED** | Fast-spinning and timeline write amplification resolved via queue pass starvation tracking, rotation cooldown backoff (`_rotation_cooldown_until`), and deduplicated timeline events. Verified in `tests/test_audit_fixes.py`. |
-| **F-006** | HIGH | CONFIRMED | CONCURRENCY | I-5, I-8 | **RESOLVED** | Process watcher suppression due to CPython `id(process)` heap memory address reuse. Resolved via monotonic integer launch IDs (`_exec_counter`, `_exec_id`) and direct `_was_killed = True` stamping. Verified with `poc_f006_f008_verification.py`. |
-| **F-007** | HIGH | CONFIRMED | STORAGE | I-6 | **RESOLVED** | Storage corruption runaway `.bak` file flood deduplication. Resolved via in-memory `(mtime_ns, size)` cache, cold boot raw byte comparison, and 5-backup rotation cap. Verified with `poc_f007_verification.py` (4 passing tests). |
-| **F-008** | MEDIUM | CONFIRMED | PROCESS | I-5 | **RESOLVED** | Child process trees surviving `Runner.kill_all()` on Windows. Resolved via `taskkill /F /T /PID` tree-kill with `CREATE_NO_WINDOW`. Verified with `poc_f006_f008_verification.py` (3-tier tree test). |
-| **F-009** | MEDIUM | CONFIRMED | CONCURRENCY | I-1, I-3 | **RESOLVED** | Concurrent `POST /api/paradiso/start` calls spawned duplicate scheduler loops and wiped in-flight states. Resolved via `_lifecycle_lock` re-entrant mutex, pre-check before `start_fresh_run()`, fresh stop events, and synchronous thread join. Verified with `poc_bg001_bg002_verification.py`. |
-| **F-010** | MEDIUM | CONFIRMED | STATE MACHINE | I-3, I-4 | **RESOLVED** | Midnight rollover duplicates queue entries & 22:00 cutoff process termination. Resolved via explicit termination of all active jobs (`running_reports`) in `_close_day()`, and `_active_date` tracking for clean midnight rollover even on pre-existing day records. Verified with `poc_f010_verification.py` (5 passing tests). |
-| **F-011** | LOW | CONFIRMED | UI | I-7 | **RESOLVED** | Timeline polling decoupled to 5s interval; `?limit=N` and `?order=asc|desc` pagination added to `get_timeline()`; static `"countdown": "32 min"` removed from `get_stats()`. Verified with `test_f011_dashboard_stats_no_mock_countdown` and `test_f011_dashboard_timeline_pagination_and_ordering`. |
-| **F-012** | LOW | CONFIRMED | DOC-DRIFT | I-7 | **RESOLVED** | Documentation corrected to state chronological (oldest-first) default ordering; `/api/dashboard/system-status` and `/api/automation/disable` endpoints added to API table. Verified with `test_f012_documented_endpoints_functional`. |
-| **F-013** | HIGH | CONFIRMED | STORAGE / QUEUE | I-8 | **RESOLVED** | Broken `"SF Base"` automation targeting deleted `0base_auto.py`. Resolved by migrating target script to `sample_report_blueprint.py` with clean `"Waiting"` status in `storage/automations.json`. |
-| **F-014** | LOW | CONFIRMED | PERFORMANCE | I-11 | **RESOLVED** | Blocking `process.wait(timeout=1.0)` held under `_proc_lock` in `kill_all()`. Resolved by moving wait loop outside `_proc_lock`, reducing lock hold time to $< 1\text{ms}$. |
-| **BG-001** | HIGH | CONFIRMED | SECURITY / INTEGRITY | I-7, I-9 | **RESOLVED** | Idle-Only Configuration Guardrail: Settings mutation while scheduler active or jobs in flight rejected with HTTP 409 Conflict. UI displays amber warning banner and locks button. Verified with `poc_bg001_bg002_verification.py`. |
-| **BG-002** | HIGH | CONFIRMED | STABILITY / CONCURRENCY | I-1, I-3 | **RESOLVED** | Start/Stop Transition Cooldown: Rapid calls to start/stop rejected with HTTP 429 within 10-second cooldown window. UI displays countdown timer and locks action buttons. Verified with `poc_bg001_bg002_verification.py`. |
+| Invariant | Definition & Rule | Status |
+|---|---|---|
+| **I-1: Single-Flight & Lane Concurrency** | Lane A sequential FIFO (up to `max_concurrent_run`). Per-report concurrency prevention in Lane B and Lane C. | **VERIFIED HARDENED** (P2.1 pool, Lane B/C distinct locks, F-035 historical last_run shift) |
+| **I-2: Dependency Wait vs. Error Retry** | Upstream dependency skips (`SKIPPED: Missing dependency 'X'`) rotate or back off with **zero penalty**. Genuine errors increment retry counter up to 3x. | **VERIFIED HARDENED** (F-004, F-005, F-022) |
+| **I-3: State Machine & Window Rules** | Strict 24h sequencing (`WAITING_TO_OPEN` 00:00–06:59 $\rightarrow$ `OPEN` 07:00–20:59 $\rightarrow$ `WAITING_TO_CLOSE` 21:00–21:59 $\rightarrow$ `CLOSED` 22:00–23:59). Hard cutoff terminates jobs at 22:00. | **VERIFIED HARDENED** (F-033 wrap-up precedence & 22:00 cutoff) |
+| **I-4: Midnight & Cold Boot** | Consistent state reset across storage files. Cold boot never leaks prior day completion or leaves orphaned running jobs. | **VERIFIED HARDENED** (F-031 storage-only hydration, F-032 partial day queueing, F-035 non-future timestamps) |
+| **I-5: Intentional Kills are Silent** | Stop, reset, and cutoff terminations terminate OS processes cleanly without retry penalty or orphan survival. | **VERIFIED HARDENED** (F-034 delete 409 guard, tree-kill, 22:00 cutoff) |
+| **I-6: Storage Atomicity & Durability** | Atomic read-modify-write under transaction locks; corrupted files raise `StorageCorruptionError` and emit a deduplicated `.bak` without state zeroing. | **VERIFIED HARDENED** (F-007, F-032 log preservation on reboot) |
+| **I-7: Honest API** | Endpoints never return `{"ok": true}` if dispatch/persistence failed. Proper HTTP error codes (400, 403, 404, 409, 429, 500). | **VERIFIED HARDENED** (F-026/F-033 409 out-of-window, F-036 symmetrical enable endpoint) |
+| **I-8: Queue / Storage / Memory Convergence** | `waitlist`, `current_runs`, `active_runs_type_b/c`, `automations.json`, and `intraday.json` must remain synchronized. | **VERIFIED HARDENED** (F-032 waitlist convergence, V-01/F-036 enable/disable sync) |
+| **I-9: Security Boundaries** | Path traversal blocked, arbitrary binary execution prevented, secrets masked, safe subprocess invocation, zero evasion code. | **VERIFIED HARDENED** (F-002, F-003, F-025 defeat device elimination) |
+| **I-10: Hot-Reload Safety** | Settings changes apply cleanly without deadlock or inconsistent state. | **VERIFIED HARDENED** (P2.1 concurrency hot-reload) |
+| **I-11: Deadlock Freedom** | Strict lock hierarchy across `IntradayService`, `StorageBase._global_lock`, `Runner._proc_lock`, and `Clock`. | **VERIFIED HARDENED** (F-014 lock release outside wait) |
+| **BG-001: Idle-Only Settings Guardrail** | Settings mutation while scheduler active or any report running rejected with HTTP 409 Conflict. | **VERIFIED HARDENED** (Multi-lane `has_active_runs` guard) |
+| **BG-002: Transition Cooldown Guardrail** | Rapid calls to start/stop rejected with HTTP 429 within 10-second cooldown window. | **VERIFIED HARDENED** (Independent per-lane cooldowns) |
 
 ---
 
-## 4. PoC & Adversarial Verification Scripts Inventory
+## 3. Findings Master Matrix (0 Active / 39 Resolved)
 
-Located under [`artifacts/audits/poc/`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/poc/):
-
-1. **`poc_f001_verification.py`**: Verifies 409 guard when scheduler active and queue fail-safe on deleted automation.
-2. **`poc_f002_verification.py`**: Verifies traversal protections (`ALLOWED_DIRS` check, basename sanitization).
-3. **`poc_f003_verification.py`**: Verifies rejection of invalid host binaries and pattern matching on interpreters.
-4. **`poc_f004_verification.py`**: Verifies Section 12 receipt contract: exit code 1 skips, retry non-consumption, log preservation on failure.
-5. **`poc_f006_f008_verification.py`**: Verifies monotonic ID process watcher suppression immunity and Windows 3-tier deep process tree termination via `taskkill`.
-6. **`poc_f007_verification.py`**: Verifies storage corruption backup deduplication (rapid ticks, cold boot byte matching, mtime touch, 5-backup rotation cap).
-7. **`poc_bg001_bg002_verification.py`**: Verifies 409 settings guardrail, 25-thread burst start mutex, 10s cooldown throttle (429), and in-flight job preservation.
-8. **`poc_f010_verification.py`**: Verifies 22:00 cutoff OS process termination, re-run report failure handling, pre-existing day record rollover, and waitlist deduplication.
-
----
-
-## 5. Remaining Open Scope
-
-> **All findings resolved.** No outstanding items remain. Audit complete.
+| ID | Severity | Category | Invariant | Title | Resolution Summary |
+|---|---|---|---|---|---|
+| **F-037** | CRITICAL | INPUT VALIDATION & STABILITY | I-1, I-7, I-9 | Non-Canonical `scheduled_time` Strings Cause Unhandled Crashes or Starvation | Regex 24-hr `HH:MM` validation in API + defensive `_normalize_timeslot` in `tick()`; verified in `poc_f037_f039_verification.py` & `test_f037_*` |
+| **F-038** | MEDIUM | API & CONTRACT INTEGRITY | I-7, I-8 | `POST /api/automation/add` Silently Discards `catch_up_policy` Parameter | Parameter extraction, validation, and persistence in `Report`; verified in `poc_f038_catch_up_policy_dropped_in_api.py` & `test_f038_*` |
+| **F-039** | MEDIUM | STATE MACHINE & NOTIFICATIONS | I-4, I-7, I-8 | `reset_all_reports()` Fails to Clear `self.type_c_warned` | Added `self.type_c_warned.clear()` to `reset_all_reports()`; verified in `poc_f039_reset_all_reports_type_c_warned_retention.py` & `test_f039_*` |
+| **F-032** | CRITICAL | STORAGE / QUEUE | I-4, I-6, I-8 | Partial Day Queue Paralysis & Log Erasure | Replaced heuristic day-cleansing with `_get_completed_or_exhausted_reports(day)` enqueuing cutoff reports without wiping history |
+| **F-035** | CRITICAL | TIME SYNTHESIS / DISPATCH | I-1, I-4 | Cold Boot Time-Only `last_run` Future Timestamp Synthesis | Adjusted non-date/future timestamps in `_hydrate_type_b_last_run()` by `- timedelta(days=1)`, guaranteeing immediate dispatch |
+| **F-033** | HIGH | STATE MACHINE / API | I-3, I-7 | `force_open` Wrap-Up Bypass & Cross-Lane Leak | Enforced `t >= self.idle_time` ahead of `force_open` in `resolve_status()`; enforced explicit `force_open: true` per lane in `lane_start()` |
+| **F-036** | MEDIUM | API / QUEUE HYGIENE | I-7, I-8 | Asymmetric Automation Disabling API | Implemented `POST /api/automation/enable` restoring reports to `Waiting` and enqueuing into active Lane A queue |
+| **F-031** | CRITICAL | COLD BOOT & STORAGE LEAK | I-1, I-4 | Lane C Cold Boot Hydration Derived Strictly from Storage | Removed catalog inspection in `_hydrate_type_c_ran_today()`; derives strictly from `intraday.json` for current date |
+| **F-034** | MEDIUM | INTEGRITY & PROCESS ORPHANING | I-5, I-8, BG-001 | Deleting Actively Executing Type B/C Reports Blocked with HTTP 409 | Guarded `delete_automation()` with `is_running` check across `current_runs` and `active_runs_type_b/c` |
+| **F-001..F-030** | VARIOUS | VARIOUS | ALL | Historical Findings Roster (30 defects) | Fully resolved, verified, and archived in `resolved_findings_registry.md` |
 
 ---
 
-## 6. Verification Commands for Incoming Auditor
+## 4. Verification Commands & Regression Validation
 
-Execute inside `paradiso/`:
+Execute from workspace root:
 ```bash
-# 1. Full Unit Test Suite (Zero Regressions)
-py -3 -m unittest discover tests
+# 1. Full Automated Unit & Regression Test Suite (128/128 tests passing in ~9.2s)
+py -3 run_tests.py
 
-# 2. All Adversarial Verification PoCs
-py -3 paradiso/artifacts/audits/poc/poc_f004_verification.py
-py -3 paradiso/artifacts/audits/poc/poc_f006_f008_verification.py
-py -3 paradiso/artifacts/audits/poc/poc_f007_verification.py
-py -3 paradiso/artifacts/audits/poc/poc_bg001_bg002_verification.py
-py -3 paradiso/artifacts/audits/poc/poc_f010_verification.py
+# 2. Batch 6 Verification Suite (F-037 through F-039)
+py -3 paradiso/artifacts/audits/poc/poc_f037_f039_verification.py
 ```
-- Total Unit Tests: **75/75 passing** in ~5.4s (3 new tests for F-011/F-012).
-- Total Adversarial Attack Tests: **22/22 passing** across all PoC suites.
+- **Total Unit Test Assets:** **128 passing tests (100% pass rate, 0 failures)**.
+- **Active Defects Awaiting Remediation:** **0**.

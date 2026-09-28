@@ -30,6 +30,16 @@ def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
         except (ValueError, TypeError):
             return False, "scheduler.job_interval_seconds must be numeric."
 
+    if "max_concurrent_run" in sched:
+        try:
+            val = int(sched["max_concurrent_run"])
+            if val < 1:
+                return False, "scheduler.max_concurrent_run must be an integer >= 1."
+            if val > 20:
+                return False, "scheduler.max_concurrent_run cannot exceed 20 parallel slots."
+        except (ValueError, TypeError):
+            return False, "scheduler.max_concurrent_run must be an integer."
+
     if "rotation_cooldown_seconds" in sched:
         try:
             val = float(sched["rotation_cooldown_seconds"])
@@ -54,6 +64,20 @@ def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
     if start_time and idle_time and close_time:
         if not (start_time < idle_time <= close_time):
             return False, "Scheduler times must satisfy: intraday_start_time < intraday_idle_time <= intraday_close_time."
+
+    if "lane_c_catch_up_policy" in sched and sched["lane_c_catch_up_policy"] is not None:
+        policy = str(sched["lane_c_catch_up_policy"]).strip().upper()
+        allowed_policies = {"CATCH_UP_IMMEDIATE", "SKIP_UNTIL_NEXT_DAY", "WARN_OPERATOR"}
+        if policy not in allowed_policies:
+            return False, f"scheduler.lane_c_catch_up_policy must be one of: {', '.join(sorted(allowed_policies))}."
+
+    if "lane_c_catch_up_grace_minutes" in sched and sched["lane_c_catch_up_grace_minutes"] is not None:
+        try:
+            val = int(sched["lane_c_catch_up_grace_minutes"])
+            if val < 0:
+                return False, "scheduler.lane_c_catch_up_grace_minutes must be a non-negative integer."
+        except (ValueError, TypeError):
+            return False, "scheduler.lane_c_catch_up_grace_minutes must be an integer."
 
     log_cfg = cfg.get("logging", {})
     if "level" in log_cfg:

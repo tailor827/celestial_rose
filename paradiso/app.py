@@ -13,10 +13,13 @@ from controllers.paradiso_controller import ParadisoController
 from controllers.dashboard_controller import DashboardController
 from controllers.settings_controller import SettingsController
 
+from pathlib import Path
 from typing import Optional, Tuple
+from models.automation import Automations
+from models.intraday import Intraday
 from utils.config import CONFIG
 
-def create_app(auto_start: Optional[bool] = None) -> Tuple[Flask, Paradiso]:
+def create_app(auto_start: Optional[bool] = None, storage_dir: Optional[Path] = None) -> Tuple[Flask, Paradiso]:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     app = Flask(
         __name__,
@@ -24,12 +27,24 @@ def create_app(auto_start: Optional[bool] = None) -> Tuple[Flask, Paradiso]:
         template_folder=os.path.join(base_dir, "web", "templates")
     )
     app.config["SECRET_KEY"] = CONFIG.get("secret_key", "celestial_rose")
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+    app.jinja_env.auto_reload = True
 
     # Shared Services Layer
-    automation_service = AutomationService()
-    execution_service = ExecutionService(automation_service)
-    intraday_service = IntradayService(automation_service, execution_service)
-    paradiso = Paradiso(intraday_service)
+    if storage_dir is not None:
+        storage_path = Path(storage_dir)
+        storage_path.mkdir(parents=True, exist_ok=True)
+        auto_repo = Automations(storage_path / "automations.json")
+        intra_repo = Intraday(storage_path / "intraday.json")
+        automation_service = AutomationService(auto_repo)
+        execution_service = ExecutionService(automation_service)
+        intraday_service = IntradayService(automation_service, execution_service, intraday_repo=intra_repo)
+        paradiso = Paradiso(intraday_service)
+    else:
+        automation_service = AutomationService()
+        execution_service = ExecutionService(automation_service)
+        intraday_service = IntradayService(automation_service, execution_service)
+        paradiso = Paradiso(intraday_service)
 
     # Controller Layer (Route Registrations)
     AutomationController(app, automation_service, intraday_service)

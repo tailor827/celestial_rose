@@ -23,7 +23,7 @@ from datetime import datetime
 # ==============================================================================
 # 1. CONFIGURATION (Edit Here)
 # ==============================================================================
-REPORT_NAME = "Sample_Report_Blueprint"
+REPORT_NAME = "SF Base"
 
 # Automatic date determination (defaults to today's date YYYYMMDD)
 TODAY = datetime.now().strftime("%Y%m%d")

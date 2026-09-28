@@ -28,6 +28,8 @@ class SettingsController:
         cfg["runtime_meta"]["intraday_start_time"] = self.intraday_service.start_time
         cfg["runtime_meta"]["intraday_idle_time"] = self.intraday_service.idle_time
         cfg["runtime_meta"]["intraday_close_time"] = self.intraday_service.close_time
+        cfg["runtime_meta"]["lane_c_catch_up_policy"] = self.intraday_service.lane_c_catch_up_policy
+        cfg["runtime_meta"]["lane_c_catch_up_grace_minutes"] = self.intraday_service.lane_c_catch_up_grace_minutes
         return jsonify({"ok": True, "settings": cfg}), 200
 
     def update_settings(self):
@@ -35,7 +37,7 @@ class SettingsController:
         is_active = False
         if self.paradiso and self.paradiso.is_running():
             is_active = True
-        elif self.intraday_service and (self.intraday_service.is_active or len(self.intraday_service.current_runs) > 0):
+        elif self.intraday_service and (self.intraday_service.is_active or self.intraday_service.has_active_runs):
             is_active = True
 
         if is_active:

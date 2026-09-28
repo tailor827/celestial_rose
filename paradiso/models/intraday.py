@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Any, Optional, Literal
 from pathlib import Path
@@ -80,7 +81,12 @@ class Intraday(StorageBase):
     CLOSED = "CLOSED"
 
     def __init__(self, file_path: Optional[Path] = None):
-        target = file_path or (BASE_DIR / "storage" / "intraday.json")
+        if file_path is not None:
+            target = file_path
+        elif "PARADISO_STORAGE_DIR" in os.environ:
+            target = Path(os.environ["PARADISO_STORAGE_DIR"]) / "intraday.json"
+        else:
+            target = BASE_DIR / "storage" / "intraday.json"
         super().__init__(target)
 
     def get_day(self, date: str) -> Optional[IntradayDay]:

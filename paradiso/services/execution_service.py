@@ -7,9 +7,15 @@ from utils.clock import CLOCK
 
 class ExecutionService:
     """Orchestrates process runner with automation service status updates."""
-    def __init__(self, automation_service: AutomationService, runner: Optional[Runner] = None):
+    def __init__(
+        self,
+        automation_service: AutomationService,
+        runner: Optional[Runner] = None,
+        log_dir: Optional[Path] = None
+    ):
         self.automation_service = automation_service
         self.runner = runner or Runner()
+        self.log_dir = log_dir
 
     def execute_report(
         self,
@@ -37,7 +43,7 @@ class ExecutionService:
         import json
         from models.report_log import ReportLog
 
-        report_logger = ReportLog(name)
+        report_logger = ReportLog(name, log_dir=self.log_dir)
         log_file = report_logger.log_dir / f"{name}.json"
 
         # Clean slate: remove or truncate previous receipts before launching
@@ -62,7 +68,7 @@ class ExecutionService:
         def _on_good(duration_str: str, output: str):
             has_receipt = report_logger.has_valid_receipt()
             if has_receipt:
-                script_log = ReportLog(name).from_json(default_stdout=output)
+                script_log = ReportLog(name, log_dir=self.log_dir).from_json(default_stdout=output)
                 # If script explicitly recorded a fatal Failed status despite exit 0:
                 if script_log.status == "Failed":
                     auto_status = "Failed"
@@ -99,7 +105,7 @@ class ExecutionService:
         def _on_fail(duration_str: str, error: str):
             has_receipt = report_logger.has_valid_receipt()
             if has_receipt:
-                script_log = ReportLog(name).from_json(default_stdout=error)
+                script_log = ReportLog(name, log_dir=self.log_dir).from_json(default_stdout=error)
                 auto_status = "Retrial" if ReportLog.is_dependency_skip(script_log.status, script_log.last_output or error) else "Failed"
                 last_out = script_log.last_output or error
             else:
