@@ -6,6 +6,8 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import datetime, timedelta
+from unittest.mock import patch, MagicMock
 
 from app import create_app
 from models.storage_base import StorageBase, StorageCorruptionError
@@ -1382,6 +1384,76 @@ class TestAuditFixes(unittest.TestCase):
         self.assertIn("The Receipt Contract", html)
         self.assertIn("code-snippet-python", html)
         self.assertIn("code-snippet-r", html)
+
+    def test_add_report_modal_rendered(self):
+        """Verifies that the upgraded 3-Lane Add Report modal is rendered on the Web UI."""
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        html = res.data.decode("utf-8")
+        self.assertIn("modal-add-report", html)
+        self.assertIn("new-report-type", html)
+        self.assertIn("group-lane-b-config", html)
+        self.assertIn("group-lane-c-config", html)
+        self.assertIn("new-report-interval", html)
+        self.assertIn("new-report-tier", html)
+        self.assertIn("new-report-catch-up", html)
+        self.assertIn("CATCH_UP_IMMEDIATE", html)
+        self.assertIn("SKIP_UNTIL_NEXT_DAY", html)
+        self.assertIn("WARN_OPERATOR", html)
+
+    def test_add_report_modal_api_payload_processing(self):
+        """Verifies backend API processes all form fields from the upgraded Add Report modal."""
+        # Lane B with custom interval
+        res_b = self.client.post("/api/automation/add", json={
+            "name": "Modal_Test_Lane_B",
+            "filename": "modal_lane_b.py",
+            "filetype": "python",
+            "dir": "../reports/python",
+            "report_type": "type_b",
+            "interval_minutes": 45,
+            "status": "Waiting"
+        })
+        self.assertEqual(res_b.status_code, 201)
+        rep_b = self.paradiso.intraday_service.automation_service.get_by_name("Modal_Test_Lane_B")
+        self.assertIsNotNone(rep_b)
+        self.assertEqual(rep_b.report_type, "type_b")
+        self.assertEqual(rep_b.interval_minutes, 45)
+
+        # Lane C with tier and catch_up_policy
+        res_c = self.client.post("/api/automation/add", json={
+            "name": "Modal_Test_Lane_C",
+            "filename": "modal_lane_c.py",
+            "filetype": "python",
+            "dir": "../reports/python",
+            "report_type": "type_c",
+            "scheduled_time": "12:30",
+            "timeslot_tier": "MID",
+            "catch_up_policy": "WARN_OPERATOR",
+            "status": "Waiting"
+        })
+        self.assertEqual(res_c.status_code, 201)
+        rep_c = self.paradiso.intraday_service.automation_service.get_by_name("Modal_Test_Lane_C")
+        self.assertIsNotNone(rep_c)
+        self.assertEqual(rep_c.report_type, "type_c")
+        self.assertEqual(rep_c.timeslot_tier, "MID")
+        self.assertEqual(rep_c.catch_up_policy, "WARN_OPERATOR")
+
+        # Empty string catch_up_policy normalizes to None
+        res_empty_pol = self.client.post("/api/automation/add", json={
+            "name": "Modal_Test_Empty_Policy",
+            "filename": "modal_empty_pol.py",
+            "filetype": "python",
+            "dir": "../reports/python",
+            "report_type": "type_c",
+            "scheduled_time": "16:30",
+            "timeslot_tier": "EOD",
+            "catch_up_policy": "",
+            "status": "Waiting"
+        })
+        self.assertEqual(res_empty_pol.status_code, 201)
+        rep_empty = self.paradiso.intraday_service.automation_service.get_by_name("Modal_Test_Empty_Policy")
+        self.assertIsNotNone(rep_empty)
+        self.assertIsNone(rep_empty.catch_up_policy)
 
     # ----------------------------------------------------------------------
     # 16. Housekeeping & Hygiene Verifications (F-015 through F-019)
@@ -3463,6 +3535,122 @@ class TestAuditFixes(unittest.TestCase):
             # 4. Now tick() can dispatch
             intra.tick()
             self.assertIn(rep_name, dispatched)
+
+    # ----------------------------------------------------------------------
+    # Batch 9: F-044 through F-047 Regression Tests
+    # ----------------------------------------------------------------------
+    def test_f044_lane_a_force_open_leak_in_add_automation(self):
+        """F-044: Verifies adding Type A report when Lane A is stopped does not leak into waitlist even if Lane B is force_opened."""
+        intra = self.paradiso.intraday_service
+        intra.lane_a_active = False
+        intra.start_lane("type_b", force_open=True)
+        self.assertTrue(intra.force_open)
+        self.assertFalse(intra.lane_a_active)
+
+        rep_name = "Leaked_Type_A_Test"
+        res = self.client.post("/api/automation/add", json={
+            "name": rep_name,
+            "filename": "dummy_leak.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "status": "Waiting"
+        })
+        self.assertEqual(res.status_code, 201)
+        self.assertNotIn(rep_name, intra.waitlist, "F-044 Fix: Type A report must NOT leak into waitlist when Lane A is stopped.")
+
+    def test_f045_re_enabled_type_c_clears_ran_today_and_dispatches(self):
+        """F-045: Verifies re-enabling a Failed Lane C report clears type_c_ran_today and allows autonomous dispatch."""
+        intra = self.paradiso.intraday_service
+        auto_svc = intra.automation_service
+        rep_name = "Starved_C_Report"
+        intra.start_lane("type_c", force_open=True)
+        auto_svc.add(Report(
+            name=rep_name,
+            filename="dummy_c.py",
+            filetype="python",
+            dir="../reports",
+            report_type="type_c",
+            scheduled_time="10:00",
+            status="Failed"
+        ))
+        auto_svc.update_status(rep_name, "Failed")
+        intra.type_c_ran_today.add(rep_name)
+        intra.type_c_warned.add(rep_name)
+
+        # Re-enable report
+        res_enable = self.client.post("/api/automation/enable", json={"name": rep_name})
+        self.assertEqual(res_enable.status_code, 200)
+        self.assertEqual(auto_svc.get_by_name(rep_name).status, "Waiting")
+        self.assertNotIn(rep_name, intra.type_c_ran_today, "F-045 Fix: type_c_ran_today must be cleared on re-enable.")
+        self.assertNotIn(rep_name, intra.type_c_warned, "F-045 Fix: type_c_warned must be cleared on re-enable.")
+
+        # Simulate tick at 10:00
+        dispatched = []
+        intra.execution_service.execute_report = lambda name, **kw: dispatched.append(name)
+        now_dt = datetime(2026, 9, 29, 10, 0, 0)
+        intra._active_date = "20260929"
+        with patch.object(CLOCK, "time_24_str", return_value="10:00"), \
+             patch.object(CLOCK, "now", return_value=now_dt), \
+             patch.object(CLOCK, "date_str", return_value="20260929"):
+            intra.tick()
+
+        self.assertIn(rep_name, dispatched, "F-045 Fix: Re-enabled Lane C report must dispatch at scheduled time.")
+
+    def test_f046_zero_interval_rejected_with_400(self):
+        """F-046: Verifies interval_minutes=0 is rejected with HTTP 400 Bad Request."""
+        res_zero = self.client.post("/api/automation/add", json={
+            "name": "Zero_Interval_Report",
+            "filename": "dummy_zero.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_b",
+            "interval_minutes": 0,
+            "status": "Waiting"
+        })
+        self.assertEqual(res_zero.status_code, 400)
+        data = json.loads(res_zero.data)
+        self.assertIn("interval_minutes must be an integer >= 1", data.get("error", ""))
+
+    def test_f047_timeslot_tier_honors_scheduled_time(self):
+        """F-047: Verifies Lane C tick honors rep.scheduled_time and does not prematurely execute at tier defaults."""
+        intra = self.paradiso.intraday_service
+        exec_svc = intra.execution_service
+        intra.start_lane("type_c", force_open=True)
+
+        res = self.client.post("/api/automation/add", json={
+            "name": "Midday_Risk_1230",
+            "filename": "mid_risk_1230.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_c",
+            "timeslot_tier": "MID",
+            "scheduled_time": "12:30",
+            "status": "Waiting"
+        })
+        self.assertEqual(res.status_code, 201)
+
+        dispatched = []
+        exec_svc.execute_report = lambda name, **kw: dispatched.append(name)
+        now_dt = datetime(2026, 9, 29, 12, 5, 0)
+        intra._active_date = "20260929"
+
+        # At 12:05 PM, report scheduled for 12:30 PM must NOT run
+        with patch.object(CLOCK, "time_24_str", return_value="12:05"), \
+             patch.object(CLOCK, "now", return_value=now_dt), \
+             patch.object(CLOCK, "date_str", return_value="20260929"):
+            intra.tick()
+
+        self.assertNotIn("Midday_Risk_1230", dispatched, "F-047 Fix: Report scheduled for 12:30 must not run at 12:05.")
+
+        # At 12:30 PM, report MUST run
+        now_1230 = datetime(2026, 9, 29, 12, 30, 0)
+        with patch.object(CLOCK, "time_24_str", return_value="12:30"), \
+             patch.object(CLOCK, "now", return_value=now_1230), \
+             patch.object(CLOCK, "date_str", return_value="20260929"):
+            intra.tick()
+
+        self.assertIn("Midday_Risk_1230", dispatched, "F-047 Fix: Report scheduled for 12:30 must run at 12:30.")
 
 if __name__ == "__main__":
     unittest.main()

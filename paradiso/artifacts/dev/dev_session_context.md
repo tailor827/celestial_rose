@@ -1,6 +1,6 @@
 # Developer Session Context — Paradiso
 
-**Date:** 2026-09-28  
+**Date:** 2026-09-29  
 **Role:** Primary Engineering and Implementation Agent ("Builder")  
 **Application:** Paradiso daemon scheduling engine & Web UI (3-Lane Architecture: Type A Sequential, Type B Recurring, Type C Timeslots)  
 **Location:** `artifacts/dev/dev_session_context.md`  
@@ -271,8 +271,8 @@ Per banking specification and operational policy, all scheduling lanes and manua
 ## 10. Verification Commands & Test Results
 
 - **Full Test Suite:** `py -3 run_tests.py`
-  - **Result:** **133/133 tests passing in ~9.7s (100% pass rate, 0 failures)**.
-  - Covers all baseline tests, API endpoints, storage atomic transactions, settings hot-reload, audit fixes F-001 through F-043, systemic hardening items V-01 through V-05, and Phase 2 milestones P2.1 and P2.2.
+  - **Result:** **139/139 tests passing in ~8.0s (100% pass rate, 0 failures)**.
+  - Covers all baseline tests, API endpoints, storage atomic transactions, settings hot-reload, audit fixes F-001 through F-047, systemic hardening items V-01 through V-05, and Phase 2 milestones P2.1 and P2.2.
 - **Adversarial Verification Suite:**
   - `poc_bg001_bg002_verification.py`: PASS (Idle 409 guard, 25-thread burst mutex, 10s throttle)
   - `poc_f001_verification.py`: PASS (Active deletion 409 guard, missing queue recovery, ghost report non-deadlock)
@@ -299,6 +299,10 @@ Per banking specification and operational policy, all scheduling lanes and manua
   - `poc_f041_lane_b_infinite_exhausted_dispatch.py`: DEFEATED (Defect blocked, assertion fails)
   - `poc_f042_simulation_reset_bypasses_idle_guardrail.py`: DEFEATED (Defect blocked, assertion fails)
   - `poc_f043_manual_run_rearms_failed_report.py`: DEFEATED (Defect blocked, assertion fails)
+  - `poc_f044_lane_a_force_open_leak_in_add_automation.py`: PASS (Defect defeated, Type A does not leak into waitlist on force_open)
+  - `poc_f045_type_c_enable_starvation.py`: PASS (Defect defeated, re-enabled Type C clears ran_today and dispatches)
+  - `poc_f046_zero_interval_validation_bypass.py`: PASS (Defect defeated, zero-interval rejected with 400 Bad Request)
+  - `poc_f047_timeslot_tier_desync.py`: PASS (Defect defeated, custom scheduled_time honored over tier milestone)
 
 ---
 
@@ -313,13 +317,15 @@ Per banking specification and operational policy, all scheduling lanes and manua
 - **Honest Lane Start & Manual Run Lifecycle (F-026, V-05, F-040, F-043):** `POST /api/paradiso/lane/start` and `POST /api/automation/run` strictly evaluate window state, report status, and parameters, returning HTTP 409 Conflict outside `OPEN` or if report is Disabled, Failed, or exhausted, HTTP 400 for empty payloads, and HTTP 404 for missing catalog reports.
 - **Lane B Stability (F-041, F-043):** Permanently `Failed` reports and reports with exhausted retries are strictly tracked in `type_b_exhausted` and excluded from recurring dispatch, preventing infinite retry spin and accidental re-arming via manual executions.
 - **Simulation Clock Guardrail (F-042):** `POST /api/settings/simulation/reset` enforces BG-001 idle-only checks across all lanes, blocking reset during active runs with HTTP 409 Conflict.
-- **Lane A Isolation (V-03, V-04):** Lane A retries and new additions are strictly isolated to `lane_a_active`, while preserving `self.is_active` for system-wide checks.
+- **Lane A Isolation (V-03, V-04, F-044):** Lane A retries and new additions are strictly isolated to `lane_a_active`, preventing `force_open` from other lanes from leaking reports into the waitlist.
+- **Lane C Starvation & Milestone Alignment (F-045, F-047):** Re-enabling a Failed Lane C report clears `type_c_ran_today`, `type_c_warned`, and `type_c_retry_after` to permit autonomous dispatch. Explicit `scheduled_time` is strictly prioritized over tier milestone defaults.
+- **Automation Input Validation (F-046):** `interval_minutes < 1` is strictly rejected with HTTP 400 Bad Request.
 - **Automation Disable & Re-Enable Guardrails (V-01, F-034, F-036, F-043):** Users can disable idle reports via `POST /api/automation/disable` and re-enable disabled or failed reports via `POST /api/automation/enable` without executing destructive system-wide resets. Deleting or disabling an actively executing report across any lane is strictly blocked with HTTP 409 Conflict.
 - **Controls & UI:** Independent Start/Stop controls per lane with 10s transition cooldown guardrail in Top Bar quick pills, Dashboard Dispatcher Hub, and dedicated Lane views (`#view-type-a`, `#view-type-b`, `#view-type-c`).
 - **Safety Guardrails:** BG-001 Idle-Only Settings guardrail fully guards all 3 lanes (HTTP 409 Conflict). F-022 skip backoff prevents rapid-fire CPU and storage spinning.
-- **Test Integrity:** 133/133 unit tests passing in ~9.7s (100% pass rate). All legacy test files (`tests/test_services.py`, `tests/test_storage.py`) are strictly intact.
+- **Test Integrity:** 139/139 unit tests passing in ~8.0s (100% pass rate). All legacy test files (`tests/test_services.py`, `tests/test_storage.py`) are strictly intact.
 - **Audit Files:** The `artifacts/audits/` directory is **strictly read-only**.
-- **Batch 4, 5, 6 & 7 Resolution (F-031..F-043):** All defects across `audit_20260926_0730.md`, `audit_20260928_1945.md`, `audit_20260928_2030.md`, `audit_20260928_2155.md`, and `audit_20260928_2235.md` have been resolved, verified, and backed by dedicated regression tests in `tests/test_audit_fixes.py`.
+- **Batch 4, 5, 6, 7 & 9 Resolution (F-031..F-047):** All defects across `audit_20260926_0730.md`, `audit_20260928_1945.md`, `audit_20260928_2030.md`, `audit_20260928_2155.md`, `audit_20260928_2235.md`, and `audit_20260929_0055.md` have been resolved, verified, and backed by dedicated regression tests in `tests/test_audit_fixes.py`.
 
 ### 11.2 Key Rules for Incoming Developer
 1. **Always Request Explicit GO:** Never modify code or project files without an explicit GO signal from the user. Work 1-by-1, presenting the plan first.
@@ -342,3 +348,4 @@ Per banking specification and operational policy, all scheduling lanes and manua
 |---|---|---|---|
 | **P2.1** | **Lane A** | **Configurable Concurrency Pool (`max_concurrent_run: N`)**: Expands Lane A from strict 1-by-1 to a configurable slot semaphore pool ($1 \le N \le 20$, default $1$).<br>1. `_evaluate_pass_completion(date)` defers pass evaluation and starvation cooldown until all parallel tasks conclude (`len(self.current_runs) == 0`).<br>2. `validate_config()` enforces bounds $1 \le N \le 20$.<br>3. `GET /api/paradiso/lanes/status` reports `max_concurrent_run`.<br>4. `POST /api/settings` and Web UI settings card allow operators to hot-reload pool size.<br>5. Web UI `#view-type-a` dynamically visualizes active slots fraction and mode badge (`X / N Active Slots`, `N-at-a-time (Concurrent Pool)`). | **112/112 Passing** (`test_audit_fixes.py` includes 5 dedicated unit tests: multi-dispatch, slot replenishment, starvation cooldown coordination, settings hot reload, and bounds validation). |
 | **P2.2** | **Lane C** | **Missed Window Catch-up Policy (`lane_c_catch_up_policy`)**: Deterministic behavior when scheduler boots or starts after pinned timeslot.<br>1. Configurable policies: `CATCH_UP_IMMEDIATE` (executes immediately and logs catch-up trigger event), `SKIP_UNTIL_NEXT_DAY` (marks status `Skipped`, records run in `intraday.json`, adds to `type_c_ran_today`), `WARN_OPERATOR` (deduplicated operator warning event, leaves available for manual run).<br>2. Configurable grace window (`lane_c_catch_up_grace_minutes: 15`).<br>3. Per-report override support via `Report.catch_up_policy`.<br>4. Settings validation, runtime metadata exposure, and dynamic hot-reloading via `POST /api/settings`. | **125/125 Passing** (`test_audit_fixes.py` includes 5 dedicated unit tests: catch-up immediate, skip until next day, warn operator deduplication, on-time grace window execution, and settings validation/hot-reload). |
+| **UI** | **Web UI** | **3-Lane Add Report Modal & Form Modernization**: Aligns report registration form with 3-lane engine architecture.<br>1. Prominent Scheduling Lane selector (`type_a`, `type_b`, `type_c`) with dynamic lane badges and descriptive hints.<br>2. Dynamic Lane B fields: Recurring Interval in minutes (min=1, default 30).<br>3. Dynamic Lane C fields: Timeslot Tier selector (`BOD: 08:30`, `MID: 12:30`, `EOD: 16:30`, `CUSTOM`) with auto-population of scheduled run time, and Missed Catch-Up Policy selector (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, `WARN_OPERATOR`, or global default).<br>4. Interpreter-driven directory suggestions (`../reports/python` vs `../reports/r`) and filename extension hint adaptation.<br>5. Contextual `+ Add Report` buttons across Dashboard and individual Lane views with pre-selected lane context.<br>6. Escape key dismissal, autofocus, and client-side format & regex validation. | **135/135 Passing** (`test_audit_fixes.py` includes dedicated tests for modal DOM rendering, all 3 lane payload types, and catch-up policy normalization). |

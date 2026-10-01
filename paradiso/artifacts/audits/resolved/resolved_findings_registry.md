@@ -75,6 +75,10 @@ The following historical audit reports have had all reported findings independen
 | **F-037** | CRITICAL | INPUT VALIDATION & STABILITY | I-1, I-7, I-9 | Non-Canonical `scheduled_time` Strings Cause Unhandled Crashes or Starvation | Regex 24-hr `HH:MM` validation in API + defensive `_normalize_timeslot` in `tick()`; verified in `poc_f037_f039_verification.py` & `test_f037_*` |
 | **F-038** | MEDIUM | API & CONTRACT INTEGRITY | I-7, I-8 | `POST /api/automation/add` Silently Discards `catch_up_policy` Parameter | Parameter extraction, validation, and persistence in `Report`; verified in `poc_f038_catch_up_policy_dropped_in_api.py` & `test_f038_*` |
 | **F-039** | MEDIUM | STATE MACHINE & NOTIFICATIONS | I-4, I-7, I-8 | `reset_all_reports()` Fails to Clear `self.type_c_warned` | Added `self.type_c_warned.clear()` to `reset_all_reports()`; verified in `poc_f039_reset_all_reports_type_c_warned_retention.py` & `test_f039_*` |
+| **F-040** | HIGH | SAFETY & STATE HYGIENE | I-7, I-8 | `POST /api/automation/run` Bypasses "Disabled" State | HTTP 409 guard in controller + False in service; verified in `test_f040_*` |
+| **F-041** | CRITICAL | DISPATCH & RESOURCE EXHAUSTION | I-1, I-6 | Lane B Dispatches Permanently Failed Reports in Unbounded Infinite Loop | `type_b_exhausted` + retry budget check in `tick()`; verified in `test_f041_*` |
+| **F-042** | MEDIUM | CLOCK INTEGRITY & GUARDRAILS | BG-001, I-3, I-7 | `POST /api/settings/simulation/reset` Bypasses BG-001 Idle-Only Guardrail | Multi-lane active check returning HTTP 409 Conflict; verified in `test_f042_*` |
+| **F-043** | MEDIUM | DISPATCH & STATE INTEGRITY | I-1, I-8 | Manual Run of Failed Lane B Report Silently Re-Arms Automatic Dispatch | HTTP 409 guard on Failed/exhausted runs + enable required; verified in `test_f043_*` |
 
 ---
 
@@ -244,5 +248,18 @@ The following historical audit reports have had all reported findings independen
 - **Mechanism:** In `IntradayService.reset_all_reports()`, added `self.type_c_warned.clear()`, resetting warned report names alongside other per-day tracking collections. Also maintained on new day rollover and `start_fresh_run()`.
 - **Evidence:** Calling `POST /api/automations/reset` clears `self.type_c_warned`. On subsequent ticks where a report remains outside its grace window, a new warning alert is emitted rather than being permanently silenced. Verified in `tests/test_audit_fixes.py` (`test_f039_reset_all_reports_clears_type_c_warned`) and adversarial verification suite (`poc_f037_f039_verification.py`).
 
+### F-040: Manual Execution of Disabled Automations Blocked
+- **Mechanism:** In `ExecutionController.run_automation()`, added HTTP 409 Conflict guard blocking manual execution if `report.status == "Disabled"`. In `IntradayService.trigger_manual_run()`, added defensive check returning `False` for disabled reports.
+- **Evidence:** `POST /api/automation/run` with a Disabled Type B or Type C report returns HTTP 409 Conflict; no subprocess is dispatched and catalog status is preserved. Verified in `tests/test_audit_fixes.py` (`test_f040_disabled_report_manual_run_rejected`).
 
+### F-041: Lane B Unbounded Failed Subprocess Dispatch Suppressed
+- **Mechanism:** In `IntradayService.tick()`, added `type_b_exhausted` and `retry_counts >= max_retries` checks to Lane B loop, immediately halting automatic dispatch when a report enters terminal `Failed` status or exhausts its retry budget.
+- **Evidence:** Once a recurring report permanently fails (exhausting `max_retries`), subsequent interval elapsed ticks skip execution without spawning subprocesses or generating timeline spam. Verified in `tests/test_audit_fixes.py` (`test_f041_lane_b_does_not_dispatch_failed_report`).
 
+### F-042: Simulation Clock Reset Guarded by BG-001 Idle Check
+- **Mechanism:** In `SettingsController.reset_simulation_clock()`, added active execution checks verifying `paradiso.is_running()`, `intraday_service.is_active`, and `intraday_service.has_active_runs`, rejecting clock resets with HTTP 409 Conflict while jobs are in flight or scheduler is running.
+- **Evidence:** Calling `POST /api/settings/simulation/reset` while scheduler is running or jobs are active returns HTTP 409 Conflict. Resets are only permitted in clean idle state. Verified in `tests/test_audit_fixes.py` (`test_f042_simulation_reset_rejected_when_active`).
+
+### F-043: Manual Run Execution Guarded Against Failed/Exhausted Re-Arming
+- **Mechanism:** In `ExecutionController.run_automation()` and `IntradayService.trigger_manual_run()`, blocked manual execution for reports that are in `Failed` status or present in `type_b_exhausted` with HTTP 409 Conflict. Updated `IntradayService._trigger_type_b_report._on_good()` to prevent clearing `retry_counts` if the report is in `type_b_exhausted`. Mandated that re-arming requires explicit administrative re-enablement via `POST /api/automation/enable`.
+- **Evidence:** Calling `POST /api/automation/run` on a Failed or exhausted Type B report returns HTTP 409 Conflict. Autonomous scheduling remains suppressed until explicitly re-enabled via `POST /api/automation/enable`. Verified in `tests/test_audit_fixes.py` (`test_f043_manual_run_failed_report_rejected` and `test_f043_failed_report_rearmed_only_via_enable`).

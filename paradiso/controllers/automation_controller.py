@@ -72,12 +72,16 @@ class AutomationController:
         if report_type not in ["type_a", "type_b", "type_c"]:
             return jsonify({"ok": False, "error": "Invalid report_type: must be strictly 'type_a', 'type_b', or 'type_c'."}), 400
 
-        try:
-            interval_minutes = int(data.get("interval_minutes") or 30)
-            if interval_minutes < 1:
-                return jsonify({"ok": False, "error": "interval_minutes must be an integer >= 1."}), 400
-        except (ValueError, TypeError):
-            return jsonify({"ok": False, "error": "interval_minutes must be a valid integer."}), 400
+        raw_interval = data.get("interval_minutes")
+        if raw_interval is None:
+            interval_minutes = 30
+        else:
+            try:
+                interval_minutes = int(raw_interval)
+                if interval_minutes < 1:
+                    return jsonify({"ok": False, "error": "interval_minutes must be an integer >= 1."}), 400
+            except (ValueError, TypeError):
+                return jsonify({"ok": False, "error": "interval_minutes must be a valid integer."}), 400
 
         timeslot_tier = str(data.get("timeslot_tier") or "CUSTOM").strip().upper()
         if timeslot_tier not in ["BOD", "MID", "EOD", "CUSTOM"]:
@@ -94,7 +98,9 @@ class AutomationController:
         catch_up_policy = data.get("catch_up_policy")
         if catch_up_policy is not None:
             catch_up_policy = str(catch_up_policy).strip().upper()
-            if catch_up_policy not in ["CATCH_UP_IMMEDIATE", "SKIP_UNTIL_NEXT_DAY", "WARN_OPERATOR"]:
+            if not catch_up_policy:
+                catch_up_policy = None
+            elif catch_up_policy not in ["CATCH_UP_IMMEDIATE", "SKIP_UNTIL_NEXT_DAY", "WARN_OPERATOR"]:
                 return jsonify({
                     "ok": False,
                     "error": f"Invalid catch_up_policy '{catch_up_policy}': must be one of CATCH_UP_IMMEDIATE, SKIP_UNTIL_NEXT_DAY, WARN_OPERATOR."
@@ -116,7 +122,7 @@ class AutomationController:
         )
         self.automation_service.add(report)
 
-        lane_a_active = bool(self.intraday_service.lane_a_active or self.intraday_service.force_open) if self.intraday_service else False
+        lane_a_active = bool(self.intraday_service.lane_a_active) if self.intraday_service else False
         if self.intraday_service and lane_a_active and initial_status == "Waiting" and report_type == "type_a":
             with self.intraday_service._lock:
                 if name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
@@ -238,6 +244,9 @@ class AutomationController:
                 from utils.clock import CLOCK
                 today_date = CLOCK.date_str()
                 self.intraday_service.type_b_exhausted.discard(name)
+                self.intraday_service.type_c_ran_today.discard(name)
+                self.intraday_service.type_c_retry_after.pop(name, None)
+                self.intraday_service.type_c_warned.discard(name)
                 self.intraday_service.retry_counts.pop(name, None)
                 if report.report_type == "type_a" and self.intraday_service.lane_a_active:
                     day = self.intraday_service.intraday_repo.get_day(today_date)

@@ -669,14 +669,16 @@ class IntradayService:
                             continue
 
                         tier = (rep.timeslot_tier or "CUSTOM").upper()
-                        if tier == "BOD":
-                            target_time = self.start_time
+                        if rep.scheduled_time:
+                            target_time = rep.scheduled_time
+                        elif tier == "BOD":
+                            target_time = self.start_time or "07:00"
                         elif tier == "MID":
                             target_time = "12:00"
                         elif tier == "EOD":
-                            target_time = rep.scheduled_time or "20:30"
+                            target_time = "20:30"
                         else:
-                            target_time = rep.scheduled_time or "08:30"
+                            target_time = "08:30"
 
                         norm = self._normalize_timeslot(target_time)
                         if not norm:

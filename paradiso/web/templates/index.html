@@ -350,6 +350,9 @@
                             <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399; font-weight: 600;">
                                 ● Window: 07:00 – 21:00
                             </span>
+                            <button type="button" class="btn-primary" onclick="openAddReportModal('type_a')" style="font-weight: 600; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">
+                                <span>+</span> Add Report
+                            </button>
                             <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
                         </div>
                     </div>
@@ -479,6 +482,9 @@
                             <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.3); color: #60a5fa; font-weight: 600;">
                                 ⚡ Concurrent Engine Ready
                             </span>
+                            <button type="button" class="btn-primary" onclick="openAddReportModal('type_b')" style="font-weight: 600; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">
+                                <span>+</span> Add Report
+                            </button>
                             <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
                         </div>
                     </div>
@@ -615,6 +621,9 @@
                             <span style="font-size: 11px; padding: 6px 12px; border-radius: 6px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.3); color: #c084fc; font-weight: 600;">
                                 ⏰ Timeslot Dispatcher Ready
                             </span>
+                            <button type="button" class="btn-primary" onclick="openAddReportModal('type_c')" style="font-weight: 600; padding: 7px 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.4); color: #c084fc; cursor: pointer;">
+                                <span>+</span> Add Report
+                            </button>
                             <button type="button" class="btn-primary" onclick="switchTab('dashboard', event)" style="padding: 8px 16px; border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">← Back to Dashboard</button>
                         </div>
                     </div>
@@ -1568,17 +1577,17 @@ tryCatch({
     </div>
 
     <!-- Modal: Add New Automation Report -->
-    <div id="modal-add-report" class="modal-overlay" onclick="handleAddModalOverlayClick(event)">
-        <div class="modal-card" style="max-width: 580px;">
+    <div id="modal-add-report" class="modal-overlay" onclick="handleAddModalOverlayClick(event)" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
+        <div class="modal-card" style="max-width: 620px;">
             <div class="modal-header">
                 <div class="modal-title-group" style="display: flex; align-items: center;">
                     <span class="modal-icon" style="font-size: 18px; margin-right: 8px;">✦</span>
                     <div>
-                        <h3 class="modal-title">Register New Automation Report</h3>
-                        <div class="modal-subtitle">Add an automation pipeline to the execution queue and catalog</div>
+                        <h3 id="modal-add-title" class="modal-title">Register New Automation Report</h3>
+                        <div class="modal-subtitle">Configure pipeline parameters across Lanes A, B, or C</div>
                     </div>
                 </div>
-                <button type="button" class="modal-close" onclick="closeAddReportModal()">✖</button>
+                <button type="button" class="modal-close" onclick="closeAddReportModal()" aria-label="Close modal">✖</button>
             </div>
             <form id="form-add-report" onsubmit="handleAddReportSubmit(event)">
                 <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
@@ -1587,27 +1596,94 @@ tryCatch({
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                         <div class="form-group">
                             <label for="new-report-name">Report Name *</label>
-                            <input type="text" id="new-report-name" class="settings-control" placeholder="e.g. Treasury_Yield_Curve" required>
-                            <span class="field-hint">Unique alphanumeric identifier</span>
+                            <input type="text" id="new-report-name" class="settings-control" placeholder="e.g. Treasury_Yield_Curve" required autocomplete="off">
+                            <span class="field-hint">Unique identifier across all lanes</span>
                         </div>
                         <div class="form-group">
                             <label for="new-report-filename">Script Filename *</label>
-                            <input type="text" id="new-report-filename" class="settings-control" placeholder="e.g. treasury_curve.py" required>
-                            <span class="field-hint">Executable script file</span>
+                            <input type="text" id="new-report-filename" class="settings-control" placeholder="e.g. treasury_curve.py" required autocomplete="off">
+                            <span class="field-hint" id="new-report-filename-hint">Executable script filename (.py)</span>
+                        </div>
+                    </div>
+
+                    <!-- Scheduling Lane Selector -->
+                    <div class="form-group">
+                        <label for="new-report-type" style="display: flex; align-items: center; justify-content: space-between;">
+                            <span>Scheduling Lane *</span>
+                            <span id="lane-badge" class="badge badge-waiting" style="font-size: 11px; padding: 2px 8px;">Lane A</span>
+                        </label>
+                        <select id="new-report-type" class="settings-control" onchange="handleReportTypeChange(this.value)">
+                            <option value="type_a">Lane A — Sequential Queue / Concurrency Pool</option>
+                            <option value="type_b">Lane B — Recurring Intervals (Periodic Cadence)</option>
+                            <option value="type_c">Lane C — Timeslots (Fixed Schedules / BOD, MID, EOD)</option>
+                        </select>
+                        <span class="field-hint" id="new-report-type-hint">Executes via FIFO queue or concurrency pool during open operating hours.</span>
+                    </div>
+
+                    <!-- Lane B Dynamic Group: Recurring Interval -->
+                    <div id="group-lane-b-config" style="display: none; background: rgba(96, 165, 250, 0.05); border: 1px solid rgba(96, 165, 250, 0.2); border-radius: 8px; padding: 12px;">
+                        <div class="form-group">
+                            <label for="new-report-interval">Recurring Interval (Minutes) *</label>
+                            <input type="number" id="new-report-interval" class="settings-control" min="1" max="1440" value="30" placeholder="30">
+                            <span class="field-hint">Cadence between autonomous executions (e.g., 15 for quarterly-hour, 30 for half-hour).</span>
+                        </div>
+                    </div>
+
+                    <!-- Lane C Dynamic Group: Timeslots & Catch-Up Policy -->
+                    <div id="group-lane-c-config" style="display: none; background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 8px; padding: 12px; flex-direction: column; gap: 12px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label for="new-report-tier">Timeslot Tier</label>
+                                <select id="new-report-tier" class="settings-control" onchange="handleTimeslotTierChange(this.value)">
+                                    <option value="CUSTOM">CUSTOM — Custom Timeslot</option>
+                                    <option value="BOD">BOD — Beginning of Day (07:00)</option>
+                                    <option value="MID">MID — Mid-Day (12:00)</option>
+                                    <option value="EOD">EOD — End of Day (20:30)</option>
+                                </select>
+                                <span class="field-hint">Preset standard windows (auto-fills scheduled time)</span>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-report-catch-up">Missed Catch-Up Policy</label>
+                                <select id="new-report-catch-up" class="settings-control">
+                                    <option value="">(Inherit Global Settings)</option>
+                                    <option value="CATCH_UP_IMMEDIATE">CATCH_UP_IMMEDIATE (Run on boot/recovery)</option>
+                                    <option value="SKIP_UNTIL_NEXT_DAY">SKIP_UNTIL_NEXT_DAY (Skip until tomorrow)</option>
+                                    <option value="WARN_OPERATOR">WARN_OPERATOR (Emit alert & await manual run)</option>
+                                </select>
+                                <span class="field-hint">Policy applied if scheduled window is missed</span>
+                            </div>
                         </div>
                     </div>
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                         <div class="form-group">
                             <label for="new-report-filetype">Interpreter / Runtime *</label>
-                            <select id="new-report-filetype" class="settings-control">
+                            <select id="new-report-filetype" class="settings-control" onchange="handleFileTypeChange(this.value)">
                                 <option value="python">Python (.py)</option>
-                                <option value="R">Rscript (.R)</option>
+                                <option value="r">Rscript (.R)</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label for="new-report-dir">Script Directory</label>
-                            <input type="text" id="new-report-dir" class="settings-control" value="../reports" placeholder="../reports">
+                            <input type="text" id="new-report-dir" class="settings-control" value="../reports/python" placeholder="../reports/python">
+                            <span class="field-hint">Authorized reports directory</span>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                        <div class="form-group" id="group-scheduled-time">
+                            <label for="new-report-time">Scheduled Run Time</label>
+                            <input type="text" id="new-report-time" class="settings-control" placeholder="08:30" value="08:30" pattern="^([01]\d|2[0-3]):[0-5]\d$">
+                            <span class="field-hint">24-hr format (HH:MM, e.g. 08:30, 14:15)</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="new-report-status">Initial Status</label>
+                            <select id="new-report-status" class="settings-control">
+                                <option value="Waiting">Waiting (Active / Queue for execution today)</option>
+                                <option value="Inactive">Inactive (Staged / Not queued)</option>
+                                <option value="Disabled">Disabled (Suppressed / Under maintenance)</option>
+                            </select>
+                            <span class="field-hint">Initial execution state</span>
                         </div>
                     </div>
 
@@ -1619,21 +1695,6 @@ tryCatch({
                         <div class="form-group">
                             <label for="new-report-owner">Owner / Contact</label>
                             <input type="text" id="new-report-owner" class="settings-control" placeholder="e.g. J. Doe" value="User">
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                        <div class="form-group">
-                            <label for="new-report-time">Scheduled Run Time</label>
-                            <input type="text" id="new-report-time" class="settings-control" placeholder="08:30" value="08:30">
-                            <span class="field-hint">24-hr format (HH:MM)</span>
-                        </div>
-                        <div class="form-group">
-                            <label for="new-report-status">Initial Status</label>
-                            <select id="new-report-status" class="settings-control">
-                                <option value="Waiting">Waiting (Queue for execution today)</option>
-                                <option value="Inactive">Inactive (Staged / Not queued)</option>
-                            </select>
                         </div>
                     </div>
                 </div>

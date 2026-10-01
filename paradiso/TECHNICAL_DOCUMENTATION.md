@@ -430,8 +430,14 @@ python run_tests.py
 # or: py -3 -m unittest discover tests (from paradiso/)
 ```
 
-#### Coverage Breakdown (133 Automated Tests)
-- **`tests/test_audit_fixes.py`** (91 tests):
+#### Coverage Breakdown (139 Automated Tests)
+- **`tests/test_audit_fixes.py`** (97 tests):
+  - **Batch 9 Remediations (F-044, F-045, F-046, F-047)**:
+    - **F-044 (Operating Window Override Leak in Lane A)**: Prohibits `force_open` (operating window override from other lanes) from causing newly added Type A automations to enter the active execution waitlist when Lane A is stopped. Waitlist addition is strictly bound to `self.intraday_service.lane_a_active`.
+    - **F-045 (Re-Enabled Lane C Autonomous Dispatch Starvation)**: Clears `type_c_ran_today`, `type_c_warned`, and `type_c_retry_after` sets inside `enable_automation()`, ensuring re-enabled Failed timeslot reports are re-armed for autonomous intraday execution.
+    - **F-046 (Zero-Interval Input Validation Bypass)**: Differentiates falsy `0` from unset `None`, enforcing strict validation `interval_minutes >= 1` and returning HTTP 400 Bad Request on `interval_minutes: 0`.
+    - **F-047 (Timeslot Tier Resolution Desync)**: Prioritizes explicit `rep.scheduled_time` over hardcoded tier defaults during Lane C evaluation, and synchronizes UI presets (`BOD: 07:00`, `MID: 12:00`, `EOD: 20:30`) across frontend templates and scripts.
+  - **3-Lane Add Report Modal & Form Verification**: DOM structure, dynamic lane switcher (Lane A sequential/pool, Lane B recurring interval, Lane C timeslot & catch-up policy), client-side validation, ESC-key dismissal, and REST API payload persistence (`POST /api/automation/add` returning 201 Created).
   - **Phase 2.1 & Phase 2.2**: Lane A concurrency pool (`max_concurrent_run`: multi-dispatch, slot replenishment, settings hot-reload, bounds validation, starvation cooldown coordination), Lane C missed window catch-up policies (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, `WARN_OPERATOR`), grace window verification, per-report policy overrides, settings validation and dynamic hot-reload.
   - **Batch 7 Remediations & Anti-Rearm Fix (F-040, F-041, F-042, F-043)**: Manual run disabled report bypass prevention (`POST /api/automation/run` returns HTTP 409 Conflict, F-040), Lane B terminal Failed and exhausted retry report suppression preventing infinite dispatch loops (F-041), simulation clock reset BG-001 idle-only guardrail enforcement (`POST /api/settings/simulation/reset` returns HTTP 409 Conflict when active, F-042), and manual run Failed report rejection with explicit administrative re-enablement preventing silent auto-dispatch resurrection (F-043).
   - **Batch 6 Remediations (F-037, F-038, F-039)**: Canonical 24-hour `scheduled_time` regex validation (`^([01]\d|2[0-3]):[0-5]\d$`), defensive runtime timeslot normalization (12-hr AM/PM and unpadded hours), API retention and catalog persistence of `catch_up_policy`, and operational reset `type_c_warned` clearance in `reset_all_reports()`.

@@ -795,7 +795,87 @@ function filterAutomationsCatalog() {
     });
 }
 
-function openAddReportModal() {
+function handleReportTypeChange(laneType) {
+    const laneBadge = document.getElementById('lane-badge');
+    const laneHint = document.getElementById('new-report-type-hint');
+    const groupLaneB = document.getElementById('group-lane-b-config');
+    const groupLaneC = document.getElementById('group-lane-c-config');
+
+    if (laneBadge) {
+        if (laneType === 'type_b') {
+            laneBadge.innerText = 'Lane B';
+            laneBadge.className = 'badge badge-running';
+            laneBadge.style.background = 'rgba(96, 165, 250, 0.2)';
+            laneBadge.style.color = '#60a5fa';
+            laneBadge.style.borderColor = 'rgba(96, 165, 250, 0.4)';
+        } else if (laneType === 'type_c') {
+            laneBadge.innerText = 'Lane C';
+            laneBadge.className = 'badge badge-completed';
+            laneBadge.style.background = 'rgba(168, 85, 247, 0.2)';
+            laneBadge.style.color = '#c084fc';
+            laneBadge.style.borderColor = 'rgba(168, 85, 247, 0.4)';
+        } else {
+            laneBadge.innerText = 'Lane A';
+            laneBadge.className = 'badge badge-waiting';
+            laneBadge.style.background = 'rgba(234, 179, 8, 0.2)';
+            laneBadge.style.color = '#facc15';
+            laneBadge.style.borderColor = 'rgba(234, 179, 8, 0.4)';
+        }
+    }
+
+    if (laneHint) {
+        if (laneType === 'type_b') {
+            laneHint.innerText = 'Autonomous interval cadence throughout intraday operating hours.';
+        } else if (laneType === 'type_c') {
+            laneHint.innerText = 'Fixed timeslot dispatch with configurable missed catch-up policies.';
+        } else {
+            laneHint.innerText = 'Executes via FIFO queue or concurrency pool during open operating hours.';
+        }
+    }
+
+    if (groupLaneB) {
+        groupLaneB.style.display = (laneType === 'type_b') ? 'block' : 'none';
+    }
+    if (groupLaneC) {
+        groupLaneC.style.display = (laneType === 'type_c') ? 'flex' : 'none';
+    }
+}
+
+function handleTimeslotTierChange(tier) {
+    const timeInput = document.getElementById('new-report-time');
+    if (!timeInput) return;
+    if (tier === 'BOD') {
+        timeInput.value = '07:00';
+    } else if (tier === 'MID') {
+        timeInput.value = '12:00';
+    } else if (tier === 'EOD') {
+        timeInput.value = '20:30';
+    }
+}
+
+function handleFileTypeChange(filetype) {
+    const dirInput = document.getElementById('new-report-dir');
+    const filenameHint = document.getElementById('new-report-filename-hint');
+    const isPy = (filetype || '').toLowerCase() === 'python';
+
+    if (filenameHint) {
+        filenameHint.innerText = isPy ? 'Executable script filename (.py)' : 'Executable script filename (.R or .r)';
+    }
+
+    if (dirInput) {
+        if (!dirInput.value || dirInput.value === '../reports' || dirInput.value === '../reports/python' || dirInput.value === '../reports/r') {
+            dirInput.value = isPy ? '../reports/python' : '../reports/r';
+        }
+    }
+}
+
+function handleAddModalKeydown(e) {
+    if (e.key === 'Escape') {
+        closeAddReportModal();
+    }
+}
+
+function openAddReportModal(defaultLane = 'type_a') {
     const modal = document.getElementById('modal-add-report');
     if (!modal) return;
     const form = document.getElementById('form-add-report');
@@ -805,23 +885,55 @@ function openAddReportModal() {
         err.style.display = 'none';
         err.innerText = '';
     }
+
+    const typeSelect = document.getElementById('new-report-type');
+    const resolvedLane = (defaultLane && ['type_a', 'type_b', 'type_c'].includes(defaultLane)) ? defaultLane : 'type_a';
+    if (typeSelect) typeSelect.value = resolvedLane;
+
+    const filetypeSelect = document.getElementById('new-report-filetype');
+    if (filetypeSelect) filetypeSelect.value = 'python';
+
     const dirInput = document.getElementById('new-report-dir');
-    if (dirInput) dirInput.value = '../reports';
+    if (dirInput) dirInput.value = '../reports/python';
+
     const teamInput = document.getElementById('new-report-team');
     if (teamInput) teamInput.value = 'General';
+
     const ownerInput = document.getElementById('new-report-owner');
     if (ownerInput) ownerInput.value = 'User';
+
     const timeInput = document.getElementById('new-report-time');
     if (timeInput) timeInput.value = '08:30';
+
+    const intervalInput = document.getElementById('new-report-interval');
+    if (intervalInput) intervalInput.value = '30';
+
+    const tierSelect = document.getElementById('new-report-tier');
+    if (tierSelect) tierSelect.value = 'CUSTOM';
+
+    const catchUpSelect = document.getElementById('new-report-catch-up');
+    if (catchUpSelect) catchUpSelect.value = '';
+
     const statusSelect = document.getElementById('new-report-status');
     if (statusSelect) statusSelect.value = 'Waiting';
 
+    handleReportTypeChange(resolvedLane);
+    handleFileTypeChange('python');
+
     modal.classList.add('active');
+
+    setTimeout(() => {
+        const nameInput = document.getElementById('new-report-name');
+        if (nameInput) nameInput.focus();
+    }, 50);
+
+    window.addEventListener('keydown', handleAddModalKeydown);
 }
 
 function closeAddReportModal() {
     const modal = document.getElementById('modal-add-report');
     if (modal) modal.classList.remove('active');
+    window.removeEventListener('keydown', handleAddModalKeydown);
 }
 
 function handleAddModalOverlayClick(e) {
@@ -834,16 +946,23 @@ async function handleAddReportSubmit(e) {
     e.preventDefault();
     const errEl = document.getElementById('add-report-error');
     const btn = document.getElementById('btn-submit-add-report');
-    const origText = btn.innerText;
+    const origText = btn ? btn.innerText : '💾 Save & Register Report';
 
-    const name = (document.getElementById('new-report-name').value || '').trim();
-    const filename = (document.getElementById('new-report-filename').value || '').trim();
-    const filetype = document.getElementById('new-report-filetype').value;
-    const dir = (document.getElementById('new-report-dir').value || '../reports').trim();
-    const team = (document.getElementById('new-report-team').value || 'General').trim();
-    const owner = (document.getElementById('new-report-owner').value || 'User').trim();
-    const scheduled_time = (document.getElementById('new-report-time').value || '08:30').trim();
-    const status = document.getElementById('new-report-status').value;
+    const name = (document.getElementById('new-report-name')?.value || '').trim();
+    const filename = (document.getElementById('new-report-filename')?.value || '').trim();
+    const report_type = (document.getElementById('new-report-type')?.value || 'type_a');
+    const filetype = (document.getElementById('new-report-filetype')?.value || 'python').toLowerCase();
+    const dir = (document.getElementById('new-report-dir')?.value || (filetype === 'python' ? '../reports/python' : '../reports/r')).trim();
+    const team = (document.getElementById('new-report-team')?.value || 'General').trim();
+    const owner = (document.getElementById('new-report-owner')?.value || 'User').trim();
+    const scheduled_time = (document.getElementById('new-report-time')?.value || '08:30').trim();
+    const status = (document.getElementById('new-report-status')?.value || 'Waiting');
+
+    const intervalVal = parseInt(document.getElementById('new-report-interval')?.value, 10);
+    const interval_minutes = isNaN(intervalVal) ? 30 : intervalVal;
+    const timeslot_tier = (document.getElementById('new-report-tier')?.value || 'CUSTOM');
+    const catch_up_raw = (document.getElementById('new-report-catch-up')?.value || '').trim();
+    const catch_up_policy = catch_up_raw ? catch_up_raw : null;
 
     if (!name || !filename) {
         if (errEl) {
@@ -853,30 +972,88 @@ async function handleAddReportSubmit(e) {
         return;
     }
 
-    btn.disabled = true;
-    btn.innerText = '⏳ Registering...';
+    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+        if (errEl) {
+            errEl.innerText = 'Filename must be a bare filename without path separators or traversal characters.';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (filetype === 'python' && !filename.endsWith('.py')) {
+        if (errEl) {
+            errEl.innerText = 'Python scripts must end with .py';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (filetype === 'r' && !filename.toLowerCase().endsWith('.r')) {
+        if (errEl) {
+            errEl.innerText = 'R scripts must end with .R or .r';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!timeRegex.test(scheduled_time)) {
+        if (errEl) {
+            errEl.innerText = `Invalid scheduled time "${scheduled_time}": must be 24-hr format HH:MM (e.g. 08:30, 14:15).`;
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (report_type === 'type_b' && interval_minutes < 1) {
+        if (errEl) {
+            errEl.innerText = 'Lane B recurring interval must be an integer >= 1.';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (errEl) {
+        errEl.style.display = 'none';
+        errEl.innerText = '';
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Registering...';
+    }
 
     try {
+        const payload = {
+            name,
+            filename,
+            filetype,
+            dir,
+            team,
+            owner,
+            scheduled_time,
+            status,
+            report_type,
+            interval_minutes,
+            timeslot_tier,
+            catch_up_policy
+        };
+
         const res = await fetch('/api/automation/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name,
-                filename,
-                filetype,
-                dir,
-                team,
-                owner,
-                scheduled_time,
-                status
-            })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.ok) {
             closeAddReportModal();
-            showSettingsToast(data.message || `Report '${name}' registered successfully!`, 'success');
+            const laneLabel = report_type === 'type_b' ? 'Lane B' : (report_type === 'type_c' ? 'Lane C' : 'Lane A');
+            showSettingsToast(data.message || `Report '${name}' registered successfully in ${laneLabel}!`, 'success');
             await fetchAutomations();
             await fetchDashboardStats();
+            if (typeof fetchLanesStatus === 'function') {
+                await fetchLanesStatus();
+            }
         } else {
             if (errEl) {
                 errEl.innerText = data.error || 'Failed to add report.';
@@ -890,8 +1067,10 @@ async function handleAddReportSubmit(e) {
             errEl.style.display = 'block';
         }
     } finally {
-        btn.disabled = false;
-        btn.innerText = origText;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = origText;
+        }
     }
 }
 
