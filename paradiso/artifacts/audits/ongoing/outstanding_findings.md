@@ -1,216 +1,45 @@
-# Outstanding Findings Dossier — Paradiso
+# OUTSTANDING FINDINGS DOSSIER (ACTIVE AUDIT BASELINE)
 
-**Date:** 2026-09-29 00:55 (Local Time)  
-**Auditor:** Independent Adversarial Auditor  
-**Scope:** Active and unmitigated findings awaiting Builder resolution.  
-**Target:** `artifacts/audits/ongoing/outstanding_findings.md`
-
----
-
-## 1. SUMMARY OF OUTSTANDING FINDINGS
-
-| ID | Severity | Confidence | Category | Invariant | Title | Current Status |
-|---|---|---|---|---|---|---|
-| **F-044** | HIGH | 100% | CROSS-LANE ISOLATION | I-1, I-8, V-04 | Cross-Lane Operating Window Override Leaks into Lane A Waitlist in `add_automation` | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-045** | HIGH | 100% | SCHEDULER & API INTEGRITY | I-7, I-8 | Re-Enabled Lane C Reports Are Permanently Starved from Autonomous Dispatch | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-046** | LOW | 100% | INPUT VALIDATION | I-7, I-9 | Zero-Interval Validation Bypass in `AutomationController.add_automation` | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-047** | MEDIUM | 100% | SCHEDULE SYNCHRONIZATION | I-3, I-7, F-027 | Timeslot Tier Resolution Desync Between UI Presets and Backend Scheduler | **ACTIVE / AWAITING DEV REMEDIATION** |
+**Target System:** Paradiso Daemon Scheduling Engine & Web UI  
+**Audit Baseline Report:** [`artifacts/audits/ongoing/audit_20261001_2315.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20261001_2315.md)  
+**Historical Archive:** [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md)  
+**Mandate Reference:** [`artifacts/audits/AUDITOR.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/AUDITOR.md)  
+**Last Updated:** 2026-10-01 23:47 (Local Time)  
+**Active Unresolved Findings:** **0 (All 52 findings verified resolved)**
 
 ---
 
-## 2. RECENTLY RESOLVED (BATCH 7 REMEDIATIONS: F-040 THROUGH F-043)
+## 1. Executive Status
 
-| ID | Severity | Category | Invariant | Title | Verification Artifact |
+Following the Batch 9 Frontend-to-Backend Integrity remediation verification pass, **there are zero (0) outstanding findings**. All 5 Frontend-to-Backend Integrity defects (`F-048` through `F-052`) have been independently verified as resolved and archived into [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md).
+
+| Metric | Count | Status |
+|---|---|---|
+| **Active Unresolved Findings** | **0** | **CLEAN SLATE** |
+| **Total Historical Findings Resolved (`F-001` – `F-052`)** | **52** | **100% VERIFIED** |
+| **Systemic Hardening Items Verified (`V-01` – `V-05`)** | **5** | **100% VERIFIED** |
+| **Production Unit & Regression Test Suite** | **146 / 146** | **100% PASSING** |
+
+---
+
+## 2. Recently Closed Batch 9 Findings (Archived)
+
+| ID | Severity | Category | Invariant | Title | Resolution Verification |
 |---|---|---|---|---|---|
-| **F-040** | HIGH | SAFETY & STATE HYGIENE | I-7, I-8 | `POST /api/automation/run` Bypasses "Disabled" State and Re-Arms Quarantined Automations | Dual-guard in controller (HTTP 409) + service layer; verified in `test_f040_*` |
-| **F-041** | CRITICAL | DISPATCH & RESOURCE EXHAUSTION | I-1, I-6 | Lane B Dispatches Permanently Failed Reports in Unbounded Infinite Loop | `type_b_exhausted` + retry budget check in `tick()`; verified in `test_f041_*` |
-| **F-042** | MEDIUM | CLOCK INTEGRITY & GUARDRAILS | BG-001, I-3, I-7 | `POST /api/settings/simulation/reset` Bypasses BG-001 Idle-Only Guardrail | Multi-lane active check returning HTTP 409 Conflict; verified in `test_f042_*` |
-| **F-043** | MEDIUM | DISPATCH & STATE INTEGRITY | I-1, I-8 | Manual Run of Failed Lane B Report Silently Re-Arms Automatic Dispatch | HTTP 409 guard on Failed/exhausted runs + enable required; verified in `test_f043_*` |
+| **F-048** | HIGH | STATE-MACHINE / API / UI | I-7, I-8, I-10, BG-001 | Stopping All Lanes via Web UI Leaves `Paradiso` Daemon Running, Permanently Locking Settings & Simulation Clock Reset (`HTTP 409`) | **RESOLVED & VERIFIED** (`poc_f048_f052_frontend_backend_integrity.py` PASS, `test_f048_stopping_all_lanes_unlocks_scheduler_and_settings` PASS) |
+| **F-049** | HIGH | UI / API | I-7, I-8 | `POST /api/automation/enable` Orphaned from Web UI & Missing `badge-disabled` Class in Catalog | **RESOLVED & VERIFIED** (`poc_f048_f052_frontend_backend_integrity.py` PASS, `test_f049_enable_endpoint_connected_in_frontend_and_disabled_badge_styled` PASS) |
+| **F-050** | MEDIUM | UI / API | I-2, I-7, I-8 | Hardcoded Frontend Retry Telemetry Falsely Reports `1 / 3` Error Retries on Zero-Penalty Dependency Skips | **RESOLVED & VERIFIED** (`poc_f048_f052_frontend_backend_integrity.py` PASS, `test_f050_automations_api_and_ui_accurate_retry_counts` PASS) |
+| **F-051** | MEDIUM | UI / HONEST API | I-7, BG-001 | Silent Frontend Suppression of HTTP 409 Error on Simulation Clock Reset and Hidden Toast Notification on Report Registration | **RESOLVED & VERIFIED** (`poc_f048_f052_frontend_backend_integrity.py` PASS, `test_f051_clock_reset_surfaces_409_and_add_report_shows_visible_toast` PASS) |
+| **F-052** | LOW | UI / DOC-DRIFT | I-3, I-7 | Unbound Lane B "Active Workers" Metric Card (`0 In-Flight`) and Residual `EOD (21:00)` Schedule Labels in `index.html` | **RESOLVED & VERIFIED** (`poc_f048_f052_frontend_backend_integrity.py` PASS, `test_f052_lane_b_active_workers_bound_and_eod_2030_consistent` PASS) |
 
 ---
 
-## 3. PREVIOUSLY RESOLVED (BATCH 6 REMEDIATIONS: P2.2 INVESTIGATION)
+## 3. Verification Commands
 
-| ID | Severity | Category | Invariant | Title | Verification Artifact |
-|---|---|---|---|---|---|
-| **F-037** | CRITICAL | INPUT VALIDATION & STABILITY | I-1, I-7, I-9 | Non-Canonical `scheduled_time` Strings Cause Unhandled Crashes or Starvation | Regex 24-hr `HH:MM` validation in API + defensive `_normalize_timeslot` in `tick()` |
-| **F-038** | MEDIUM | API & CONTRACT INTEGRITY | I-7, I-8 | `POST /api/automation/add` Silently Discards `catch_up_policy` Parameter | Parameter extraction, validation, and persistence in `Report` |
-| **F-039** | MEDIUM | STATE MACHINE & NOTIFICATIONS | I-4, I-7, I-8 | `reset_all_reports()` Fails to Clear `self.type_c_warned` | Added `self.type_c_warned.clear()` to `reset_all_reports()` |
+```bash
+# 1. Full Automated Unit & Regression Test Suite (146/146 tests passing)
+py -3 run_tests.py
 
----
-
-## 4. HISTORICALLY RESOLVED (BATCH 4 & 5 REMEDIATIONS)
-
-| ID | Severity | Category | Invariant | Title | Verification Artifact |
-|---|---|---|---|---|---|
-| **F-032** | CRITICAL | STORAGE / QUEUE | I-4, I-6, I-8 | Partial Day Queue Paralysis & Log Erasure | `_get_completed_or_exhausted_reports()` distinguishes completed/exhausted |
-| **F-035** | CRITICAL | TIME SYNTHESIS / DISPATCH | I-1, I-4 | Cold Boot Time-Only `last_run` Future Timestamp Synthesis | `_hydrate_type_b_last_run()` shifts future timestamps |
-| **F-033** | HIGH | STATE MACHINE / API | I-3, I-7 | `force_open` Wrap-Up Bypass & Cross-Lane Leak | `resolve_status()` enforces idle_time precedence |
-| **F-036** | MEDIUM | API / QUEUE HYGIENE | I-7, I-8 | Asymmetric Automation Disabling API | `POST /api/automation/enable` endpoint |
-| **F-031** | CRITICAL | COLD BOOT & STORAGE LEAK | I-1, I-4 | Lane C Cold Boot Hydration Derived Strictly from Storage | Storage-only `_hydrate_type_c_ran_today()` |
-| **F-034** | MEDIUM | INTEGRITY & PROCESS ORPHANING | I-5, I-8, BG-001 | Deleting Actively Executing Reports Blocked with HTTP 409 | `is_running` guard on `delete_automation()` |
-
----
-
-## 5. ACTIVE FINDINGS DOSSIER
-
-### F-044: Cross-Lane Operating Window Override Leaks into Lane A Waitlist in `add_automation`
-
-- **Severity:** HIGH
-- **Invariants Breached:** I-1 (Cross-Lane Isolation), I-8 (Queue / Memory Convergence), V-04 (Lane A stopped isolation)
-- **Source Location:** `paradiso/controllers/automation_controller.py:add_automation:121-125`
-- **Adversarial Asset:** `paradiso/artifacts/audits/poc/poc_f044_lane_a_force_open_leak_in_add_automation.py`
-
-#### OBSERVATION
-In `AutomationController.add_automation()`:
-```python
-lane_a_active = bool(self.intraday_service.lane_a_active or self.intraday_service.force_open) if self.intraday_service else False
-if self.intraday_service and lane_a_active and initial_status == "Waiting" and report_type == "type_a":
-    with self.intraday_service._lock:
-        if name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
-            self.intraday_service.waitlist.append(name)
+# 2. Batch 9 Frontend-to-Backend Integrity PoC Suite (5/5 passing)
+py -3 paradiso/artifacts/audits/poc/poc_f048_f052_frontend_backend_integrity.py
 ```
-The expression `self.intraday_service.lane_a_active or self.intraday_service.force_open` treats `force_open` as an indicator that Lane A is active.
-
-#### EVIDENCE
-Demonstrated deterministically in `poc_f044_lane_a_force_open_leak_in_add_automation.py`:
-1. Lane A is explicitly stopped (`lane_a_active == False`).
-2. Lane B is started outside operating hours with `force_open=True`. This sets `self.intraday_service.force_open = True`.
-3. An operator registers a new Type A report via `POST /api/automation/add`.
-4. Line 121 evaluates `lane_a_active = False or True` $\rightarrow$ `True`.
-5. The report is enqueued into `self.intraday_service.waitlist`: `['Leaked_Type_A_Report']`.
-6. In `paradiso/tests/test_audit_fixes.py` line 2651, the Builder's unit test for V-04 explicitly inserted `intra_svc.force_open = False` to prevent their own assertion (`self.assertNotIn(rep_name, intra_svc.waitlist)`) from failing, masking this latent cross-lane leakage.
-
-#### CONSEQUENCE
-Cross-lane state leakage violates the architectural isolation between lanes. Starting Lane B or Lane C with an operating window override pollutes the stopped Lane A sequential queue with pending waitlist items.
-
-#### VERIFICATION CRITERION
-`AutomationController.add_automation()` must gate Type A waitlist enqueueing strictly on `self.intraday_service.lane_a_active`. If Lane A is stopped, newly registered Type A reports must NEVER be pushed into `waitlist`, regardless of the value of `force_open` or the state of other lanes.
-
----
-
-### F-045: Re-Enabled Lane C Reports Are Permanently Starved from Autonomous Dispatch
-
-- **Severity:** HIGH
-- **Invariants Breached:** I-7 (Honest API), I-8 (Queue / Storage / Memory Convergence)
-- **Source Location:** `paradiso/controllers/automation_controller.py:enable_automation:238-256`, `paradiso/services/intraday_service.py:tick:664`
-- **Adversarial Asset:** `paradiso/artifacts/audits/poc/poc_f045_type_c_enable_starvation.py`
-
-#### OBSERVATION
-In commit `31d0a1c`, `AutomationController.enable_automation()` was updated to allow re-enabling `"Failed"` reports (lines 231–255). When an automation is re-enabled, it clears `type_b_exhausted` and `retry_counts` (lines 242–243):
-```python
-self.intraday_service.type_b_exhausted.discard(name)
-self.intraday_service.retry_counts.pop(name, None)
-```
-However, when a Lane C report reaches terminal failure, `IntradayService._handle_failure()` permanently adds its name to `self.type_c_ran_today` (line 1144). `enable_automation()` fails to remove the report from `self.type_c_ran_today`, fails to clear `self.type_c_retry_after`, and fails to clear `self.type_c_warned`.
-
-#### EVIDENCE
-Demonstrated deterministically in `poc_f045_type_c_enable_starvation.py`:
-1. Register a Type C report and induce terminal failure (`status="Failed"`, `name in self.type_c_ran_today`).
-2. Submit `POST /api/automation/enable` with `{"name": "Starved_Lane_C_Report"}`.
-3. The API responds with HTTP 200 OK: `{"ok": true, "message": "Report 'Starved_Lane_C_Report' enabled"}`.
-4. The report status in `automations.json` is updated to `"Waiting"`.
-5. When `IntradayService.tick()` evaluates Lane C reports (line 664):
-   ```python
-   if rep.name in self.type_c_ran_today:
-       continue
-   ```
-6. Because `self.type_c_ran_today` still holds `name`, `tick()` skips the report on every cycle.
-7. The re-enabled report is permanently starved from autonomous execution for the rest of the calendar day.
-
-#### CONSEQUENCE
-Breach of the Honest API invariant. Operators are informed that a Failed Lane C report has been successfully re-enabled and restored to active `"Waiting"` status, but autonomous scheduler execution remains permanently blocked on all subsequent ticks.
-
-#### VERIFICATION CRITERION
-When `POST /api/automation/enable` is called on a Lane C report, the report must be evicted from `self.intraday_service.type_c_ran_today`, `self.intraday_service.type_c_retry_after`, and `self.intraday_service.type_c_warned`, allowing Lane C to autonomously dispatch the re-enabled report at its scheduled time slot.
-
----
-
-### F-046: Zero-Interval Input Validation Bypass in `AutomationController.add_automation`
-
-- **Severity:** LOW
-- **Invariants Breached:** I-7 (Honest API), I-9 (Input Validation)
-- **Source Location:** `paradiso/controllers/automation_controller.py:add_automation:76-80`
-- **Adversarial Asset:** `paradiso/artifacts/audits/poc/poc_f046_zero_interval_validation_bypass.py`
-
-#### OBSERVATION
-In `AutomationController.add_automation()`:
-```python
-try:
-    interval_minutes = int(data.get("interval_minutes") or 30)
-    if interval_minutes < 1:
-        return jsonify({"ok": False, "error": "interval_minutes must be an integer >= 1."}), 400
-except (ValueError, TypeError):
-    return jsonify({"ok": False, "error": "interval_minutes must be a valid integer."}), 400
-```
-In Python, `0 or 30` evaluates to `30` because `0` is falsy.
-
-#### EVIDENCE
-Demonstrated deterministically in `poc_f046_zero_interval_validation_bypass.py`:
-1. Submit `POST /api/automation/add` with `{"interval_minutes": -5}`: returns HTTP 400 Bad Request (`"interval_minutes must be an integer >= 1."`).
-2. Submit `POST /api/automation/add` with `{"interval_minutes": 0}`: returns HTTP 201 Created with `interval_minutes: 30` in the created record.
-3. The invalid value `0` bypasses the `< 1` check and is silently rewritten to `30`.
-
-#### CONSEQUENCE
-Silent input mutation. Clients submitting an invalid non-positive interval are not informed of their error; the system silently substitutes a default without rejection or warning.
-
-#### VERIFICATION CRITERION
-Submitting `interval_minutes: 0` to `POST /api/automation/add` must return HTTP 400 Bad Request with an error message stating that `interval_minutes` must be an integer >= 1.
-
----
-
-### F-047: Timeslot Tier Resolution Desync Between UI Presets and Backend Scheduler
-
-- **Severity:** MEDIUM
-- **Invariants Breached:** I-3 (State Machine & Window Rules), I-7 (Honest API / UI Convergence), F-027 (EOD 20:30 Consistency)
-- **Source Location:** `paradiso/web/static/js/app.js:844-854`, `paradiso/web/templates/index.html:1629-1636`, `paradiso/services/intraday_service.py:tick:671-679`
-- **Adversarial Asset:** `paradiso/artifacts/audits/poc/poc_f047_timeslot_tier_desync.py`
-
-#### OBSERVATION
-The newly added 3-Lane Add Report Modal introduces timeslot tier selection:
-In `index.html` lines 1629–1636:
-- `BOD — Beginning of Day (08:30)`
-- `MID — Mid-Day (12:30)`
-- `EOD — End of Day (16:30)`
-
-In `app.js` lines 844–854:
-```javascript
-function handleTimeslotTierChange(tier) {
-    const timeInput = document.getElementById('new-report-time');
-    if (!timeInput) return;
-    if (tier === 'BOD') timeInput.value = '08:30';
-    else if (tier === 'MID') timeInput.value = '12:30';
-    else if (tier === 'EOD') timeInput.value = '16:30';
-}
-```
-However, in `IntradayService.tick()` lines 671–679:
-```python
-tier = (rep.timeslot_tier or "CUSTOM").upper()
-if tier == "BOD":
-    target_time = self.start_time
-elif tier == "MID":
-    target_time = "12:00"
-elif tier == "EOD":
-    target_time = rep.scheduled_time or "20:30"
-else:
-    target_time = rep.scheduled_time or "08:30"
-```
-The backend scheduler resolves:
-1. `BOD`: targets `self.start_time` (configured as `07:00` in `config.yaml`), completely ignoring the `08:30` displayed and auto-filled by the UI.
-2. `MID`: hardcodes target time to `"12:00"`, completely ignoring the `12:30` auto-filled by the UI (and ignoring any custom time the operator entered while `MID` is selected).
-3. `EOD`: auto-fills `16:30` in the UI, directly contradicting resolved finding F-027 and `ROADMAP.md` (lines 55, 68), which explicitly mandate and standardize `EOD` across the system as `20:30`.
-
-#### EVIDENCE
-Demonstrated deterministically in `poc_f047_timeslot_tier_desync.py`:
-1. Register a Type C report using the UI parameters: `timeslot_tier: "MID"`, `scheduled_time: "12:30"`.
-2. Advance clock to 12:05 PM (25 minutes before the 12:30 PM time displayed in the UI).
-3. Call `tick()`.
-4. The report is triggered at 12:05 PM because line 675 hardcodes `MID` to `12:00`.
-
-#### CONSEQUENCE
-Discrepancy between operator intent and runtime execution. Operators configuring a midday report expecting it to run at 12:30 PM will experience unintended premature execution at 12:00 PM. Reports configured with BOD run at 07:00 AM instead of 08:30 AM. EOD timing breaks alignment with F-027.
-
-#### VERIFICATION CRITERION
-UI timeslot presets and backend tier dispatch must be strictly synchronized:
-1. Preset labels and auto-filled values in `index.html` and `app.js` must match backend schedule definitions (`BOD: 07:00`, `MID: 12:00`, `EOD: 20:30`), OR
-2. Backend timeslot tier evaluation must respect `rep.scheduled_time` if explicitly provided.

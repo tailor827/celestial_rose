@@ -338,6 +338,7 @@ async function startLane(lane) {
             return;
         }
         await fetchLanesStatus();
+        checkSchedulerStatus();
         fetchDashboardStats();
     } catch (err) {
         console.error(`Failed to start lane ${key}:`, err);
@@ -366,6 +367,7 @@ async function stopLane(lane) {
             return;
         }
         await fetchLanesStatus();
+        checkSchedulerStatus();
         fetchDashboardStats();
     } catch (err) {
         console.error(`Failed to stop lane ${key}:`, err);
@@ -494,6 +496,12 @@ function updateLaneUI(laneKey) {
         if (slotsSub) {
             slotsSub.innerText = `Max ${maxSlots} in-flight process${maxSlots > 1 ? 'es' : ''} permitted`;
         }
+    } else if (laneKey === 'type_b') {
+        const activeWorkers = document.getElementById('metric-b-active');
+        if (activeWorkers) {
+            activeWorkers.innerText = `${s.active_runs || 0} In-Flight`;
+            activeWorkers.style.color = (s.active_runs || 0) > 0 ? '#34d399' : (isRunning ? '#60a5fa' : 'var(--text-muted)');
+        }
     }
 }
 
@@ -502,6 +510,11 @@ async function fetchLanesStatus() {
         const res = await fetch('/api/paradiso/lanes/status');
         const data = await res.json();
         if (!data.ok || !data.lanes) return;
+
+        if (typeof data.running === 'boolean') {
+            isSchedulerRunning = data.running;
+            updateSettingsLockUI();
+        }
 
         ['type_a', 'type_b', 'type_c'].forEach(k => {
             const laneInfo = data.lanes[k];
@@ -604,7 +617,12 @@ async function fetchAutomations() {
                 const tr = document.createElement('tr');
 
                 let badgeClass = 'badge-waiting';
-                let execModeHtml = `<span style="font-size: 11px; color: var(--text-muted); padding: 3px 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px;">Sequential (Type A)</span>`;
+                const rType = (item.report_type || 'type_a').toLowerCase();
+                let typeLabel = 'Sequential (Type A)';
+                if (rType === 'type_b') typeLabel = `Recurring (${item.interval_minutes || 30}m)`;
+                else if (rType === 'type_c') typeLabel = `Timeslot (${item.timeslot_tier || 'Custom'})`;
+
+                let execModeHtml = `<span style="font-size: 11px; color: var(--text-muted); padding: 3px 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px;">${typeLabel}</span>`;
 
                 if (item.status === 'Completed') {
                     badgeClass = 'badge-completed';
@@ -615,6 +633,8 @@ async function fetchAutomations() {
                     badgeClass = 'badge-retrial';
                 } else if (item.status === 'Failed') {
                     badgeClass = 'badge-failed';
+                } else if (item.status === 'Disabled') {
+                    badgeClass = 'badge-disabled';
                 }
 
                 tr.innerHTML = `
@@ -631,13 +651,140 @@ async function fetchAutomations() {
             });
         }
 
+        renderLaneATable(data.automations);
+        renderLaneBTable(data.automations);
+        renderLaneCTable(data.automations);
         filterAutomationsCatalog();
     } catch (e) {
         console.error('Automations poll failed:', e);
     }
 }
 
+function formatReportRetries(item) {
+    const maxRetries = item.max_retries || 3;
+    const retryCount = (typeof item.retry_count === 'number') ? item.retry_count : 0;
+    return `${retryCount} / ${maxRetries}`;
+}
+
+function renderLaneATable(automations) {
+    const tbody = document.getElementById('lane-a-body');
+    if (!tbody) return;
+    const items = (automations || []).filter(r => (r.report_type || 'type_a').toLowerCase() === 'type_a');
+    tbody.innerHTML = '';
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">No Type A sequential reports configured in catalog. Click <strong>+ Add Report</strong> to register a pipeline.</td></tr>`;
+        return;
+    }
+    items.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        let badgeClass = 'badge-waiting';
+        if (item.status === 'Completed') badgeClass = 'badge-completed';
+        else if (item.status === 'Running') badgeClass = 'badge-running';
+        else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
+        else if (item.status === 'Failed') badgeClass = 'badge-failed';
+        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+
+        const retries = formatReportRetries(item);
+        const policyCell = (item.status === 'Disabled' || item.status === 'Failed')
+            ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
+            : `<span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span>`;
+
+        tr.innerHTML = `
+            <td style="color: var(--text-muted);">${index + 1}</td>
+            <td><strong style="color: #fff;">${escapeHtml(item.name)}</strong></td>
+            <td>${escapeHtml(item.owner || 'System')} / ${escapeHtml(item.team || 'General')}</td>
+            <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
+            <td>${retries}</td>
+            <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/${escapeHtml(item.name)}.json</code></td>
+            <td>${policyCell}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLaneBTable(automations) {
+    const tbody = document.getElementById('lane-b-body');
+    if (!tbody) return;
+    const items = (automations || []).filter(r => (r.report_type || '').toLowerCase() === 'type_b');
+    tbody.innerHTML = '';
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">No Type B recurring reports configured in catalog. Click <strong>+ Add Report</strong> to register a pipeline.</td></tr>`;
+        return;
+    }
+    items.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        let badgeClass = 'badge-waiting';
+        if (item.status === 'Completed') badgeClass = 'badge-completed';
+        else if (item.status === 'Running') badgeClass = 'badge-running';
+        else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
+        else if (item.status === 'Failed') badgeClass = 'badge-failed';
+        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+
+        const retries = formatReportRetries(item);
+        const interval = item.interval_minutes || 30;
+        const lastOut = item.last_output && item.last_output !== 'Unavailable' ? item.last_output : (item.status === 'Waiting' ? 'Staged for recurring dispatch' : '--');
+        const actionBtn = (item.status === 'Disabled' || item.status === 'Failed')
+            ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
+            : `<button type="button" class="btn-primary" onclick="runReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">▶ Run Now</button>`;
+
+        tr.innerHTML = `
+            <td style="color: var(--text-muted);">${index + 1}</td>
+            <td><strong style="color: #fff;">${escapeHtml(item.name)}</strong></td>
+            <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every ${interval} min</span></td>
+            <td><span style="color: #60a5fa; font-weight: 600;">${escapeHtml(formatTime12(item.scheduled_time || '08:30'))}</span></td>
+            <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
+            <td><span style="color: var(--text-muted); font-size: 12px;">${escapeHtml(lastOut)}</span></td>
+            <td>${retries}</td>
+            <td>${actionBtn}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function renderLaneCTable(automations) {
+    const tbody = document.getElementById('lane-c-body');
+    if (!tbody) return;
+    const items = (automations || []).filter(r => (r.report_type || '').toLowerCase() === 'type_c');
+    tbody.innerHTML = '';
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">No Type C timeslot reports configured in catalog. Click <strong>+ Add Report</strong> to register a pipeline.</td></tr>`;
+        return;
+    }
+    items.forEach((item) => {
+        const tr = document.createElement('tr');
+        let badgeClass = 'badge-waiting';
+        if (item.status === 'Completed') badgeClass = 'badge-completed';
+        else if (item.status === 'Running') badgeClass = 'badge-running';
+        else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
+        else if (item.status === 'Failed') badgeClass = 'badge-failed';
+        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+
+        const retries = formatReportRetries(item);
+        const tier = (item.timeslot_tier || 'CUSTOM').toUpperCase();
+        let tierBadge = `<span class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc;">Custom (${escapeHtml(item.scheduled_time || '08:30')})</span>`;
+        if (tier === 'BOD') tierBadge = `<span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">BOD (${escapeHtml(item.scheduled_time || '07:00')})</span>`;
+        else if (tier === 'MID') tierBadge = `<span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">MID (${escapeHtml(item.scheduled_time || '12:00')})</span>`;
+        else if (tier === 'EOD') tierBadge = `<span class="badge" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">EOD (${escapeHtml(item.scheduled_time || '20:30')})</span>`;
+
+        const actionBtn = (item.status === 'Disabled' || item.status === 'Failed')
+            ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
+            : `<button type="button" class="btn-primary" onclick="runReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">▶ Run Now</button>`;
+
+        tr.innerHTML = `
+            <td>${tierBadge}</td>
+            <td><strong style="color: #fff;">${escapeHtml(item.name)}</strong></td>
+            <td><span style="color: #fff; font-weight: 600;">${escapeHtml(formatTime12(item.scheduled_time || '08:30'))}</span></td>
+            <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
+            <td><span style="color: var(--text-muted); font-size: 12px;">${escapeHtml(formatTime12(item.last_run))}</span></td>
+            <td>${retries}</td>
+            <td>${actionBtn}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 function filterAutomationsCatalog() {
+
     const rawList = window.allAutomations || [];
 
     // Calculate Summary Metrics
@@ -741,6 +888,7 @@ function filterAutomationsCatalog() {
         else if (item.status === 'Running') badgeClass = 'badge-running';
         else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
+        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
 
         const isPython = (item.filetype || '').toLowerCase().includes('py');
         const runtimeBadgeClass = isPython ? 'badge-runtime-python' : 'badge-runtime-rscript';
@@ -781,6 +929,10 @@ function filterAutomationsCatalog() {
             <div class="automation-card-actions">
                 <span style="font-size: 11px; color: var(--text-muted);">Last: ${escapeHtml(item.last_run || '--')}</span>
                 <div style="display: flex; gap: 6px;">
+                    ${(item.status === 'Disabled' || item.status === 'Failed') ? `
+                    <button type="button" class="btn-card-action" onclick="enableReport('${escapeHtml(item.name)}')" title="Re-enable report for scheduling" style="color: #34d399; border-color: rgba(52, 211, 153, 0.35);">
+                        ▶ Enable
+                    </button>` : ''}
                     ${item.status !== 'Disabled' ? `
                     <button type="button" class="btn-card-action" onclick="disableReport('${escapeHtml(item.name)}')" title="Disable report from scheduling">
                         ⏸ Disable
@@ -1048,7 +1200,9 @@ async function handleAddReportSubmit(e) {
         if (data.ok) {
             closeAddReportModal();
             const laneLabel = report_type === 'type_b' ? 'Lane B' : (report_type === 'type_c' ? 'Lane C' : 'Lane A');
-            showSettingsToast(data.message || `Report '${name}' registered successfully in ${laneLabel}!`, 'success');
+            const msg = data.message || `Report '${name}' registered successfully in ${laneLabel}!`;
+            showToast(msg, 'success');
+            showSettingsToast(msg, 'success');
             await fetchAutomations();
             await fetchDashboardStats();
             if (typeof fetchLanesStatus === 'function') {
@@ -1074,10 +1228,116 @@ async function handleAddReportSubmit(e) {
     }
 }
 
-async function disableReport(name) {
-    if (!confirm(`Are you sure you want to disable report '${name}'? This will remove it from today's active execution queue.`)) {
-        return;
+let confirmModalResolver = null;
+
+function showConfirmModal({
+    title = 'Confirm Action',
+    subtitle = 'Operational guardrail confirmation',
+    message = 'Are you sure you want to proceed?',
+    warning = null,
+    confirmText = 'Confirm',
+    confirmClass = 'btn-destructive',
+    icon = '⚠️'
+} = {}) {
+    return new Promise((resolve) => {
+        confirmModalResolver = resolve;
+        const modal = document.getElementById('modal-confirm');
+        if (!modal) {
+            resolve(false);
+            return;
+        }
+
+        const titleEl = document.getElementById('modal-confirm-title');
+        const subEl = document.getElementById('modal-confirm-subtitle');
+        const msgEl = document.getElementById('modal-confirm-message');
+        const warnEl = document.getElementById('modal-confirm-warning');
+        const iconEl = document.getElementById('modal-confirm-icon');
+        const btnConfirm = document.getElementById('btn-confirm-action');
+
+        if (titleEl) titleEl.innerText = title;
+        if (subEl) subEl.innerText = subtitle;
+        if (msgEl) msgEl.innerText = message;
+        if (iconEl) iconEl.innerText = icon;
+
+        if (warnEl) {
+            if (warning) {
+                warnEl.innerText = warning;
+                warnEl.style.display = 'block';
+            } else {
+                warnEl.style.display = 'none';
+            }
+        }
+
+        if (btnConfirm) {
+            btnConfirm.innerText = confirmText;
+            btnConfirm.className = `btn-primary ${confirmClass}`;
+            btnConfirm.disabled = false;
+        }
+
+        modal.classList.add('active');
+        window.addEventListener('keydown', handleConfirmModalKeydown);
+    });
+}
+
+function closeConfirmModal(result = false) {
+    const modal = document.getElementById('modal-confirm');
+    if (modal) modal.classList.remove('active');
+    window.removeEventListener('keydown', handleConfirmModalKeydown);
+    if (confirmModalResolver) {
+        const resolve = confirmModalResolver;
+        confirmModalResolver = null;
+        resolve(result);
     }
+}
+
+function handleConfirmModalOverlayClick(e) {
+    if (e.target && e.target.id === 'modal-confirm') {
+        closeConfirmModal(false);
+    }
+}
+
+function handleConfirmModalKeydown(e) {
+    if (e.key === 'Escape') {
+        closeConfirmModal(false);
+    }
+}
+
+async function enableReport(name) {
+    try {
+        const res = await fetch('/api/automation/enable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast(data.message || `Report '${name}' enabled and restored to Waiting.`, 'success');
+            await fetchAutomations();
+            await fetchDashboardStats();
+            if (typeof fetchLanesStatus === 'function') {
+                await fetchLanesStatus();
+            }
+        } else {
+            showToast(data.error || 'Failed to enable report.', 'error');
+        }
+    } catch (e) {
+        console.error('Enable report error:', e);
+        showToast('Network error enabling report.', 'error');
+    }
+}
+
+async function disableReport(name) {
+    const confirmed = await showConfirmModal({
+        title: 'Disable Automation',
+        subtitle: 'Intraday queue suspension',
+        message: `Are you sure you want to disable report '${name}'? This will remove it from today's active execution queue.`,
+        warning: '⚠️ While disabled, this report will not be dispatched autonomously or manually until re-enabled.',
+        confirmText: '⏸ Disable Report',
+        confirmClass: 'btn-warning-action',
+        icon: '⏸️'
+    });
+
+    if (!confirmed) return;
 
     try {
         const res = await fetch('/api/automation/disable', {
@@ -1100,9 +1360,17 @@ async function disableReport(name) {
 }
 
 async function deleteReport(name) {
-    if (!confirm(`Are you sure you want to delete report '${name}'? This will remove it from the catalog and today's queue.`)) {
-        return;
-    }
+    const confirmed = await showConfirmModal({
+        title: 'Delete Automation',
+        subtitle: 'Permanent catalog & queue removal',
+        message: `Are you sure you want to permanently delete report '${name}'?`,
+        warning: '⚠️ This will immediately remove the report from storage/automations.json and cancel any pending queue executions.',
+        confirmText: '🗑 Delete Report',
+        confirmClass: 'btn-destructive',
+        icon: '🗑️'
+    });
+
+    if (!confirmed) return;
 
     try {
         const res = await fetch(`/api/automation/delete/${encodeURIComponent(name)}`, {
@@ -1110,15 +1378,18 @@ async function deleteReport(name) {
         });
         const data = await res.json();
         if (data.ok) {
-            showSettingsToast(data.message || `Report '${name}' deleted successfully.`, 'success');
+            showToast(data.message || `Report '${name}' deleted successfully.`, 'success');
             await fetchAutomations();
             await fetchDashboardStats();
+            if (typeof fetchLanesStatus === 'function') {
+                await fetchLanesStatus();
+            }
         } else {
-            showSettingsToast(data.error || 'Failed to delete report.', 'error');
+            showToast(data.error || 'Failed to delete report.', 'error');
         }
     } catch (e) {
         console.error('Delete report error:', e);
-        showSettingsToast('Network error deleting report.', 'error');
+        showToast('Network error deleting report.', 'error');
     }
 }
 
@@ -1558,11 +1829,24 @@ async function runReport(name) {
             body: JSON.stringify({ name })
         });
         const data = await res.json();
+        if (res.ok && data.ok) {
+            if (typeof showToast === 'function') {
+                showToast(data.message || `Triggered '${name}' successfully`, 'success');
+            }
+        } else {
+            if (typeof showToast === 'function') {
+                showToast(data.error || `Failed to run '${name}'`, 'error');
+            }
+        }
         fetchAutomations();
     } catch (e) {
         console.error('Failed to trigger report run:', e);
+        if (typeof showToast === 'function') {
+            showToast(`Error running '${name}': ${e.message}`, 'error');
+        }
     }
 }
+
 
 async function startScheduler() {
     if (transitionCooldownRemaining > 0) return;
@@ -1802,13 +2086,20 @@ async function triggerClockReset() {
         const res = await fetch('/api/settings/simulation/reset', { method: 'POST' });
         const data = await res.json();
         if (data.ok) {
+            showToast('Simulation clock reset to midnight.', 'success');
             showSettingsToast('Simulation clock reset to midnight.', 'success');
             showTestingToast('Simulation clock reset to midnight.', 'success');
             fetchDashboardStats();
             fetchTimeline();
+        } else {
+            const errMsg = data.error || 'Simulation clock cannot be reset while Paradiso scheduler or jobs are running.';
+            showToast(errMsg, 'error');
+            showSettingsToast(errMsg, 'error');
+            showTestingToast(errMsg, 'error');
         }
     } catch (e) {
         console.error('Error resetting clock:', e);
+        showToast('Failed to reset simulation clock.', 'error');
         showSettingsToast('Failed to reset simulation clock.', 'error');
         showTestingToast('Failed to reset simulation clock.', 'error');
     }

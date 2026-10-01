@@ -30,6 +30,12 @@ class AutomationController:
 
     def get_automations(self):
         reports = self.automation_service.get_all(serialized=True)
+        if self.intraday_service:
+            max_retries = self.intraday_service.max_retries
+            for rep in reports:
+                name = rep.get("name", "")
+                rep["retry_count"] = self.intraday_service.retry_counts.get(name, 0)
+                rep["max_retries"] = max_retries
         return jsonify({"ok": True, "automations": reports}), 200
 
     def add_automation(self):
@@ -248,11 +254,15 @@ class AutomationController:
                 self.intraday_service.type_c_retry_after.pop(name, None)
                 self.intraday_service.type_c_warned.discard(name)
                 self.intraday_service.retry_counts.pop(name, None)
+                self.intraday_service.intraday_repo.clear_non_completed_run(today_date, name)
                 if report.report_type == "type_a" and self.intraday_service.lane_a_active:
                     day = self.intraday_service.intraday_repo.get_day(today_date)
                     already_ran = self.intraday_service._get_completed_or_exhausted_reports(day) if day else set()
                     if name not in already_ran and name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
                         self.intraday_service.waitlist.append(name)
+                        self.intraday_service.all_completed = False
+                        self.intraday_service._rotation_cooldown_until = 0.0
+                        self.intraday_service._cycle_pass_reports.add(name)
 
                 self.intraday_service.intraday_repo.add_timeline_event(
                     date=today_date,

@@ -1,6 +1,6 @@
 # Resolved Findings Registry — Paradiso
 
-**Date:** 2026-09-25 23:05 (Local Time)  
+**Date:** 2026-10-01 23:47 (Local Time)  
 **Auditor:** Independent Adversarial Auditor  
 **Location:** `artifacts/audits/resolved/resolved_findings_registry.md`
 
@@ -20,13 +20,18 @@ The following historical audit reports have had all reported findings independen
 | [`audit_20260924_1130.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260924_1130.md) | Verification of F-015 - F-019 remediations | F-015 through F-019 verification | **RESOLVED & ARCHIVED** |
 | [`audit_20260924_1515.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260924_1515.md) | Testing Lab UI segregation & production cleanup | F-020 (Testing Lab segregation) | **RESOLVED & ARCHIVED** |
 | [`audit_20260925_0830.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260925_0830.md) | 3-Lane Scheduling Engine comprehensive audit | F-021 through F-024 (initial findings) | **RESOLVED & ARCHIVED** |
-| [`audit_20260925_0850.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260925_0850.md) | Verification of F-021 - F-024 remediations | F-021 through F-024 verification | **RESOLVED & ARCHIVED** |
-| [`audit_20260925_2245.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260925_2245.md) | Unified execution window audit & defeat device discovery | F-025 through F-027 (initial findings) | **RESOLVED & ARCHIVED** |
-| [`audit_20260925_2305.md`](file:///c:/Users/desktop/Documents/work\celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260925_2305.md) | Verification of F-025 - F-027 remediations | F-025 through F-027 verification | **RESOLVED & ARCHIVED** |
-| [`audit_20260926_0055.md`](file:///c:/Users/desktop/Documents/work\celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260926_0055.md) | Midnight rollover & Concurrency expansion audit | F-028 through F-030 initial findings | **RESOLVED & ARCHIVED** |
-| [`audit_20260926_0730.md`](file:///c:/Users/desktop/Documents/work\celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260926_0730.md) | Batch 4 Adversarial Audit: Cold boot & lifecycle leakage | F-031 through F-034 initial findings | **RESOLVED & ARCHIVED** |
-| [`audit_20260928_1945.md`](file:///c:/Users/desktop/Documents/work\celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260928_1945.md) | Batch 5 Remediation Audit: Heuristic & window leakage | F-032, F-035, F-033, F-036 verification | **RESOLVED & ARCHIVED** |
-| [`audit_20260928_2030.md`](file:///c:/Users/desktop/Documents/work\celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260928_2030.md) | Milestone P2.2 Investigation: Catch-up policies & timeslots | F-037 through F-039 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20260925_0850.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260925_0850.md) | Verification of F-021 - F-024 remediations | F-021 through F-024 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20260925_2245.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260925_2245.md) | Unified execution window audit & defeat device discovery | F-025 through F-027 (initial findings) | **RESOLVED & ARCHIVED** |
+| [`audit_20260925_2305.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260925_2305.md) | Verification of F-025 - F-027 remediations | F-025 through F-027 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20260926_0055.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260926_0055.md) | Midnight rollover & Concurrency expansion audit | F-028 through F-030 initial findings | **RESOLVED & ARCHIVED** |
+| [`audit_20260926_0730.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260926_0730.md) | Batch 4 Adversarial Audit: Cold boot & lifecycle leakage | F-031 through F-034 initial findings | **RESOLVED & ARCHIVED** |
+| [`audit_20260928_1945.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260928_1945.md) | Batch 5 Remediation Audit: Heuristic & window leakage | F-032, F-035, F-033, F-036 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20260928_2030.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260928_2030.md) | Milestone P2.2 Investigation: Catch-up policies & timeslots | F-037 through F-039 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20260928_2155.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260928_2155.md) | Batch 7 Adversarial Audit: Disabled run bypass & Lane B spin | F-040 through F-042 initial findings | **RESOLVED & ARCHIVED** |
+| [`audit_20260928_2235.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260928_2235.md) | Batch 7 Verification & F-043 Discovery | F-040..F-042 verification, F-043 discovery | **RESOLVED & ARCHIVED** |
+| [`audit_20260929_0055.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20260929_0055.md) | Batch 7 Final Verification & Batch 8 Audit Pass | F-043 verification, F-044..F-047 discovery | **RESOLVED & ARCHIVED** |
+| [`audit_20261001_2235.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/audit_20261001_2235.md) | Batch 8 Remediation Re-Audit Verification | F-044 through F-047 verification | **RESOLVED & ARCHIVED** |
+| [`audit_20261001_2315.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20261001_2315.md) | Batch 9 Frontend-to-Backend Integrity Audit & Verification | F-048 through F-052 discovery & verification | **RESOLVED & VERIFIED** |
 
 ---
 
@@ -55,7 +60,7 @@ The following historical audit reports have had all reported findings independen
 | **F-017** | LOW | LOG HYGIENE | I-7, I-8 | Test receipt contamination of production `paradiso/logs/` | `PARADISO_LOGS_DIR` isolation across test fixtures; 8 debris logs purged; verified in `test_f017_*` |
 | **F-018** | LOW | REPO HYGIENE | I-9 | Missing `.gitignore` & tracked bytecode cache (`.pyc`) | Root `.gitignore` created; `.pyc` untracked from git index; verified in `test_f018_*` |
 | **F-019** | LOW | DOC-DRIFT | I-7 | Missing `run_tests.py` entry point & outdated 48-test doc count | `run_tests.py` created at root and `paradiso/`; doc updated to 82 tests; verified in `test_f019_*` |
-| **F-020** | LOW | UI / SAFETY | I-7, I-9 | Segregation of testing controls into unified Testing Lab UI | Segregated `#view-testing` tab, live mode badge, top-bar reset removal; verified in `test_f020_*` |
+| **F-020** | LOW | UI / SAFETY | I-7, I-9 | Segregation of testing controls into unified Testing Lab UI | Segregated `#view-testing` tab, live mode badge, top-bar reset removal; verified in `test_f20_*` |
 | **F-021** | CRITICAL | RECEIPT CONTRACT | I-7, I-8 | Exact receipt naming mismatch in Type B & C pipeline scripts | Emitted exact registered filenames with spaces; verified in `poc_f021_f024_verification.py` & `test_f021_*` |
 | **F-022** | HIGH | QUEUE & CONCURRENCY | I-2, I-6 | Unbounded 500ms rapid spin on dependency skips across Lane B and Lane C | Lane B interval stamping + Lane C 5m backoff cooldown; verified in `poc_f021_f024_verification.py` & `test_f022_*` |
 | **F-023** | HIGH | SECURITY & INTEGRITY | BG-001, I-7, I-9 | BG-001 Settings guardrail bypassed during Lane B or Lane C runs | Multi-lane `has_active_runs` enforcement (HTTP 409); verified in `poc_f021_f024_verification.py` & `test_f023_*` |
@@ -79,6 +84,15 @@ The following historical audit reports have had all reported findings independen
 | **F-041** | CRITICAL | DISPATCH & RESOURCE EXHAUSTION | I-1, I-6 | Lane B Dispatches Permanently Failed Reports in Unbounded Infinite Loop | `type_b_exhausted` + retry budget check in `tick()`; verified in `test_f041_*` |
 | **F-042** | MEDIUM | CLOCK INTEGRITY & GUARDRAILS | BG-001, I-3, I-7 | `POST /api/settings/simulation/reset` Bypasses BG-001 Idle-Only Guardrail | Multi-lane active check returning HTTP 409 Conflict; verified in `test_f042_*` |
 | **F-043** | MEDIUM | DISPATCH & STATE INTEGRITY | I-1, I-8 | Manual Run of Failed Lane B Report Silently Re-Arms Automatic Dispatch | HTTP 409 guard on Failed/exhausted runs + enable required; verified in `test_f043_*` |
+| **F-044** | HIGH | CROSS-LANE ISOLATION | I-1, I-8, V-04 | Cross-Lane Operating Window Override Leaks into Lane A Waitlist in `add_automation` | Strict `lane_a_active` check without `force_open` leak; verified in `poc_f044_*` & `test_f044_*` |
+| **F-045** | HIGH | SCHEDULER & API INTEGRITY | I-7, I-8 | Re-Enabled Lane C Reports Are Permanently Starved from Autonomous Dispatch | Evicts `type_c_ran_today`, `type_c_retry_after`, `type_c_warned` & clears failed run in storage; verified in `poc_f045_*` & `test_f045_*` |
+| **F-046** | LOW | INPUT VALIDATION | I-7, I-9 | Zero-Interval Validation Bypass in `AutomationController.add_automation` | Explicit `None` check before `int(raw_interval) < 1` validation (HTTP 400); verified in `poc_f046_*` & `test_f046_*` |
+| **F-047** | MEDIUM | SCHEDULE SYNCHRONIZATION | I-3, I-7, F-027 | Timeslot Tier Resolution Desync Between UI Presets and Backend Scheduler | UI presets aligned (`07:00`, `12:00`, `20:30`) + backend honors explicit `scheduled_time`; verified in `poc_f047_*` & `test_f047_*` |
+| **F-048** | HIGH | STATE-MACHINE / API / UI | I-7, I-8, I-10, BG-001 | Stopping All Lanes via Web UI Leaves `Paradiso` Daemon Running, Permanently Locking Settings & Simulation Clock Reset (`HTTP 409`) | `Paradiso.stop_lane()` sets `_stop_event` and joins `_thread` when `not intraday_service.is_active`; verified in `poc_f048_f052_*` & `test_f048_*` |
+| **F-049** | HIGH | UI / API | I-7, I-8 | `POST /api/automation/enable` Orphaned from Web UI & Missing `badge-disabled` Class in Catalog | `enableReport()` wired to `/api/automation/enable`, `▶ Enable` buttons in Catalog & Lane A/B/C tables, `badge-disabled` styled; verified in `poc_f048_f052_*` & `test_f049_*` |
+| **F-050** | MEDIUM | UI / API | I-2, I-7, I-8 | Hardcoded Frontend Retry Telemetry Falsely Reports `1 / 3` Error Retries on Dependency Skips | `GET /api/automations` enriched with `retry_count` & `max_retries`; `formatReportRetries(item)` in `app.js`; verified in `poc_f048_f052_*` & `test_f050_*` |
+| **F-051** | MEDIUM | UI / HONEST API | I-7, BG-001 | Silent Suppression of HTTP 409 on Clock Reset & Hidden Toast on Report Registration | `triggerClockReset()` surfaces `!data.ok` via `showTestingToast`/`showToast`; `handleAddReportSubmit()` calls `showToast()`; verified in `poc_f048_f052_*` & `test_f051_*` |
+| **F-052** | LOW | UI / DOC-DRIFT | I-3, I-7 | Unbound Lane B `Active Workers` Metric Card & Residual `EOD (21:00)` Labels in `index.html` | Added `id="metric-b-active"` bound in `updateLaneUI('type_b')` & updated all 3 `EOD (21:00)` labels to `EOD (20:30)`; verified in `poc_f048_f052_*` & `test_f052_*` |
 
 ---
 
@@ -263,3 +277,41 @@ The following historical audit reports have had all reported findings independen
 ### F-043: Manual Run Execution Guarded Against Failed/Exhausted Re-Arming
 - **Mechanism:** In `ExecutionController.run_automation()` and `IntradayService.trigger_manual_run()`, blocked manual execution for reports that are in `Failed` status or present in `type_b_exhausted` with HTTP 409 Conflict. Updated `IntradayService._trigger_type_b_report._on_good()` to prevent clearing `retry_counts` if the report is in `type_b_exhausted`. Mandated that re-arming requires explicit administrative re-enablement via `POST /api/automation/enable`.
 - **Evidence:** Calling `POST /api/automation/run` on a Failed or exhausted Type B report returns HTTP 409 Conflict. Autonomous scheduling remains suppressed until explicitly re-enabled via `POST /api/automation/enable`. Verified in `tests/test_audit_fixes.py` (`test_f043_manual_run_failed_report_rejected` and `test_f043_failed_report_rearmed_only_via_enable`).
+
+### F-044: Cross-Lane Operating Window Override Isolation in `add_automation`
+- **Mechanism:** In `AutomationController.add_automation()`, evaluated `lane_a_active = bool(self.intraday_service.lane_a_active) if self.intraday_service else False`, removing `or self.intraday_service.force_open`.
+- **Evidence:** Starting Lane B or Lane C with `force_open=True` while Lane A is stopped does not cause newly registered Type A reports to leak into `waitlist`. Verified in `poc_f044_lane_a_force_open_leak_in_add_automation.py` and `tests/test_audit_fixes.py` (`test_f044_add_automation_does_not_leak_on_cross_lane_force_open`).
+
+### F-045: Re-Enabled Lane C Autonomous Dispatch Restoration
+- **Mechanism:** In `AutomationController.enable_automation()`, added eviction of `name` from `type_c_ran_today`, `type_c_retry_after`, and `type_c_warned`, plus `intraday_repo.clear_non_completed_run(today_date, name)` in `Intraday` model so non-completed run entries in `day.reports_ran` do not re-hydrate into `type_c_ran_today` on subsequent ticks.
+- **Evidence:** Re-enabling a Failed Lane C report via `POST /api/automation/enable` clears both in-memory and persisted failure suppression, allowing `tick()` to dispatch the report at its scheduled timeslot. Verified in `poc_f045_type_c_enable_starvation.py` and `tests/test_audit_fixes.py` (`test_f045_re_enabled_type_c_clears_ran_today_and_dispatches`).
+
+### F-046: Zero-Interval Input Validation Enforcement
+- **Mechanism:** In `AutomationController.add_automation()`, replaced `int(data.get("interval_minutes") or 30)` with explicit `raw_interval is None` check before integer parsing and `< 1` validation.
+- **Evidence:** Submitting `{"interval_minutes": 0}` to `POST /api/automation/add` returns HTTP 400 Bad Request instead of silently coercing to `30`. Verified in `poc_f046_zero_interval_validation_bypass.py` and `tests/test_audit_fixes.py` (`test_f046_zero_interval_rejected_with_400`).
+
+### F-047: UI Presets & Backend Scheduler Timeslot Tier Synchronization
+- **Mechanism:** Aligned `BOD` (`07:00`), `MID` (`12:00`), and `EOD` (`20:30`) preset labels and auto-fill handlers across `index.html` and `app.js`, and updated `IntradayService.tick()` to prioritize explicit `rep.scheduled_time` before falling back to tier milestone defaults.
+- **Evidence:** UI preset times match backend schedule definitions 1-to-1, and custom `scheduled_time` values on tiered reports are honored without premature execution. Verified in `poc_f047_timeslot_tier_desync.py` and `tests/test_audit_fixes.py` (`test_f047_timeslot_tier_and_scheduled_time_alignment`).
+
+### F-048: Daemon Thread Shutdown & Settings Lock Release When All Lanes Stop
+- **Mechanism:** In `Paradiso.stop_lane()`, added `if not self.intraday_service.is_active:` check that sets `self._stop_event.set()`, joins `self._thread`, and clears `self._thread = None`. In `app.js`, synced `isSchedulerRunning` and `updateSettingsLockUI()` across `fetchLanesStatus()`, `startLane()`, and `stopLane()`.
+- **Evidence:** Stopping all active lanes via `POST /api/paradiso/lane/stop` immediately transitions `GET /api/paradiso/status` to `"running": false`, unlocks `#btn-save-settings`, and allows `POST /api/settings` and `POST /api/settings/simulation/reset` to succeed with HTTP 200 OK. Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f048_stopping_all_lanes_unlocks_scheduler_and_settings`).
+
+### F-049: Web UI Re-Enable Control & Disabled Badge Styling
+- **Mechanism:** Implemented `enableReport(name)` in `app.js` wired to `POST /api/automation/enable`, rendered `▶ Enable` buttons in the Automations Catalog and Lane A, Lane B, and Lane C tables for reports in `Disabled` or `Failed` status, and added `else if (item.status === 'Disabled') badgeClass = 'badge-disabled';` in `filterAutomationsCatalog()`.
+- **Evidence:** Operators can re-enable `Disabled` and `Failed` reports directly from the Web UI without destructive resets, and `Disabled` badges render with `.badge-disabled` styling. Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f049_enable_endpoint_connected_in_frontend_and_disabled_badge_styled`).
+
+### F-050: Live Retry Count Telemetry in `/api/automations` and Lane Renderers
+- **Mechanism:** Enriched `AutomationController.get_automations()` with `rep["retry_count"] = self.intraday_service.retry_counts.get(name, 0)` and `rep["max_retries"] = self.intraday_service.max_retries`, and replaced the hardcoded status ternary in `app.js` with `formatReportRetries(item)`.
+- **Evidence:** Zero-penalty dependency skips (`status == "Retrial"`, `retry_count == 0`) accurately display `0 / 3` retries in Lane A/B/C tables, while genuine runtime errors display exact live counts (`1 / 3`, `2 / 3`, `3 / 3`). Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f050_automations_api_and_ui_accurate_retry_counts`).
+
+### F-051: Clock Reset Error Toast & Visible Report Registration Toast
+- **Mechanism:** Added an `else` (`!data.ok`) error handler in `triggerClockReset()` calling `showToast`, `showSettingsToast`, and `showTestingToast`, and added `showToast(msg, 'success')` to `handleAddReportSubmit()` in `app.js`.
+- **Evidence:** HTTP 409 rejections on simulation clock reset are surfaced in the UI, and registering a report from any tab displays a visible confirmation toast. Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f051_clock_reset_surfaces_409_and_add_report_shows_visible_toast`).
+
+### F-052: Lane B Active Workers Binding & `EOD (20:30)` Label Alignment
+- **Mechanism:** Added `id="metric-b-active"` to the `#view-type-b` Active Workers metric card in `index.html`, bound it in `updateLaneUI('type_b')` in `app.js`, and aligned all 3 `EOD (21:00)` / `EOD Slot (21:00)` labels in `index.html` (lines 168, 535, 570) to `20:30`.
+- **Evidence:** Lane B dynamically updates its in-flight worker count and all EOD schedule references in `index.html` consistently read `20:30`. Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f052_lane_b_active_workers_bound_and_eod_2030_consistent`).
+
+

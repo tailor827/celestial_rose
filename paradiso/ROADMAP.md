@@ -40,33 +40,34 @@ flowchart TD
 
 ### Phase 1: Core 3-Lane Engine & Guardrail Baseline (v1.0 — Current)
 > [!NOTE]
-> **Status: 100% COMPLETE & AUDIT PASSED** (139/139 Unit Tests Passing — 0 Active Audit Defects)
+> **Status: 100% COMPLETE & AUDIT PASSED** (146/146 Unit Tests Passing — 0 Active Audit Defects across F-001 to F-052)
 
 - [x] **Lane A (Sequential Queue & Concurrency Pool):**
   - FIFO queue execution within intraday window (07:00 – 20:59) with 22:00 hard cutoff.
   - Zero-penalty dependency skip rotation (`Retrial`) and genuine error retries (3x limit).
   - Manual run prevention (`HTTP 403 Forbidden`).
-  - Pre-existing closed day record cleansing on boot / start (F-028).
+  - Pre-existing closed day record cleansing on boot / start (F-028, F-032).
 - [x] **Lane B (Recurring Intervals):**
   - Interval-based background pipelines with self-overlap prevention (`active_runs_type_b`).
   - Rapid spin elimination: interval cooldown tracking on dependency skips (F-022).
+  - Exhausted/Failed report isolation preventing infinite recurring loop and accidental manual re-arming (F-041, F-043).
   - On-demand manual execution permitted (`HTTP 200`).
 - [x] **Lane C (Pinned Timeslots):**
   - Wall-clock time-pinned reports (BOD 07:00, MID 12:00, EOD 20:30, Custom `HH:MM`).
   - Once-per-day execution enforcement (`type_c_ran_today`).
   - Rapid spin elimination: 5-minute backoff cooldown on skips and retryable errors (F-022).
-  - Mid-day reboot hydration from storage preventing duplicate dispatches (F-029).
+  - Mid-day reboot hydration from storage preventing duplicate dispatches (F-029, F-031, F-045).
   - On-demand manual execution permitted (`HTTP 200` during `OPEN`).
 - [x] **Cross-Lane Security & Invariants:**
-  - **Universal Intraday Window Yielding:** All lanes (Lane A, B, C), manual runs, and independent lane starts strictly yield to 07:00–21:00 intraday window, with `WAITING_TO_CLOSE` wrap-up and `22:00` hard cutoff (F-026: out-of-window lane start returns HTTP `409 Conflict`).
+  - **Universal Intraday Window Yielding:** All lanes (Lane A, B, C), manual runs, and independent lane starts strictly yield to 07:00–21:00 intraday window, with `WAITING_TO_CLOSE` wrap-up and `22:00` hard cutoff (F-026, F-033, F-044).
   - **Clock Subsystem Integrity:** Cleaned of all `sys.argv` inspection and spoofed timestamp logic (F-025).
   - **Distinct Report Invariant:** A report exists in strictly one lane across the entire catalog (`HTTP 409 Conflict` on duplicate names).
-  - **Per-Lane Controls:** Independent Start/Stop endpoints (`POST /api/paradiso/lane/start`, `POST /api/paradiso/lane/stop`) with 10-second transition cooldown buffer (`HTTP 429`).
-  - **BG-001 Multi-Lane Guardrail:** Idle-only configuration mutations enforced across all lanes via `has_active_runs` (F-023).
-  - **API Validation:** Strict canonical lane identifier enforcement (`VALID_LANES`, F-024).
+  - **Per-Lane Controls & Daemon Lifecycle:** Independent Start/Stop endpoints (`POST /api/paradiso/lane/start`, `POST /api/paradiso/lane/stop`) with 10-second transition cooldown buffer (`HTTP 429`), automatically stopping the background daemon loop and releasing configuration locks when all lanes are stopped (F-048).
+  - **BG-001 Multi-Lane Guardrail:** Idle-only configuration and simulation clock reset mutations enforced across all lanes via `has_active_runs` (F-023, F-042, F-051).
+  - **API Validation:** Strict canonical lane identifier enforcement (`VALID_LANES`, F-024) and interval bounds validation (F-046).
   - **Section 12 Receipt Parity:** Exact 1-to-1 filename matching between script `REPORT_NAME` and `storage/automations.json` (F-021).
-  - **EOD 20:30 Consistency:** Complete alignment of EOD milestone timing across docs, config, and scheduler (F-027).
-  - **Web UI HTTP 409 Error Toasts:** Universal `showToast` system cleanly reporting lane start window rejection errors (F-030).
+  - **EOD 20:30 Consistency:** Complete alignment of EOD milestone timing across docs, UI, config, and scheduler (F-027, F-047, F-052).
+  - **Frontend-to-Backend Integrity:** Dynamic Lane A/B/C tables without hardcoded mock data, native confirmation modals (`#modal-confirm`) replacing browser `confirm()`/`alert()`, live error retry telemetry (`retry_count / max_retries`, F-050), and interactive `▶ Enable` recovery buttons for `Disabled` and `Failed` reports (F-049).
 
 ---
 
@@ -76,11 +77,12 @@ flowchart TD
 
 | Lane / Component | Feature Description | Blast Radius & Technical Consideration | Priority |
 |---|---|---|---|
-| **Lane A** | **Configurable Concurrency Pool (`max_concurrent_run: N`)** `[DONE - VERIFIED]` | Expands Lane A from strict 1-by-1 to a configurable slot semaphore pool ($N \ge 1$, default $1$, max $20$). Queue pass tracking (`_evaluate_pass_completion`) defers starvation cooldown until all parallel slots conclude; dynamically hot-reloads via Settings API. Verified with 102/102 unit tests. | **HIGH** |
+| **Lane A** | **Configurable Concurrency Pool (`max_concurrent_run: N`)** `[DONE - VERIFIED]` | Expands Lane A from strict 1-by-1 to a configurable slot semaphore pool ($N \ge 1$, default $1$, max $20$). Queue pass tracking (`_evaluate_pass_completion`) defers starvation cooldown until all parallel slots conclude; dynamically hot-reloads via Settings API. | **HIGH** |
 | **Lane B** | **Operating Window Masking** | Enables recurring intervals to be constrained within specific operating hours (e.g., run every 15 minutes, but only between 08:30 and 17:30). | **MEDIUM** |
 | **Lane B** | **Interval Jitter & Drift Compensation** | Adds $\pm 5\%$ randomized jitter to avoid thundering-herd spikes when multiple interval pipelines share identical period boundaries. | **LOW** |
-| **Lane C** | **Missed Window Catch-up Policy (`lane_c_catch_up_policy`)** `[DONE - VERIFIED]` | Configurable behavior when the scheduler is offline during a pinned timeslot: `CATCH_UP_IMMEDIATE` (run once when booted), `SKIP_UNTIL_NEXT_DAY`, or `WARN_OPERATOR`. Supported globally and via per-report overrides (`Report.catch_up_policy`). Hardened against non-canonical time strings (F-037), API policy dropping (F-038), and operational reset warned set retention (F-039). Verified with 7 dedicated unit tests (128/128 full suite passing). | **HIGH** |
+| **Lane C** | **Missed Window Catch-up Policy (`lane_c_catch_up_policy`)** `[DONE - VERIFIED]` | Configurable behavior when the scheduler is offline during a pinned timeslot: `CATCH_UP_IMMEDIATE` (run once when booted), `SKIP_UNTIL_NEXT_DAY`, or `WARN_OPERATOR`. Supported globally and via per-report overrides (`Report.catch_up_policy`). Hardened against non-canonical time strings (F-037), API policy dropping (F-038), and operational reset warned set retention (F-039). | **HIGH** |
 | **Lane C** | **Multi-Timeslot Pinned Reports** | Allows a single report to pin multiple timeslots in a day (e.g. Morning 08:30 AND Afternoon 16:30) without duplicating records. | **MEDIUM** |
+| **UI / Web** | **Dynamic Lane Tables & Native Confirmation Modals** `[DONE - VERIFIED]` | Dynamic rendering for Lane A, Lane B, and Lane C tables with live retry counts, active worker metrics, `▶ Enable` recovery controls, and native obsidian confirmation modals (`#modal-confirm`). | **HIGH** |
 | **UI / Web** | **Per-Lane Filter & Quick Actions** | Filter Today's Executions table and Automations catalog directly by Lane badge (A / B / C) with 1-click status toggling. | **MEDIUM** |
 
 ---
@@ -121,12 +123,13 @@ flowchart TD
     ├── Distinct Report Invariant              [DONE]
     ├── Independent Lane Controls              [DONE]
     ├── Universal Intraday Window Yielding     [DONE]
-    └── F-021 - F-047 Audit Remediations       [DONE - VERIFIED]
+    └── F-001 - F-052 Audit Remediations       [DONE - VERIFIED]
 
-[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 139/139 TESTS PASSING]
+[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 146/146 TESTS PASSING]
     ├── [P2.1] Lane A Concurrency Expansion    [DONE - VERIFIED]
     ├── [P2.2] Lane C Missed Window Catch-up   [DONE - VERIFIED]
     ├── [UI] 3-Lane Add Report Modal & Form    [DONE - VERIFIED]
+    ├── [UI] Dynamic Lane Tables & Modals      [DONE - VERIFIED]
     ├── [P2.3] Lane B Window Masking           [PLANNED]
     └── [P2.4] Multi-Timeslot Support          [PLANNED]
 

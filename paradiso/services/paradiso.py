@@ -121,6 +121,11 @@ class Paradiso:
                     return TransitionResult(False, "cooldown", remaining)
 
             self.intraday_service.stop_lane(norm)
+            if not self.intraday_service.is_active:
+                self._stop_event.set()
+                if self._thread is not None and self._thread.is_alive() and threading.current_thread() is not self._thread:
+                    self._thread.join(timeout=2.0)
+                self._thread = None
             self._lane_transition_times[norm] = time.time()
             self._last_transition_time = time.time()
             return TransitionResult(True, "stopped", 0.0)

@@ -1175,6 +1175,42 @@ body {
     justify-content: flex-end;
 }
 
+.modal-confirm-card {
+    max-width: 480px;
+    border-color: rgba(239, 68, 68, 0.3);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(239, 68, 68, 0.08);
+}
+
+.btn-destructive {
+    background: rgba(239, 68, 68, 0.16) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    color: #f87171 !important;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-destructive:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.28) !important;
+    border-color: #ef4444 !important;
+    color: #fecaca !important;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+}
+
+.btn-warning-action {
+    background: rgba(245, 158, 11, 0.16) !important;
+    border-color: rgba(245, 158, 11, 0.5) !important;
+    color: #fbbf24 !important;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-warning-action:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.28) !important;
+    border-color: #f59e0b !important;
+    color: #fef3c7 !important;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+}
+
 /* ==========================================================================
    Settings Subsystem Styles
    ========================================================================== */

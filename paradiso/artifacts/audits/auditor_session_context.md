@@ -3,12 +3,12 @@
 **Role:** Independent Adversarial Auditor  
 **Target System:** Paradiso Daemon Scheduling Engine & Web UI (3-Lane Architecture)  
 **Audit Mandate Reference:** [`artifacts/audits/AUDITOR.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/AUDITOR.md)  
-**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20260929_0055.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20260929_0055.md)  
+**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20261001_2315.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20261001_2315.md)  
 **Outstanding Findings Dossier:** [`artifacts/audits/ongoing/outstanding_findings.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/outstanding_findings.md)  
 **Resolved Findings Registry:** [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md)  
 **Builder Context Reference:** [`artifacts/dev/dev_session_context.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/dev/dev_session_context.md)  
-**Last Updated:** 2026-09-29 00:55 (Local Time)  
-**Current Operating Window State:** `WAITING_TO_OPEN` (00:00 – 06:59)
+**Last Updated:** 2026-10-01 23:47 (Local Time)  
+**Current Operating Window State:** `CLOSED` (22:00 – 23:59)
 
 ---
 
@@ -33,35 +33,34 @@ All incoming and active auditors must strictly adhere to the operational directi
 
 | Invariant | Definition & Rule | Status | Breached By |
 |---|---|---|---|
-| **I-1: Single-Flight & Lane Concurrency** | Lane A sequential FIFO (up to `max_concurrent_run`). Per-report concurrency prevention in Lane B and Lane C. Strict cross-lane isolation. | **BREACHED** | **F-044** (Cross-lane force_open leak into Lane A waitlist) |
-| **I-2: Dependency Wait vs. Error Retry** | Upstream dependency skips rotate or back off with **zero penalty**. Genuine errors increment retry counter up to 3x. | **VERIFIED HARDENED** | — |
-| **I-3: State Machine & Window Rules** | Strict 24h sequencing. Hard cutoff terminates jobs at 22:00. Accurate timeslot mapping. | **BREACHED** | **F-047** (UI preset desync: BOD 08:30 vs 07:00, MID 12:30 vs 12:00, EOD 16:30 vs 20:30) |
+| **I-1: Single-Flight & Lane Concurrency** | Lane A sequential FIFO (up to `max_concurrent_run`). Per-report concurrency prevention in Lane B and Lane C. Strict cross-lane isolation. | **VERIFIED HARDENED** | — (F-044 resolved) |
+| **I-2: Dependency Wait vs. Error Retry** | Upstream dependency skips rotate or back off with **zero penalty**. Genuine errors increment retry counter up to 3x. | **VERIFIED HARDENED** | — (F-050 resolved) |
+| **I-3: State Machine & Window Rules** | Strict 24h sequencing. Hard cutoff terminates jobs at 22:00. Accurate timeslot mapping. | **VERIFIED HARDENED** | — (F-047, F-052 resolved) |
 | **I-4: Midnight & Cold Boot** | Consistent state reset. Cold boot never leaks prior day data. | **VERIFIED HARDENED** | — |
 | **I-5: Intentional Kills are Silent** | Stop/reset/cutoff terminate cleanly without retry penalty. | **VERIFIED HARDENED** | — |
 | **I-6: Storage Atomicity & Durability** | Atomic read-modify-write; corrupted files preserved with `.bak`. | **VERIFIED HARDENED** | — |
-| **I-7: Honest API** | Proper HTTP error codes; never return `{"ok": true}` on failure or starvation. Accurate UI representations. | **BREACHED** | **F-045, F-046, F-047** (Enabled report starved, interval 0 coerced, UI schedule desync) |
-| **I-8: Queue / Storage / Memory Convergence** | All state tracking maps must remain synchronized. | **BREACHED** | **F-044, F-045** (Waitlist queued while stopped, type_c_ran_today not evicted on enable) |
-| **I-9: Security Boundaries** | Path traversal blocked, secrets masked, safe subprocess invocation, strict input validation. | **BREACHED** | **F-046** (Interval 0 validation bypass) |
-| **I-10: Hot-Reload Safety** | Settings changes apply without deadlock. | **VERIFIED HARDENED** | — |
+| **I-7: Honest API / UI** | Proper HTTP error codes; never return `{"ok": true}` on failure or starvation. Accurate UI representations. | **VERIFIED HARDENED** | — (F-048..F-052 resolved) |
+| **I-8: Queue / Storage / Memory Convergence** | All state tracking maps and UI telemetry must remain synchronized. | **VERIFIED HARDENED** | — (F-048..F-050 resolved) |
+| **I-9: Security Boundaries** | Path traversal blocked, secrets masked, safe subprocess invocation, strict input validation. | **VERIFIED HARDENED** | — (F-046 resolved) |
+| **I-10: Hot-Reload Safety** | Settings changes apply without deadlock when lanes are stopped. | **VERIFIED HARDENED** | — (F-048 resolved) |
 | **I-11: Deadlock Freedom** | Strict lock hierarchy. | **VERIFIED HARDENED** | — |
-| **BG-001: Idle-Only Settings Guardrail** | Settings mutation and simulation reset while active rejected with HTTP 409. | **VERIFIED HARDENED** | (F-042 verified hardened) |
+| **BG-001: Idle-Only Settings Guardrail** | Settings mutation and simulation reset while active rejected with HTTP 409, and unlocked when idle. | **VERIFIED HARDENED** | — (F-048, F-051 resolved) |
 | **BG-002: Transition Cooldown Guardrail** | Rapid start/stop rejected within 10s window. | **VERIFIED HARDENED** | — |
 
 ---
 
-## 3. Findings Master Matrix (4 Active / 43 Resolved)
+## 3. Findings Master Matrix (0 Active / 52 Resolved)
 
 | ID | Severity | Category | Invariant | Title | Current Status |
 |---|---|---|---|---|---|
-| **F-044** | **HIGH** | CROSS-LANE ISOLATION | I-1, I-8, V-04 | Cross-Lane Operating Window Override Leaks into Lane A Waitlist in `add_automation` | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-045** | **HIGH** | SCHEDULER & API INTEGRITY | I-7, I-8 | Re-Enabled Lane C Reports Are Permanently Starved from Autonomous Dispatch | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-046** | **LOW** | INPUT VALIDATION | I-7, I-9 | Zero-Interval Validation Bypass in `AutomationController.add_automation` | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-047** | **MEDIUM** | SCHEDULE SYNCHRONIZATION | I-3, I-7, F-027 | Timeslot Tier Resolution Desync Between UI Presets and Backend Scheduler | **ACTIVE / AWAITING DEV REMEDIATION** |
-| **F-043** | MEDIUM | DISPATCH & STATE INTEGRITY | I-1, I-8 | Manual Run Execution Guarded Against Failed/Exhausted Re-Arming | RESOLVED (Batch 7) |
-| **F-040** | HIGH | SAFETY & STATE HYGIENE | I-7, I-8 | `POST /api/automation/run` Bypasses "Disabled" State | RESOLVED (Batch 7) |
-| **F-041** | CRITICAL | DISPATCH & RESOURCE EXHAUSTION | I-1, I-6 | Lane B Infinite Dispatch Loop for Failed Reports | RESOLVED (Batch 7) |
-| **F-042** | MEDIUM | CLOCK INTEGRITY & GUARDRAILS | BG-001, I-3, I-7 | Simulation Reset Bypasses BG-001 Guardrail | RESOLVED (Batch 7) |
-| **F-001..F-039** | VARIOUS | VARIOUS | ALL | Historical Findings Roster (39 defects) | RESOLVED (Archived in `resolved_findings_registry.md`) |
+| **F-048** | HIGH | STATE-MACHINE / API / UI | I-7, I-8, I-10, BG-001 | Stopping All Lanes via Web UI Leaves `Paradiso` Daemon Running, Permanently Locking Settings & Simulation Clock Reset (`HTTP 409`) | **RESOLVED (Batch 9)** |
+| **F-049** | HIGH | UI / API | I-7, I-8 | `POST /api/automation/enable` Is Completely Orphaned from the Web UI, Trapping Disabled and Failed Reports Without Recovery Controls | **RESOLVED (Batch 9)** |
+| **F-050** | MEDIUM | UI / API | I-2, I-7, I-8 | Hardcoded Frontend Retry Telemetry Falsely Reports `1 / 3` Error Retries on Zero-Penalty Dependency Skips and Masks Actual Retry Counts | **RESOLVED (Batch 9)** |
+| **F-051** | MEDIUM | UI / HONEST API | I-7, BG-001 | Silent Frontend Suppression of HTTP 409 Error on Simulation Clock Reset and Hidden Toast Notification on Report Registration | **RESOLVED (Batch 9)** |
+| **F-052** | LOW | UI / DOC-DRIFT | I-3, I-7 | Unbound Lane B "Active Workers" Metric Card (`0 In-Flight`) and Residual `EOD (21:00)` Schedule Labels in `index.html` | **RESOLVED (Batch 9)** |
+| **F-044..F-047** | VARIOUS | VARIOUS | I-1, I-3, I-7, I-8, I-9 | Batch 8 Findings (Lane A force_open leak, Type C enable starvation, Zero-interval bypass, Timeslot tier desync) | **RESOLVED (Batch 8)** |
+| **F-040..F-043** | VARIOUS | VARIOUS | I-1, I-6, I-7, I-8, BG-001 | Batch 7 Findings (Disabled manual run bypass, Lane B exhausted loop, Sim reset guard, Manual re-arming) | **RESOLVED (Batch 7)** |
+| **F-001..F-039** | VARIOUS | VARIOUS | ALL | Historical Findings Roster (39 defects) | **RESOLVED (Archived in `resolved_findings_registry.md`)** |
 
 ---
 
@@ -69,20 +68,11 @@ All incoming and active auditors must strictly adhere to the operational directi
 
 Execute from workspace root:
 ```bash
-# 1. Full Automated Unit & Regression Test Suite (135/135 tests passing in ~7.5s)
+# 1. Batch 9 Frontend-to-Backend Integrity PoC Suite (F-048..F-052 — all 5 tests PASS)
+py -3 paradiso/artifacts/audits/poc/poc_f048_f052_frontend_backend_integrity.py
+
+# 2. Full Automated Unit & Regression Test Suite (146/146 tests passing in ~7.7s)
 py -3 run_tests.py
-
-# 2. Resolved Batch 7 Verification (F-040..F-043 — all 4 PoCs FAIL against patched code)
-py -3 paradiso/artifacts/audits/poc/poc_f040_disabled_report_manual_run_bypass.py
-py -3 paradiso/artifacts/audits/poc/poc_f041_lane_b_infinite_exhausted_dispatch.py
-py -3 paradiso/artifacts/audits/poc/poc_f042_simulation_reset_bypasses_idle_guardrail.py
-py -3 paradiso/artifacts/audits/poc/poc_f043_manual_run_rearms_failed_report.py
-
-# 3. New Findings PoCs (F-044, F-045, F-046, F-047 — all 4 reproduce defects deterministically)
-py -3 paradiso/artifacts/audits/poc/poc_f044_lane_a_force_open_leak_in_add_automation.py
-py -3 paradiso/artifacts/audits/poc/poc_f045_type_c_enable_starvation.py
-py -3 paradiso/artifacts/audits/poc/poc_f046_zero_interval_validation_bypass.py
-py -3 paradiso/artifacts/audits/poc/poc_f047_timeslot_tier_desync.py
 ```
-- **Total Unit Test Assets:** **135 passing tests (100% pass rate, 0 failures)**.
-- **Active Defects Awaiting Remediation:** **4 (F-044, F-045, F-046, F-047)**.
+- **Total Unit Test Assets:** **146 passing tests (100% pass rate, 0 failures)**.
+- **Active Defects Awaiting Remediation:** **0 (All 52 findings verified resolved)**.

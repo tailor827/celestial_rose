@@ -165,7 +165,7 @@
                                     </div>
                                     <span id="dash-status-type_c" class="badge" style="background: rgba(140, 150, 171, 0.15); color: var(--text-muted); font-size: 10px;">○ Standby</span>
                                 </div>
-                                <p style="font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex: 1;">Fixed time-pinned reports for BOD (07:00), Mid-day (12:00), EOD (21:00), and custom slots.</p>
+                                <p style="font-size: 11px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px; flex: 1;">Fixed time-pinned reports for BOD (07:00), Mid-day (12:00), EOD (20:30), and custom slots.</p>
                                 <div style="display: flex; gap: 8px; align-items: center; margin-top: auto;">
                                     <button type="button" id="btn-dash-start-type_c" class="btn-primary" onclick="startLane('type_c')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(52, 211, 153, 0.15); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Start Lane C</button>
                                     <button type="button" id="btn-dash-stop-type_c" class="btn-primary" onclick="stopLane('type_c')" style="flex: 1; padding: 6px 12px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; display: none; cursor: pointer;">⏹ Stop Lane C</button>
@@ -413,44 +413,10 @@
                                     <th>Execution Policy</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td style="color: var(--text-muted);">1</td>
-                                    <td><strong style="color: #fff;">SF Base</strong></td>
-                                    <td>Cy / MIS Agency</td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td>0 / 3</td>
-                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/SF Base.json</code></td>
-                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
-                                </tr>
-                                <tr>
-                                    <td style="color: var(--text-muted);">2</td>
-                                    <td><strong style="color: #fff;">Daily Cash Flow</strong></td>
-                                    <td>Finance / Treasury</td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td>0 / 3</td>
-                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Daily Cash Flow.json</code></td>
-                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
-                                </tr>
-                                <tr>
-                                    <td style="color: var(--text-muted);">3</td>
-                                    <td><strong style="color: #fff;">Portfolio Summary</strong></td>
-                                    <td>Analytics / Asset Mgmt</td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td>0 / 3</td>
-                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Portfolio Summary.json</code></td>
-                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
-                                </tr>
-                                <tr>
-                                    <td style="color: var(--text-muted);">4</td>
-                                    <td><strong style="color: #fff;">Credit Risk Monitor</strong></td>
-                                    <td>Risk / Credit Analytics</td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td>0 / 3</td>
-                                    <td><code style="font-size: 11px; color: #cbd5e1;">paradiso/logs/Credit Risk Monitor.json</code></td>
-                                    <td><span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span></td>
-                                </tr>
+                            <tbody id="lane-a-body">
+                                <!-- Populated dynamically via JS -->
                             </tbody>
+
                         </table>
                     </div>
                 </section>
@@ -498,7 +464,7 @@
                         </div>
                         <div class="metric-card">
                             <div class="metric-label">Active Workers</div>
-                            <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #34d399; margin-top: 8px;">0 In-Flight</div>
+                            <div id="metric-b-active" class="metric-num" style="font-size: 16px; font-weight: 700; color: #34d399; margin-top: 8px;">0 In-Flight</div>
                             <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Multiple jobs run simultaneously</div>
                         </div>
                         <div class="metric-card">
@@ -546,50 +512,10 @@
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td style="color: var(--text-muted);">1</td>
-                                    <td><strong style="color: #fff;">Hourly Liquidity Feed</strong></td>
-                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 15 min</span></td>
-                                    <td><span style="color: #60a5fa; font-weight: 600;">07:15 (Due in 15m)</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="color: var(--text-muted);">2</td>
-                                    <td><strong style="color: #fff;">Intraday Transaction Feed</strong></td>
-                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 30 min</span></td>
-                                    <td><span style="color: #60a5fa; font-weight: 600;">07:30 (Due in 30m)</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="color: var(--text-muted);">3</td>
-                                    <td><strong style="color: #fff;">Risk Limit Poller</strong></td>
-                                    <td><span class="badge" style="background: rgba(234, 179, 8, 0.15); color: #fde047;">Every 60 min</span></td>
-                                    <td><span style="color: #60a5fa; font-weight: 600;">08:00 (Due in 1h)</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Waiting</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">Staged for recurring dispatch</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
+                            <tbody id="lane-b-body">
+                                <!-- Populated dynamically via JS -->
                             </tbody>
+
                         </table>
                     </div>
                 </section>
@@ -606,7 +532,7 @@
                                 <h1 class="hero-title" style="margin-bottom: 0;">Type C: Custom Timeslots</h1>
                                 <span class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc; border: 1px solid rgba(167, 139, 250, 0.3); font-size: 11px; padding: 4px 8px;">Time-Pinned Triggers</span>
                             </div>
-                            <p class="hero-subtitle">Automated reports scheduled for designated operational moments: BOD (07:00), Mid-day (12:00), EOD (21:00), or custom HH:MM.</p>
+                            <p class="hero-subtitle">Automated reports scheduled for designated operational moments: BOD (07:00), Mid-day (12:00), EOD (20:30), or custom HH:MM.</p>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <div class="lane-control-cluster" style="display: flex; gap: 8px; align-items: center;">
@@ -641,7 +567,7 @@
                             <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Noon Benchmark / FX Rates Fix</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">EOD Slot (21:00)</div>
+                            <div class="metric-label">EOD Slot (20:30)</div>
                             <div class="metric-num" style="font-size: 16px; font-weight: 700; color: #f43f5e; margin-top: 8px;">Scheduled</div>
                             <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">End-of-Day Ledger Reconciliation</div>
                         </div>
@@ -684,60 +610,10 @@
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr>
-                                    <td><span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">BOD (07:00)</span></td>
-                                    <td><strong style="color: #fff;">Beginning of Day Position File</strong></td>
-                                    <td><span style="color: #fff; font-weight: 600;">07:00 AM</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">Mid-Day (12:00)</span></td>
-                                    <td><strong style="color: #fff;">Mid-Day Currency Benchmark</strong></td>
-                                    <td><span style="color: #fff; font-weight: 600;">12:00 PM</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">EOD (21:00)</span></td>
-                                    <td><strong style="color: #fff;">General Ledger EOD Reconciliation</strong></td>
-                                    <td><span style="color: #fff; font-weight: 600;">09:00 PM</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><span class="badge" style="background: rgba(167, 139, 250, 0.15); color: #c084fc;">Custom (16:30)</span></td>
-                                    <td><strong style="color: #fff;">Market Close Portfolio Extract</strong></td>
-                                    <td><span style="color: #fff; font-weight: 600;">04:30 PM</span></td>
-                                    <td><span class="badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa;">Scheduled</span></td>
-                                    <td><span style="color: var(--text-muted); font-size: 12px;">--/--/--</span></td>
-                                    <td>0 / 3</td>
-                                    <td>
-                                        <button type="button" class="btn-primary" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
-                                            ▶ Run Now
-                                        </button>
-                                    </td>
-                                </tr>
+                            <tbody id="lane-c-body">
+                                <!-- Populated dynamically via JS -->
                             </tbody>
+
                         </table>
                     </div>
                 </section>
@@ -1739,6 +1615,38 @@ tryCatch({
             </div>
             <div class="modal-footer">
                 <button class="btn-primary" onclick="closeLogModal()">Close Console</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Native Application Confirmation Modal Overlay -->
+    <div id="modal-confirm" class="modal-overlay" onclick="handleConfirmModalOverlayClick(event)">
+        <div class="modal-card modal-confirm-card">
+            <div class="modal-header">
+                <div class="modal-title-group" style="display: flex; align-items: center;">
+                    <span id="modal-confirm-icon" class="modal-icon" style="font-size: 20px; margin-right: 10px;">⚠️</span>
+                    <div>
+                        <h3 id="modal-confirm-title" class="modal-title">Confirm Action</h3>
+                        <div id="modal-confirm-subtitle" class="modal-subtitle">Operational guardrail confirmation</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" onclick="closeConfirmModal(false)">✖</button>
+            </div>
+            <div class="modal-body" style="padding: 20px 24px;">
+                <div id="modal-confirm-message" style="font-size: 13px; color: var(--text-primary); line-height: 1.6;">
+                    Are you sure you want to proceed?
+                </div>
+                <div id="modal-confirm-warning" style="display: none; margin-top: 14px; padding: 10px 14px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); font-size: 12px; color: #fca5a5;">
+                    ⚠️ This action will remove the report from today's active execution queue and configuration catalog.
+                </div>
+            </div>
+            <div class="modal-footer" style="gap: 10px;">
+                <button type="button" class="btn-primary" onclick="closeConfirmModal(false)" style="border-color: rgba(140, 150, 171, 0.3); color: var(--text-muted);">
+                    Cancel
+                </button>
+                <button type="button" id="btn-confirm-action" class="btn-primary btn-destructive" onclick="closeConfirmModal(true)">
+                    Confirm
+                </button>
             </div>
         </div>
     </div>

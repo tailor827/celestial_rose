@@ -138,3 +138,12 @@ class Intraday(StorageBase):
             data[date].setdefault("reports_ran", {})[report_name] = run_dict
         self.mutate(_mutate)
 
+    def clear_non_completed_run(self, date: str, report_name: str) -> None:
+        """Removes a non-completed (e.g. failed/skipped) run record for a report on the given date when re-enabled."""
+        def _mutate(data):
+            if date in data and "reports_ran" in data[date]:
+                existing = data[date]["reports_ran"].get(report_name)
+                if existing and existing.get("result") != "completed":
+                    data[date]["reports_ran"].pop(report_name, None)
+        self.mutate(_mutate)
+
