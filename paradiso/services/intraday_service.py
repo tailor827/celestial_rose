@@ -98,7 +98,27 @@ class IntradayService:
             return 5.0
         return self.rotation_cooldown_seconds
 
-    def _evaluate_pass_completion(self, date: str):
+    def _priority_rank(self, report_name: str) -> int:
+        """Returns numeric priority rank for a report: P0 -> 0, P1 -> 1, P2 -> 2 (default)."""
+        rep = self.automation_service.get_by_name(report_name)
+        prio = str(getattr(rep, "priority", "P2") if rep else "P2").strip().upper()
+        return {"P0": 0, "P1": 1, "P2": 2}.get(prio, 2)
+
+    def _enqueue_lane_a_by_priority(self, report_name: str) -> None:
+        """Inserts a fresh/enabled Lane A report into waitlist according to priority tier without starving rotated items."""
+        if report_name in self.waitlist:
+            return
+        target_rank = self._priority_rank(report_name)
+        items = list(self.waitlist)
+        insert_idx = len(items)
+        for idx, existing in enumerate(items):
+            if existing in self._cycle_seen_in_pass or self._priority_rank(existing) > target_rank:
+                insert_idx = idx
+                break
+        items.insert(insert_idx, report_name)
+        self.waitlist = deque(items)
+
+    def _evaluate_pass_completion(self, date: str, defer_seen_clear: bool = False):
         """Checks if a full pass over all waiting reports has completed, engaging cooldown if all were skipped."""
         if self._cycle_pass_reports and self._cycle_pass_reports.issubset(self._cycle_seen_in_pass):
             # With multi-slot concurrency (max_concurrent_run > 1), wait for all in-flight jobs in the pass to finish
@@ -115,9 +135,13 @@ class IntradayService:
                     description=f"All {len(self._cycle_seen_in_pass)} pending report(s) waiting on dependencies. Queue paused for {int(cooldown)}s.",
                     event_type="system"
                 )
+            # Re-order waitlist by priority tier (P0 -> P1 -> P2, stable within tier) for the next pass
+            if len(self.waitlist) > 1:
+                self.waitlist = deque(sorted(self.waitlist, key=self._priority_rank))
             # Reset pass tracking for the next pass
             self._cycle_pass_reports = set(self.waitlist)
-            self._cycle_seen_in_pass.clear()
+            if not defer_seen_clear:
+                self._cycle_seen_in_pass.clear()
             self._cycle_completions_in_pass = 0
             self._cycle_skips_in_pass = 0
             self._cycle_errors_in_pass = 0
@@ -576,6 +600,13 @@ class IntradayService:
                 if self.lane_a_active:
                     pending_a = self.automation_service.get_pending_by_type("type_a")
                     self.waitlist = deque(pending_a)
+                    self._rotation_cooldown_until = 0.0
+                    self._cycle_pass_reports = set(self.waitlist)
+                    self._cycle_seen_in_pass.clear()
+                    self._cycle_completions_in_pass = 0
+                    self._cycle_skips_in_pass = 0
+                    self._cycle_errors_in_pass = 0
+                    self._last_rotation_logged.clear()
                 self.day_closed = False
             else:
                 # Same day: if day was prematurely closed or stale, ensure clean day
@@ -607,19 +638,32 @@ class IntradayService:
                     pending_a = self.automation_service.get_pending_by_type("type_a")
                     uncompleted = [r for r in pending_a if r not in already_ran and r not in self.current_runs and r not in self.waitlist]
                     for r in uncompleted:
-                        self.waitlist.append(r)
+                        self._enqueue_lane_a_by_priority(r)
+                        self._cycle_pass_reports.add(r)
+
+                    if not self._cycle_pass_reports and self.waitlist:
+                        self._cycle_pass_reports = set(self.waitlist)
 
                     if len(self.waitlist) > 0 and len(self.current_runs) < self.max_concurrent_run:
+                        unseen_candidates = [r for r in self.waitlist if r not in self._cycle_seen_in_pass]
+                        if len(self.current_runs) == 0 and len(self.waitlist) > 0 and not unseen_candidates:
+                            self._evaluate_pass_completion(today_date)
+                            unseen_candidates = [r for r in self.waitlist if r not in self._cycle_seen_in_pass]
+
                         if time.time() >= self._rotation_cooldown_until:
                             available_slots = self.max_concurrent_run - len(self.current_runs)
-                            to_launch = min(available_slots, len(self.waitlist))
-                            for _ in range(to_launch):
-                                next_report = self.waitlist.popleft()
+                            launched = 0
+                            for next_report in unseen_candidates:
+                                if launched >= available_slots:
+                                    break
+                                self.waitlist.remove(next_report)
                                 rep = self.automation_service.get_by_name(next_report)
-                                if rep and rep.status == "Disabled":
+                                if not rep or rep.status == "Disabled":
                                     self._cycle_pass_reports.discard(next_report)
+                                    self._evaluate_pass_completion(today_date)
                                     continue
                                 self._trigger_report(next_report, today_date)
+                                launched += 1
 
                 # --- LANE B: Recurring at intervals (concurrent, self-overlap prevented) ---
                 if self.lane_b_active:

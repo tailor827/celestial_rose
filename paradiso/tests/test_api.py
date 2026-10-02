@@ -16,6 +16,30 @@ class TestAPIEndpoints(unittest.TestCase):
         real_auto = BASE_DIR / "storage" / "automations.json"
         if real_auto.exists():
             shutil.copy2(real_auto, self.dir_path / "automations.json")
+        auto_file = self.dir_path / "automations.json"
+        try:
+            catalog = json.loads(auto_file.read_text(encoding="utf-8")) if auto_file.exists() else {}
+        except Exception:
+            catalog = {}
+        if "SF Base" not in catalog:
+            catalog["SF Base"] = {
+                "filename": "sample_report_blueprint.py",
+                "filetype": "python",
+                "dir": "../reports",
+                "team": "Strategy",
+                "owner": "System",
+                "scheduled_time": "08:30",
+                "status": "Waiting",
+                "last_run": "--",
+                "duration": "0s",
+                "last_output": "",
+                "report_type": "type_a",
+                "interval_minutes": None,
+                "timeslot_tier": "CUSTOM",
+                "catch_up_policy": None,
+                "priority": "P2"
+            }
+            auto_file.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
         (self.dir_path / "intraday.json").write_text("{}", encoding="utf-8")
         os.environ["PARADISO_STORAGE_DIR"] = str(self.dir_path)
 

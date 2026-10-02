@@ -19,9 +19,9 @@ flowchart TD
     • Lane B: Active Window Masking & Drift Jitter
     • Lane C: Missed Timeslot Catch-up & Multi-Timeslot Support"]
     
-    Phase3["Phase 3: Cross-Lane Orchestration & Calendar (v1.2)
+    Phase3["Phase 3: Cross-Lane Orchestration & Priority (v1.2)
     • Cross-Lane Dependency DAG
-    • Trading Calendar & Holiday Exclusion
+    • Adaptive Starvation Backoff
     • Lane A Priority Queue (P0/P1/P2)"]
     
     Phase4["Phase 4: Telemetry & Enterprise Observability (v2.0)
@@ -40,11 +40,11 @@ flowchart TD
 
 ### Phase 1: Core 3-Lane Engine & Guardrail Baseline (v1.0 — Current)
 > [!NOTE]
-> **Status: 100% COMPLETE & AUDIT PASSED** (146/146 Unit Tests Passing — 0 Active Audit Defects across F-001 to F-052)
+> **Status: 100% COMPLETE & AUDIT PASSED** (148/148 Unit Tests Passing — 0 Active Audit Defects across F-001 to F-052)
 
 - [x] **Lane A (Sequential Queue & Concurrency Pool):**
-  - FIFO queue execution within intraday window (07:00 – 20:59) with 22:00 hard cutoff.
-  - Zero-penalty dependency skip rotation (`Retrial`) and genuine error retries (3x limit).
+  - Priority-aware FIFO queue execution (`P0` $\to$ `P1` $\to$ `P2`) within intraday window (07:00 – 20:59) with 22:00 hard cutoff.
+  - Zero-penalty dependency skip rotation (`Retrial`) and genuine error retries (configurable `max_retries`).
   - Manual run prevention (`HTTP 403 Forbidden`).
   - Pre-existing closed day record cleansing on boot / start (F-028, F-032).
 - [x] **Lane B (Recurring Intervals):**
@@ -67,7 +67,7 @@ flowchart TD
   - **API Validation:** Strict canonical lane identifier enforcement (`VALID_LANES`, F-024) and interval bounds validation (F-046).
   - **Section 12 Receipt Parity:** Exact 1-to-1 filename matching between script `REPORT_NAME` and `storage/automations.json` (F-021).
   - **EOD 20:30 Consistency:** Complete alignment of EOD milestone timing across docs, UI, config, and scheduler (F-027, F-047, F-052).
-  - **Frontend-to-Backend Integrity:** Dynamic Lane A/B/C tables without hardcoded mock data, native confirmation modals (`#modal-confirm`) replacing browser `confirm()`/`alert()`, live error retry telemetry (`retry_count / max_retries`, F-050), and interactive `▶ Enable` recovery buttons for `Disabled` and `Failed` reports (F-049).
+  - **Frontend-to-Backend Integrity:** Dynamic Lane A/B/C tables without hardcoded mock data, native confirmation modals (`#modal-confirm`) replacing browser `confirm()`/`alert()`, live error retry telemetry (`retry_count / max_retries`, F-050) and dynamic `max_retries` metric cards across all lanes, and interactive `▶ Enable` recovery buttons for `Disabled` and `Failed` reports (F-049).
 
 ---
 
@@ -83,19 +83,18 @@ flowchart TD
 | **Lane C** | **Missed Window Catch-up Policy (`lane_c_catch_up_policy`)** `[DONE - VERIFIED]` | Configurable behavior when the scheduler is offline during a pinned timeslot: `CATCH_UP_IMMEDIATE` (run once when booted), `SKIP_UNTIL_NEXT_DAY`, or `WARN_OPERATOR`. Supported globally and via per-report overrides (`Report.catch_up_policy`). Hardened against non-canonical time strings (F-037), API policy dropping (F-038), and operational reset warned set retention (F-039). | **HIGH** |
 | **Lane C** | **Multi-Timeslot Pinned Reports** | Allows a single report to pin multiple timeslots in a day (e.g. Morning 08:30 AND Afternoon 16:30) without duplicating records. | **MEDIUM** |
 | **UI / Web** | **Dynamic Lane Tables & Native Confirmation Modals** `[DONE - VERIFIED]` | Dynamic rendering for Lane A, Lane B, and Lane C tables with live retry counts, active worker metrics, `▶ Enable` recovery controls, and native obsidian confirmation modals (`#modal-confirm`). | **HIGH** |
-| **UI / Web** | **Per-Lane Filter & Quick Actions** | Filter Today's Executions table and Automations catalog directly by Lane badge (A / B / C) with 1-click status toggling. | **MEDIUM** |
+| **UI / Web** | **Per-Lane Filter & Quick Actions** `[DONE - VERIFIED]` | Filter Today's Executions table and Automations catalog directly by Lane badge (A / B / C) with 1-click status toggling (`▶ Enable` / `⏸ Disable`). | **MEDIUM** |
 
 ---
 
-### Phase 3: Cross-Lane Orchestration & Calendar Engine (v1.2 — Mid-Term)
+### Phase 3: Cross-Lane Orchestration & Priority Engine (v1.2 — Mid-Term)
 > [!TIP]
-> **Target:** Inter-lane dependency coordination and calendar-aware scheduling for financial environments.
+> **Target:** Inter-lane dependency coordination and priority/backoff scheduling.
 
 | Feature | Scope & Mechanics | Impact |
 |---|---|---|
 | **Cross-Lane Dependency DAG** | Allows a report in one lane to depend on reports in another (e.g. Lane C EOD Ledger Reconciliation blocked until Lane B Hourly Feed completes its 17:00 batch). Evaluated without cross-locking. | Eliminates manual sequencing between recurring data feeds and end-of-day ledgers. |
-| **Trading & Banking Calendar** | Configurable weekend and bank holiday calendar integration. Reports can be marked `SKIP_ON_HOLIDAYS`, `RUN_ON_BUSINESS_DAYS_ONLY`, or `RUN_ON_MONTH_END`. | Bank-grade compliance for settlement and regulatory reports. |
-| **Lane A Priority Queuing** | Introduce priority tiers (P0 Critical, P1 High, P2 Normal) within Lane A FIFO queue. High-priority items jump ahead of normal items when slots open. | Prevents non-urgent batches from delaying time-critical regulatory extracts. |
+| **Lane A Priority Queuing (`P0`/`P1`/`P2`)** `[DONE - VERIFIED]` | Introduces priority tiers (`P0` Critical, `P1` High, `P2` Normal) within Lane A's queue. Starvation-safe per-pass ordering: `get_pending_by_type("type_a")` and pass boundaries (`_evaluate_pass_completion`) sort `P0 -> P1 -> P2` (FIFO within tier), while mid-pass skips rotate to the back of the current pass so `P0` dependency skips never starve `P1`/`P2` reports. Newly added or re-enabled reports insert ahead of unseen lower-priority reports via `_enqueue_lane_a_by_priority`. | Prevents non-urgent batches from delaying time-critical regulatory extracts without risking dependency starvation. |
 | **Adaptive Starvation Backoff** | Dynamically adjust queue cooldowns based on dependency resolution history rather than fixed timers. | Lowers latency for dependent batches when upstream files arrive early. |
 
 ---
@@ -109,7 +108,7 @@ flowchart TD
 | **Dedicated Worker Pools** | Physical subprocess pool segregation by lane (e.g. Thread/Process Pool A, B, C) so heavy computation in Lane B cannot starve Lane A resources. | CPU & process isolation under OS-level process management. |
 | **SLA Tracking & P95 Telemetry** | Historical execution runtime telemetry per report and per lane. Automated visual alerts when run durations breach P95 or SLA thresholds. | Prometheus-compatible metrics endpoint and in-app latency indicators. |
 | **Interactive Pipeline DAG Canvas** | Rich interactive visual graph in Web UI rendering pipeline dependency relationships, live run states, and queue bottlenecks. | Client-side SVG/Canvas DAG viewer inside `#view-monitoring`. |
-| **Automated Incident Webhooks** | Outbound notification webhooks (Slack, Teams, Email, PagerDuty) on permanent report failures (3x retries exhausted) or cutoff terminations. | Decoupled notification dispatcher service. |
+| **Automated Incident Webhooks** | Outbound notification webhooks (Slack, Teams, Email, PagerDuty) on permanent report failures (retries exhausted) or cutoff terminations. | Decoupled notification dispatcher service. |
 
 ---
 
@@ -125,18 +124,19 @@ flowchart TD
     ├── Universal Intraday Window Yielding     [DONE]
     └── F-001 - F-052 Audit Remediations       [DONE - VERIFIED]
 
-[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 146/146 TESTS PASSING]
+[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 148/148 TESTS PASSING]
     ├── [P2.1] Lane A Concurrency Expansion    [DONE - VERIFIED]
     ├── [P2.2] Lane C Missed Window Catch-up   [DONE - VERIFIED]
     ├── [UI] 3-Lane Add Report Modal & Form    [DONE - VERIFIED]
     ├── [UI] Dynamic Lane Tables & Modals      [DONE - VERIFIED]
+    ├── [UI] Per-Lane Filter & Quick Actions   [DONE - VERIFIED]
     ├── [P2.3] Lane B Window Masking           [PLANNED]
     └── [P2.4] Multi-Timeslot Support          [PLANNED]
 
-[Phase 3: Cross-Lane & Calendar v1.2] ════════ [QUEUED]
+[Phase 3: Cross-Lane & Priority v1.2] ════════ [IN PROGRESS]
     ├── [P3.1] Cross-Lane Dependency DAG       [QUEUED]
-    ├── [P3.2] Trading/Holiday Calendar        [QUEUED]
-    └── [P3.3] Lane A Priority Tiers           [QUEUED]
+    ├── [P3.2] Adaptive Starvation Backoff     [QUEUED]
+    └── [P3.3] Lane A Priority Tiers           [DONE - VERIFIED]
 
 [Phase 4: Enterprise v2.0] ═══════════════════ [FUTURE]
     ├── [P4.1] Dedicated Worker Pools          [FUTURE]

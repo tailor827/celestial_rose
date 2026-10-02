@@ -65,8 +65,12 @@ class Automations(StorageBase):
         return [r for r in self.get_all(serialized=False) if r.report_type == target_type]
 
     def get_pending_by_type(self, report_type: str) -> List[str]:
-        """Returns pending non-terminal reports for a specific lane."""
+        """Returns pending non-terminal reports for a specific lane (sorted by P0 -> P1 -> P2 for type_a)."""
         target_type = report_type.lower()
-        return [r.name for r in self.get_all(serialized=False) if r.report_type == target_type and r.status not in ["Completed", "Disabled"]]
+        pending = [r for r in self.get_all(serialized=False) if r.report_type == target_type and r.status not in ["Completed", "Disabled"]]
+        if target_type == "type_a":
+            prio_map = {"P0": 0, "P1": 1, "P2": 2}
+            pending.sort(key=lambda r: prio_map.get(str(getattr(r, "priority", "P2")).upper(), 2))
+        return [r.name for r in pending]
 
 

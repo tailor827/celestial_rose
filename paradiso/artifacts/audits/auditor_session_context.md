@@ -3,12 +3,12 @@
 **Role:** Independent Adversarial Auditor  
 **Target System:** Paradiso Daemon Scheduling Engine & Web UI (3-Lane Architecture)  
 **Audit Mandate Reference:** [`artifacts/audits/AUDITOR.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/AUDITOR.md)  
-**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20261001_2315.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20261001_2315.md)  
+**Primary Baseline Report:** [`artifacts/audits/ongoing/audit_20261003_0135.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/audit_20261003_0135.md)  
 **Outstanding Findings Dossier:** [`artifacts/audits/ongoing/outstanding_findings.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/ongoing/outstanding_findings.md)  
 **Resolved Findings Registry:** [`artifacts/audits/resolved/resolved_findings_registry.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/audits/resolved/resolved_findings_registry.md)  
 **Builder Context Reference:** [`artifacts/dev/dev_session_context.md`](file:///c:/Users/desktop/Documents/work/celestial_rose/paradiso/artifacts/dev/dev_session_context.md)  
-**Last Updated:** 2026-10-01 23:47 (Local Time)  
-**Current Operating Window State:** `CLOSED` (22:00 – 23:59)
+**Last Updated:** 2026-10-03 01:40 (Local Time)  
+**Current Operating Window State:** `WAITING_TO_OPEN` (00:00 – 06:59)
 
 ---
 
@@ -33,31 +33,35 @@ All incoming and active auditors must strictly adhere to the operational directi
 
 | Invariant | Definition & Rule | Status | Breached By |
 |---|---|---|---|
-| **I-1: Single-Flight & Lane Concurrency** | Lane A sequential FIFO (up to `max_concurrent_run`). Per-report concurrency prevention in Lane B and Lane C. Strict cross-lane isolation. | **VERIFIED HARDENED** | — (F-044 resolved) |
-| **I-2: Dependency Wait vs. Error Retry** | Upstream dependency skips rotate or back off with **zero penalty**. Genuine errors increment retry counter up to 3x. | **VERIFIED HARDENED** | — (F-050 resolved) |
+| **I-1: Single-Flight & Lane Concurrency** | Lane A sequential FIFO (up to `max_concurrent_run`). Per-report concurrency prevention in Lane B and Lane C. Strict cross-lane isolation. | **BREACHED** | **F-057, F-058, F-060** |
+| **I-2: Dependency Wait vs. Error Retry** | Upstream dependency skips rotate or back off with **zero penalty**. Genuine errors increment retry counter up to 3x. Queue pass starvation engages cooldown without rapid re-spin. | **BREACHED** | **F-058, F-059** |
 | **I-3: State Machine & Window Rules** | Strict 24h sequencing. Hard cutoff terminates jobs at 22:00. Accurate timeslot mapping. | **VERIFIED HARDENED** | — (F-047, F-052 resolved) |
 | **I-4: Midnight & Cold Boot** | Consistent state reset. Cold boot never leaks prior day data. | **VERIFIED HARDENED** | — |
 | **I-5: Intentional Kills are Silent** | Stop/reset/cutoff terminate cleanly without retry penalty. | **VERIFIED HARDENED** | — |
 | **I-6: Storage Atomicity & Durability** | Atomic read-modify-write; corrupted files preserved with `.bak`. | **VERIFIED HARDENED** | — |
-| **I-7: Honest API / UI** | Proper HTTP error codes; never return `{"ok": true}` on failure or starvation. Accurate UI representations. | **VERIFIED HARDENED** | — (F-048..F-052 resolved) |
-| **I-8: Queue / Storage / Memory Convergence** | All state tracking maps and UI telemetry must remain synchronized. | **VERIFIED HARDENED** | — (F-048..F-050 resolved) |
+| **I-7: Honest API / UI** | Proper HTTP error codes; never return `{"ok": true}` on failure or starvation. Accurate UI representations. | **BREACHED** | **F-057** |
+| **I-8: Queue / Storage / Memory Convergence** | All state tracking maps and UI telemetry must remain synchronized. | **BREACHED** | **F-057, F-058, F-059, F-060** |
 | **I-9: Security Boundaries** | Path traversal blocked, secrets masked, safe subprocess invocation, strict input validation. | **VERIFIED HARDENED** | — (F-046 resolved) |
 | **I-10: Hot-Reload Safety** | Settings changes apply without deadlock when lanes are stopped. | **VERIFIED HARDENED** | — (F-048 resolved) |
-| **I-11: Deadlock Freedom** | Strict lock hierarchy. | **VERIFIED HARDENED** | — |
+| **I-11: Deadlock Freedom** | Strict lock hierarchy and queue liveness. | **VERIFIED HARDENED** | — (F-056 resolved) |
 | **BG-001: Idle-Only Settings Guardrail** | Settings mutation and simulation reset while active rejected with HTTP 409, and unlocked when idle. | **VERIFIED HARDENED** | — (F-048, F-051 resolved) |
 | **BG-002: Transition Cooldown Guardrail** | Rapid start/stop rejected within 10s window. | **VERIFIED HARDENED** | — |
 
 ---
 
-## 3. Findings Master Matrix (0 Active / 52 Resolved)
+## 3. Findings Master Matrix (4 Active / 56 Resolved)
 
 | ID | Severity | Category | Invariant | Title | Current Status |
 |---|---|---|---|---|---|
-| **F-048** | HIGH | STATE-MACHINE / API / UI | I-7, I-8, I-10, BG-001 | Stopping All Lanes via Web UI Leaves `Paradiso` Daemon Running, Permanently Locking Settings & Simulation Clock Reset (`HTTP 409`) | **RESOLVED (Batch 9)** |
-| **F-049** | HIGH | UI / API | I-7, I-8 | `POST /api/automation/enable` Is Completely Orphaned from the Web UI, Trapping Disabled and Failed Reports Without Recovery Controls | **RESOLVED (Batch 9)** |
-| **F-050** | MEDIUM | UI / API | I-2, I-7, I-8 | Hardcoded Frontend Retry Telemetry Falsely Reports `1 / 3` Error Retries on Zero-Penalty Dependency Skips and Masks Actual Retry Counts | **RESOLVED (Batch 9)** |
-| **F-051** | MEDIUM | UI / HONEST API | I-7, BG-001 | Silent Frontend Suppression of HTTP 409 Error on Simulation Clock Reset and Hidden Toast Notification on Report Registration | **RESOLVED (Batch 9)** |
-| **F-052** | LOW | UI / DOC-DRIFT | I-3, I-7 | Unbound Lane B "Active Workers" Metric Card (`0 In-Flight`) and Residual `EOD (21:00)` Schedule Labels in `index.html` | **RESOLVED (Batch 9)** |
+| **F-057** | **HIGH** | QUEUE / PRIORITY / STATE MACHINE | I-1, I-7, I-8, F-005 | `enable_automation` Fails to Clear `_cycle_seen_in_pass`, Bypassing and Starving Re-Enabled Failed `P0` Reports Behind `P2` Reports | **ACTIVE (Batch 13)** |
+| **F-058** | **HIGH** | QUEUE / COOLDOWN / STATE MACHINE | I-1, I-2, I-8, F-005 | Terminal Completion or Failure of the Final Report in a Pass Leaves Pass Counters Dirty, Bypassing Starvation Cooldown for Subsequent Reports | **ACTIVE (Batch 13)** |
+| **F-059** | **MEDIUM** | QUEUE / LIFECYCLE / COOLDOWN | I-2, I-8, F-005 | `start_lane("type_a")`, `stop_lane("type_a")`, `start_fresh_run()`, and `reset_all_reports()` Fail to Reset `_cycle_skips_in_pass` and `_cycle_errors_in_pass` | **ACTIVE (Batch 13)** |
+| **F-060** | **HIGH** | QUEUE / PRIORITY / STARVATION | I-1, I-8, F-005 | Deferred `_cycle_seen_in_pass` Clearing (`defer_seen_clear=True`) on `disable_automation` Inverts Priority Order and Starves `P0` Reports When Reports Are Added/Enabled | **ACTIVE (Batch 13)** |
+| **F-056** | **HIGH** | QUEUE / STATE MACHINE / DEADLOCK | I-1, I-7, I-8, F-005 | Disabling an Idle Lane A Report Stalls Queue Pass Evaluation, Stranding Skipped Reports in Permanent Deadlock | **RESOLVED & VERIFIED (Batch 12)** |
+| **F-053** | **HIGH** | QUEUE / CONCURRENCY / STARVATION | I-1, I-2, F-005 | Multi-Slot Concurrency Starvation Cooldown Bypass & Asymmetric Fast-Spinning on Lane A Dependency Skips (`max_concurrent_run > 1`) | **RESOLVED & VERIFIED (Batch 11)** |
+| **F-054** | **HIGH** | STATE MACHINE / STORAGE / QUEUE | I-7, I-8 | `delete_automation` Leaks Runtime Execution State and Storage Run History, Permanently Starving Re-created Reports | **RESOLVED & VERIFIED (Batch 11)** |
+| **F-055** | **MEDIUM** | TEST INTEGRITY / CATALOG DRIFT | I-1, I-7 | Replacement of Blueprint `"SF Base"` in `storage/automations.json` Breaks `test_trigger_single_automation_run` Regression Suite (`404 != 403`) | **RESOLVED & VERIFIED (Batch 11)** |
+| **F-048..F-052** | VARIOUS | VARIOUS | I-2, I-3, I-7, I-8, I-10, BG-001 | Batch 9 Frontend-to-Backend Integrity Findings | **RESOLVED & VERIFIED** |
 | **F-044..F-047** | VARIOUS | VARIOUS | I-1, I-3, I-7, I-8, I-9 | Batch 8 Findings (Lane A force_open leak, Type C enable starvation, Zero-interval bypass, Timeslot tier desync) | **RESOLVED (Batch 8)** |
 | **F-040..F-043** | VARIOUS | VARIOUS | I-1, I-6, I-7, I-8, BG-001 | Batch 7 Findings (Disabled manual run bypass, Lane B exhausted loop, Sim reset guard, Manual re-arming) | **RESOLVED (Batch 7)** |
 | **F-001..F-039** | VARIOUS | VARIOUS | ALL | Historical Findings Roster (39 defects) | **RESOLVED (Archived in `resolved_findings_registry.md`)** |
@@ -68,11 +72,17 @@ All incoming and active auditors must strictly adhere to the operational directi
 
 Execute from workspace root:
 ```bash
-# 1. Batch 9 Frontend-to-Backend Integrity PoC Suite (F-048..F-052 — all 5 tests PASS)
-py -3 paradiso/artifacts/audits/poc/poc_f048_f052_frontend_backend_integrity.py
+# 1. Batch 13 PoC Verification Suite (F-057, F-058, F-059, F-060: currently 4/4 failing; must pass 4/4 after fix)
+py -3 paradiso/artifacts/audits/poc/poc_f057_f060_lane_a_multi_angle_attacks.py
 
-# 2. Full Automated Unit & Regression Test Suite (146/146 tests passing in ~7.7s)
+# 2. Batch 12 PoC Verification Suite (F-056 verified: 1/1 passing)
+py -3 paradiso/artifacts/audits/poc/poc_f056_disable_queue_deadlock.py
+
+# 3. Batch 11 PoC Verification Suite (F-053 & F-054 verified: 2/2 passing)
+py -3 paradiso/artifacts/audits/poc/poc_f053_f054_concurrency_spin_and_delete_leak.py
+
+# 4. Automated Production Test Suite (151/151 passing, 0 failures)
 py -3 run_tests.py
 ```
-- **Total Unit Test Assets:** **146 passing tests (100% pass rate, 0 failures)**.
-- **Active Defects Awaiting Remediation:** **0 (All 52 findings verified resolved)**.
+- **Total Unit Test Assets:** 151 / 151 passing (100% pass rate).
+- **Active Defects Awaiting Remediation:** **4 (`F-057`, `F-058`, `F-059`, `F-060`)**.

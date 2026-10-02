@@ -3804,9 +3804,291 @@ class TestAuditFixes(unittest.TestCase):
         self.assertIn('id="metric-b-active"', index_html)
         self.assertIn("getElementById('metric-b-active')", app_js)
 
+    def test_p33_lane_a_priority_queue_ordering_and_starvation_safety(self):
+        """P3.3: Verifies P0 -> P1 -> P2 priority ordering, API validation, mid-pass insertion, and starvation-safe pass re-sorting."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        auto_svc.delete("SF Base")
+
+        # 1. API rejects invalid priority tier with HTTP 400
+        res_bad = self.client.post("/api/automation/add", json={
+            "name": "Bad_Priority_Report",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P99"
+        })
+        self.assertEqual(res_bad.status_code, 400)
+
+        # 2. Seed reports in mixed order: P2_1, P1_1, P0_1, P2_2, P0_2
+        seed_specs = [
+            ("Rep_P2_1", "P2"),
+            ("Rep_P1_1", "P1"),
+            ("Rep_P0_1", "P0"),
+            ("Rep_P2_2", "P2"),
+            ("Rep_P0_2", "P0"),
+        ]
+        for r_name, prio in seed_specs:
+            res = self.client.post("/api/automation/add", json={
+                "name": r_name,
+                "filename": "sample_report_blueprint.py",
+                "filetype": "python",
+                "dir": "../reports",
+                "report_type": "type_a",
+                "priority": prio
+            })
+            self.assertEqual(res.status_code, 201)
+
+        # 3. Verify get_pending_by_type("type_a") sorts P0 -> P1 -> P2 with stable FIFO within tier
+        pending = auto_svc.get_pending_by_type("type_a")
+        self.assertEqual(pending, ["Rep_P0_1", "Rep_P0_2", "Rep_P1_1", "Rep_P2_1", "Rep_P2_2"])
+
+        # 4. Start Lane A and verify waitlist matches priority order
+        intra_svc.start_lane("type_a", force_open=True)
+        self.assertEqual(list(intra_svc.waitlist), ["Rep_P0_1", "Rep_P0_2", "Rep_P1_1", "Rep_P2_1", "Rep_P2_2"])
+
+        # 5. Simulate mid-pass: Rep_P0_1 skips (Retrial) and rotates to back of waitlist
+        intra_svc.waitlist.popleft()
+        intra_svc._cycle_seen_in_pass.add("Rep_P0_1")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc.waitlist.append("Rep_P0_1")
+        # Waitlist now has unseen ["Rep_P0_2", "Rep_P1_1", "Rep_P2_1", "Rep_P2_2"] followed by seen ["Rep_P0_1"]
+
+        # Adding a new P1 report mid-pass inserts after unseen P0/P1 and before unseen P2 (and before seen Rep_P0_1)
+        res_mid = self.client.post("/api/automation/add", json={
+            "name": "Rep_P1_2",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+        self.assertEqual(res_mid.status_code, 201)
+        self.assertEqual(
+            list(intra_svc.waitlist),
+            ["Rep_P0_2", "Rep_P1_1", "Rep_P1_2", "Rep_P2_1", "Rep_P2_2", "Rep_P0_1"]
+        )
+
+        # 6. Complete the pass (all items seen, no active runs) -> waitlist re-sorts so Rep_P0_1 is back at the front for Pass 2
+        intra_svc._cycle_seen_in_pass.update(intra_svc._cycle_pass_reports)
+        intra_svc._evaluate_pass_completion(CLOCK.date_str())
+        self.assertEqual(
+            list(intra_svc.waitlist)[:2],
+            ["Rep_P0_2", "Rep_P0_1"]
+        )
+
+    def test_ui_per_lane_filter_and_dynamic_error_retries_cards(self):
+        """Verifies Per-Lane Filter controls, Priority UI badges, and dynamic max_retries in /api/paradiso/lanes/status."""
+        index_html = (BASE_DIR / "web" / "templates" / "index.html").read_text(encoding="utf-8")
+        app_js = (BASE_DIR / "web" / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+        # 1. Dashboard & Catalog per-lane filter controls and Priority modal field
+        self.assertIn('id="dash-lane-filter-group"', index_html)
+        self.assertIn('id="auto-lane-filter"', index_html)
+        self.assertIn('id="group-lane-a-config"', index_html)
+        self.assertIn('id="new-report-priority"', index_html)
+        self.assertIn("function setDashboardLaneFilter(", app_js)
+        self.assertIn("function renderDashboardTable(", app_js)
+        self.assertIn("function formatPriorityBadge(", app_js)
+
+        # 2. Dynamic Error Retries metric card IDs and API field
+        self.assertIn('id="metric-a-retries-num"', index_html)
+        self.assertIn('id="metric-b-retries-num"', index_html)
+        self.assertIn('id="metric-c-retries-num"', index_html)
+        res = self.client.get("/api/paradiso/lanes/status").get_json()
+        self.assertTrue(res["ok"])
+        for lane_key in ("type_a", "type_b", "type_c"):
+            self.assertEqual(res["lanes"][lane_key]["max_retries"], self.paradiso.intraday_service.max_retries)
+
+    def test_f053_multi_slot_seen_reports_do_not_fast_spin_in_same_pass(self):
+        """F-053: Seen skipped reports in a multi-slot pass must wait for the pass to complete rather than re-dispatching into freed slots."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 2
+        intra_svc.rotation_cooldown_seconds = 30.0
+        intra_svc._override_cooldown = 30.0
+
+        self.client.post("/api/automation/add", json={
+            "name": "Fast_Skip_Rep",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Slow_Skip_Rep",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P2"
+        })
+
+        intra_svc.start_lane("type_a", force_open=True)
+        dispatch_counts = {"Fast_Skip_Rep": 0, "Slow_Skip_Rep": 0}
+
+        def mock_trigger(name, date):
+            dispatch_counts[name] += 1
+            intra_svc.current_runs[name] = "09:00:00"
+            intra_svc._cycle_seen_in_pass.add(name)
+
+        intra_svc._trigger_report = mock_trigger
+        intra_svc.tick()
+        self.assertEqual(dispatch_counts, {"Fast_Skip_Rep": 1, "Slow_Skip_Rep": 1})
+
+        # Fast_Skip_Rep finishes with dependency skip while Slow_Skip_Rep is still running
+        intra_svc.current_runs.pop("Fast_Skip_Rep")
+        intra_svc.waitlist.append("Fast_Skip_Rep")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc._evaluate_pass_completion(CLOCK.date_str())
+
+        # Next tick while Slow_Skip_Rep is still running must NOT re-dispatch Fast_Skip_Rep
+        intra_svc.tick()
+        self.assertEqual(dispatch_counts["Fast_Skip_Rep"], 1)
+        self.assertIn("Fast_Skip_Rep", intra_svc.waitlist)
+
+        # Now Slow_Skip_Rep finishes with dependency skip -> pass completes and cooldown engages
+        intra_svc.current_runs.pop("Slow_Skip_Rep")
+        intra_svc.waitlist.append("Slow_Skip_Rep")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc._evaluate_pass_completion(CLOCK.date_str())
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
+        self.assertEqual(len(intra_svc._cycle_seen_in_pass), 0)
+
+    def test_f054_delete_automation_purges_runtime_and_intraday_state(self):
+        """F-054: Deleting an automation purges Lane A/B/C runtime state and today's intraday history so re-created reports are not starved."""
+        intra_svc = self.paradiso.intraday_service
+        intraday_repo = intra_svc.intraday_repo
+        today_date = CLOCK.date_str()
+
+        # 1. Lane C report delete + re-create
+        self.client.post("/api/automation/add", json={
+            "name": "Timeslot_Report_C",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_c",
+            "scheduled_time": "09:00",
+            "timeslot_tier": "CUSTOM"
+        })
+        intra_svc.type_c_ran_today.add("Timeslot_Report_C")
+        intra_svc.type_c_retry_after["Timeslot_Report_C"] = time.time() + 300
+        intra_svc.type_c_warned.add("Timeslot_Report_C")
+
+        intra_svc.stop_scheduler()
+        res_del_c = self.client.delete("/api/automation/delete/Timeslot_Report_C")
+        self.assertEqual(res_del_c.status_code, 200)
+        self.assertNotIn("Timeslot_Report_C", intra_svc.type_c_ran_today)
+        self.assertNotIn("Timeslot_Report_C", intra_svc.type_c_retry_after)
+        self.assertNotIn("Timeslot_Report_C", intra_svc.type_c_warned)
+
+        # 2. Lane B report delete + re-create
+        self.client.post("/api/automation/add", json={
+            "name": "Recurring_Report_B",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_b",
+            "interval_minutes": 15
+        })
+        intra_svc.type_b_exhausted.add("Recurring_Report_B")
+        intra_svc.type_b_last_run["Recurring_Report_B"] = time.time()
+
+        res_del_b = self.client.delete("/api/automation/delete/Recurring_Report_B")
+        self.assertEqual(res_del_b.status_code, 200)
+        self.assertNotIn("Recurring_Report_B", intra_svc.type_b_exhausted)
+        self.assertNotIn("Recurring_Report_B", intra_svc.type_b_last_run)
+
+        # 3. Lane A report delete + re-create purges day.reports_ran
+        self.client.post("/api/automation/add", json={
+            "name": "Sequential_Report_A",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        intraday_repo.add_report_run(
+            date=today_date,
+            report_name="Sequential_Report_A",
+            run=ReportRun(started_at="09:00:00", finished_at="09:01:00", result="completed", duration="60s", reason="Done")
+        )
+        res_del_a = self.client.delete("/api/automation/delete/Sequential_Report_A")
+        self.assertEqual(res_del_a.status_code, 200)
+        day = intraday_repo.get_day(today_date)
+        self.assertNotIn("Sequential_Report_A", day.reports_ran)
+
+        self.client.post("/api/automation/add", json={
+            "name": "Sequential_Report_A",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        intra_svc.start_lane("type_a", force_open=True)
+        self.assertIn("Sequential_Report_A", intra_svc.waitlist)
+
+    def test_f056_disabling_idle_report_completes_pass_without_deadlock(self):
+        """F-056: Disabling an idle report when all other pass items have skipped completes the pass, engages cooldown, and clears seen set."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc.rotation_cooldown_seconds = 30.0
+        intra_svc._override_cooldown = 30.0
+
+        self.client.post("/api/automation/add", json={
+            "name": "Report_A_P0",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Report_B_P1",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+
+        intra_svc.start_lane("type_a", force_open=True)
+        dispatches = []
+        def mock_trigger(name, date):
+            dispatches.append(name)
+            intra_svc.current_runs[name] = "09:00:00"
+            intra_svc._cycle_seen_in_pass.add(name)
+
+        intra_svc._trigger_report = mock_trigger
+        intra_svc.tick()
+        self.assertEqual(dispatches, ["Report_A_P0"])
+
+        # Report_A_P0 finishes with dependency skip
+        intra_svc.current_runs.pop("Report_A_P0")
+        intra_svc.waitlist.append("Report_A_P0")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc._evaluate_pass_completion(CLOCK.date_str())
+
+        # Operator disables idle Report_B_P1
+        res_dis = self.client.post("/api/automation/disable", json={"name": "Report_B_P1"})
+        self.assertEqual(res_dis.status_code, 200)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
+
+        # Subsequent ticks clear _cycle_seen_in_pass for the next pass without deadlocking
+        for _ in range(3):
+            intra_svc.tick()
+        self.assertEqual(len(intra_svc._cycle_seen_in_pass), 0)
+
 if __name__ == "__main__":
     unittest.main()
-
-
-
 

@@ -1,1026 +1,6 @@
 {
-    "20260907": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "Agency Performance"
-        ],
-        "reports_ran": {
-            "Agency Performance": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "09:42 AM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 20260907 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:42 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:42 AM",
-                "title": "Started Agency Performance",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "09:42 AM",
-                "title": "Agency Performance encountered error",
-                "description": "Re-queued for retry (1/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
-                "type": "failed"
-            },
-            {
-                "timestamp": "09:43 AM",
-                "title": "Started Agency Performance",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "09:43 AM",
-                "title": "Agency Performance encountered error",
-                "description": "Re-queued for retry (2/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
-                "type": "failed"
-            },
-            {
-                "timestamp": "09:43 AM",
-                "title": "Started Agency Performance",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "09:43 AM",
-                "title": "Agency Performance permanently failed",
-                "description": "Exceeded max retries (3/3): Report script not found on disk: C:\\Users\\ubpcbcsvc2\\OneDriv",
-                "type": "failed"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:47 AM",
-                "title": "Started Agency Performance",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "09:48 AM",
-                "title": "Completed Agency Performance",
-                "description": "Finished in 29s",
-                "type": "success"
-            },
-            {
-                "timestamp": "09:48 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:48 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:51 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "09:51 AM",
-                "title": "Started SF Base",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "09:51 AM",
-                "title": "SF Base encountered error",
-                "description": "Re-queued for retry (1/3): Return code 1: Traceback (most recent call last):\n  File \"C:",
-                "type": "failed"
-            },
-            {
-                "timestamp": "09:51 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 20260907 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
-    "20260922": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "12:15 AM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 20260922 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:15 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:07 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:07 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:08 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:09 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:09 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:05 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:05 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:31 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:05 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:05 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:32 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:05 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:41 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 2 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:41 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:42 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 2 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:42 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:57 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:02 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:04 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "01:58 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:03 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:05 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:06 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:52 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:02 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:02 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Paradiso closed",
-                "description": "Intraday execution window closed at 10:00 PM; uncompleted reports logged as Failed",
-                "type": "system"
-            },
-            {
-                "timestamp": "11:55 PM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:00 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 0 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Reports reset",
-                "description": "All report statuses reset to Waiting (Scheduler Standby)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:01 AM",
-                "title": "Scheduler started",
-                "description": "Sequential queue execution initiated for 1 pending report(s)",
-                "type": "system"
-            },
-            {
-                "timestamp": "12:02 AM",
-                "title": "Scheduler stopped",
-                "description": "Queue execution paused by user; active runs terminated",
-                "type": "system"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 20260922 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
-    "20260923": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "2026-09-23 12:29:45 AM",
-                "finished_at": "2026-09-23 12:29:45 AM",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "08:01 AM",
-                "title": "Event 1",
-                "description": "Desc 1",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Event 2",
-                "description": "Desc 2",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Event 3",
-                "description": "Desc 3",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Event 4",
-                "description": "Desc 4",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:05 AM",
-                "title": "Event 5",
-                "description": "Desc 5",
-                "type": "system"
-            }
-        ]
-    },
-    "2039-10-22": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "02:38 PM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 2039-10-22 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "02:38 PM",
-                "title": "Started SF Base",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "02:38 PM",
-                "title": "SF Base encountered error",
-                "description": "Re-queued for retry (1/3): Contract violation: Script 'SF Base' exited 0 without writin",
-                "type": "failed"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 2039-10-22 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
-    "2045-12-02": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "02:39 PM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 2045-12-02 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "02:39 PM",
-                "title": "Started SF Base",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "02:39 PM",
-                "title": "SF Base encountered error",
-                "description": "Re-queued for retry (1/3): Contract violation: Script 'SF Base' exited 0 without writin",
-                "type": "failed"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 2045-12-02 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
-    "2029-12-31": {
-        "status": "WAITING_TO_OPEN",
-        "expected_reports": [],
-        "reports_ran": {},
-        "timeline": [
-            {
-                "timestamp": "12:30 AM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 2029-12-31 (All reports reset to Waiting)",
-                "type": "system"
-            }
-        ]
-    },
-    "2045-12-04": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "02:42 PM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 2045-12-04 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "02:42 PM",
-                "title": "Started SF Base",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "02:42 PM",
-                "title": "SF Base encountered error",
-                "description": "Re-queued for retry (1/3): Contract violation: Script 'SF Base' exited 0 without writin",
-                "type": "failed"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 2045-12-04 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
-    "2045-12-05": {
-        "status": "CLOSED",
-        "expected_reports": [
-            "SF Base"
-        ],
-        "reports_ran": {
-            "SF Base": {
-                "started_at": "--",
-                "finished_at": "--",
-                "result": "failed",
-                "duration": "0s",
-                "reason": "Historical day finalized automatically"
-            }
-        },
-        "timeline": [
-            {
-                "timestamp": "02:55 PM",
-                "title": "Day Initialized",
-                "description": "Paradiso day initialized for 2045-12-05 (All reports reset to Waiting)",
-                "type": "system"
-            },
-            {
-                "timestamp": "02:55 PM",
-                "title": "Started SF Base",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "02:55 PM",
-                "title": "SF Base encountered error",
-                "description": "Re-queued for retry (1/3): Contract violation: Script 'SF Base' exited 0 without writin",
-                "type": "failed"
-            },
-            {
-                "timestamp": "22:00",
-                "title": "Paradiso closed (auto-reconciled)",
-                "description": "Historical intraday window for 2045-12-05 automatically marked CLOSED",
-                "type": "system"
-            }
-        ]
-    },
     "20261002": {
-        "status": "OPEN",
+        "status": "CLOSED",
         "expected_reports": [
             "Sample Lane A 01",
             "Sample Lane A 02",
@@ -1034,670 +14,328 @@
             "Sample Lane A 10"
         ],
         "reports_ran": {
-            "Sample Lane A 08": {
-                "started_at": "2026-10-02 07:54:11 AM",
-                "finished_at": "2026-10-02 07:54:27 AM",
+            "Sample Lane A 03": {
+                "started_at": "2026-10-02 08:09:41 AM",
+                "finished_at": "2026-10-02 09:19:45 AM",
                 "result": "completed",
-                "duration": "15s",
-                "reason": "Sample Lane A 08 completed in 15.2s. Successfully processed 1563 records for 20261002."
-            },
-            "Sample Lane A 07": {
-                "started_at": "2026-10-02 07:54:11 AM",
-                "finished_at": "2026-10-02 07:54:31 AM",
-                "result": "completed",
-                "duration": "19s",
-                "reason": "Sample Lane A 07 completed in 19.9s. Successfully processed 2256 records for 20261002."
-            },
-            "Sample Lane A 05": {
-                "started_at": "2026-10-02 07:56:12 AM",
-                "finished_at": "2026-10-02 07:56:34 AM",
-                "result": "completed",
-                "duration": "22s",
-                "reason": "Sample Lane A 05 completed in 22.0s. Successfully processed 1245 records for 20261002."
-            },
-            "Sample Lane A 06": {
-                "started_at": "2026-10-02 07:56:12 AM",
-                "finished_at": "2026-10-02 07:56:41 AM",
-                "result": "completed",
-                "duration": "28s",
-                "reason": "Sample Lane A 06 completed in 28.9s. Successfully processed 1899 records for 20261002."
-            },
-            "Sample Lane A 09": {
-                "started_at": "2026-10-02 07:56:42 AM",
-                "finished_at": "2026-10-02 07:57:07 AM",
-                "result": "completed",
-                "duration": "25s",
-                "reason": "Sample Lane A 09 completed in 25.2s. Successfully processed 2055 records for 20261002."
-            },
-            "Sample Lane A 01": {
-                "started_at": "2026-10-02 07:58:42 AM",
-                "finished_at": "2026-10-02 07:59:00 AM",
-                "result": "completed",
-                "duration": "17s",
-                "reason": "Sample Lane A 01 completed in 17.2s. Successfully processed 1540 records for 20261002."
-            },
-            "Sample Lane A 02": {
-                "started_at": "2026-10-02 07:59:42 AM",
-                "finished_at": "2026-10-02 08:00:01 AM",
-                "result": "completed",
-                "duration": "19s",
-                "reason": "Sample Lane A 02 completed in 19.0s. Successfully processed 1991 records for 20261002."
+                "duration": "6s",
+                "reason": "Sample Lane A 03 completed in 6.9s. Successfully processed 2042 records for 20261002."
             },
             "Sample Lane A 04": {
-                "started_at": "2026-10-02 08:03:43 AM",
-                "finished_at": "2026-10-02 08:04:06 AM",
-                "result": "failed",
-                "duration": "22s",
-                "reason": "Exceeded max retries (5/5): Return code 1: ============================================================\nRunning: Sample Lane A 04 | Date: 20261002\n============================================================\n[08:03:43] Checking upstream dependencies for date 20261002 (target outcome: fail, duration: 22.8s)...\n[08:03:43] Starting data processing for 20261002 (22.8s)...\n[-] FAILED: Unhandled exception in Sample Lane A 04: Simulated processing failure in Sample Lane A 04 after 22.8s\nTraceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 04 after 22.8s"
+                "started_at": "2026-10-02 08:08:51 AM",
+                "finished_at": "2026-10-02 12:57:42 PM",
+                "result": "completed",
+                "duration": "28s",
+                "reason": "Sample Lane A 04 completed in 28.8s. Successfully processed 1846 records for 20261002."
             },
-            "Sample Lane A 03": {
-                "started_at": "2026-10-02 08:04:13 AM",
-                "finished_at": "2026-10-02 08:04:31 AM",
-                "result": "failed",
-                "duration": "17s",
-                "reason": "Exceeded max retries (5/5): Return code 1: ============================================================\nRunning: Sample Lane A 03 | Date: 20261002\n============================================================\n[08:04:13] Checking upstream dependencies for date 20261002 (target outcome: fail, duration: 17.7s)...\n[08:04:13] Starting data processing for 20261002 (17.7s)...\n[-] FAILED: Unhandled exception in Sample Lane A 03: Simulated processing failure in Sample Lane A 03 after 17.7s\nTraceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_03.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_03.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 03 after 17.7s"
+            "Sample Lane A 05": {
+                "started_at": "2026-10-02 01:32:37 PM",
+                "finished_at": "2026-10-02 03:34:02 PM",
+                "result": "completed",
+                "duration": "12s",
+                "reason": "Sample Lane A 05 completed in 12.0s. Successfully processed 1508 records for 20261002."
+            },
+            "Sample Lane A 09": {
+                "started_at": "2026-10-02 02:40:12 PM",
+                "finished_at": "2026-10-02 04:14:09 PM",
+                "result": "completed",
+                "duration": "9s",
+                "reason": "Sample Lane A 09 completed in 9.3s. Successfully processed 1808 records for 20261002."
             },
             "Sample Lane A 10": {
-                "started_at": "2026-10-02 08:04:43 AM",
-                "finished_at": "2026-10-02 08:05:01 AM",
+                "started_at": "2026-10-02 03:16:25 PM",
+                "finished_at": "2026-10-02 07:42:24 PM",
                 "result": "completed",
-                "duration": "17s",
-                "reason": "Sample Lane A 10 completed in 17.3s. Successfully processed 1786 records for 20261002."
+                "duration": "26s",
+                "reason": "Sample Lane A 10 completed in 26.5s. Successfully processed 1195 records for 20261002."
+            },
+            "Sample Lane A 01": {
+                "started_at": "2026-10-02 07:56:40 PM",
+                "finished_at": "2026-10-02 09:42:37 PM",
+                "result": "completed",
+                "duration": "10s",
+                "reason": "Sample Lane A 01 completed in 10.5s. Successfully processed 1557 records for 20261002."
+            },
+            "Sample Lane A 02": {
+                "started_at": "2026-10-02 10:06:02 PM",
+                "finished_at": "2026-10-02 10:06:02 PM",
+                "result": "failed",
+                "duration": "0s",
+                "reason": "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)"
+            },
+            "Sample Lane A 06": {
+                "started_at": "2026-10-02 10:06:12 PM",
+                "finished_at": "2026-10-02 10:06:12 PM",
+                "result": "failed",
+                "duration": "0s",
+                "reason": "Not completed before 10:00 PM cutoff"
+            },
+            "Sample Lane A 07": {
+                "started_at": "2026-10-02 10:06:23 PM",
+                "finished_at": "2026-10-02 10:06:23 PM",
+                "result": "failed",
+                "duration": "0s",
+                "reason": "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)"
+            },
+            "Sample Lane A 08": {
+                "started_at": "2026-10-02 10:06:34 PM",
+                "finished_at": "2026-10-02 10:06:34 PM",
+                "result": "failed",
+                "duration": "0s",
+                "reason": "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)"
             }
         },
         "timeline": [
             {
-                "timestamp": "07:52 AM",
+                "timestamp": "08:08 AM",
                 "title": "Day Initialized",
                 "description": "Paradiso day initialized for 20261002",
                 "type": "system"
             },
             {
-                "timestamp": "07:52 AM",
+                "timestamp": "08:08 AM",
                 "title": "Lane A (Sequential) started",
                 "description": "Sequential queue execution initiated for 10 pending report(s)",
                 "type": "system"
             },
             {
-                "timestamp": "07:52 AM",
-                "title": "Started Sample Lane A 01",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:52 AM",
-                "title": "Started Sample Lane A 02",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:53 AM",
-                "title": "Sample Lane A 01 encountered error",
-                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "07:53 AM",
-                "title": "Rotated Sample Lane A 02",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:53 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:53 AM",
+                "timestamp": "08:08 AM",
                 "title": "Started Sample Lane A 04",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:53 AM",
-                "title": "Rotated Sample Lane A 03",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:53 AM",
-                "title": "Sample Lane A 04 encountered error",
-                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "07:53 AM",
-                "title": "Started Sample Lane A 05",
+                "timestamp": "08:09 AM",
+                "title": "Started Sample Lane A 09",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:53 AM",
+                "timestamp": "08:09 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:09 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "09:17 AM",
+                "title": "Sample Lane A 09 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "09:19 AM",
+                "title": "Completed Sample Lane A 03",
+                "description": "Finished in 6s",
+                "type": "success"
+            },
+            {
+                "timestamp": "09:21 AM",
                 "title": "Started Sample Lane A 06",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:54 AM",
-                "title": "Sample Lane A 05 encountered error",
-                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "07:54 AM",
-                "title": "Sample Lane A 06 encountered error",
-                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "07:54 AM",
-                "title": "Started Sample Lane A 07",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:54 AM",
+                "timestamp": "09:21 AM",
                 "title": "Started Sample Lane A 08",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:54 AM",
-                "title": "Completed Sample Lane A 08",
-                "description": "Finished in 15s",
-                "type": "success"
-            },
-            {
-                "timestamp": "07:54 AM",
-                "title": "Completed Sample Lane A 07",
-                "description": "Finished in 19s",
-                "type": "success"
-            },
-            {
-                "timestamp": "07:54 AM",
-                "title": "Started Sample Lane A 09",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:54 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:54 AM",
+                "timestamp": "12:44 PM",
                 "title": "Rotated Sample Lane A 10",
                 "description": "Skipped (missing dependency), rotated to back of queue",
                 "type": "system"
             },
             {
-                "timestamp": "07:55 AM",
-                "title": "Rotated Sample Lane A 09",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:55 AM",
+                "timestamp": "12:45 PM",
                 "title": "Started Sample Lane A 01",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:55 AM",
+                "timestamp": "12:57 PM",
+                "title": "Completed Sample Lane A 04",
+                "description": "Finished in 28s",
+                "type": "success"
+            },
+            {
+                "timestamp": "01:01 PM",
                 "title": "Started Sample Lane A 02",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:55 AM",
-                "title": "Rotated Sample Lane A 01",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
+                "timestamp": "01:27 PM",
+                "title": "Sample Lane A 06 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
             },
             {
-                "timestamp": "07:55 AM",
-                "title": "Rotated Sample Lane A 02",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:55 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:55 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:56 AM",
-                "title": "Rotated Sample Lane A 04",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:56 AM",
-                "title": "Rotated Sample Lane A 03",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:56 AM",
+                "timestamp": "01:32 PM",
                 "title": "Started Sample Lane A 05",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:56 AM",
-                "title": "Started Sample Lane A 06",
+                "timestamp": "01:58 PM",
+                "title": "Rotated Sample Lane A 01",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "01:59 PM",
+                "title": "Started Sample Lane A 07",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:56 AM",
-                "title": "Completed Sample Lane A 05",
-                "description": "Finished in 22s",
-                "type": "success"
+                "timestamp": "02:36 PM",
+                "title": "Sample Lane A 08 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
             },
             {
-                "timestamp": "07:56 AM",
-                "title": "Completed Sample Lane A 06",
-                "description": "Finished in 28s",
-                "type": "success"
-            },
-            {
-                "timestamp": "07:56 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:56 AM",
+                "timestamp": "02:40 PM",
                 "title": "Started Sample Lane A 09",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:56 AM",
-                "title": "Rotated Sample Lane A 10",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
+                "timestamp": "03:15 PM",
+                "title": "Sample Lane A 07 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
             },
             {
-                "timestamp": "07:57 AM",
-                "title": "Completed Sample Lane A 09",
-                "description": "Finished in 25s",
+                "timestamp": "03:16 PM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "03:34 PM",
+                "title": "Completed Sample Lane A 05",
+                "description": "Finished in 12s",
                 "type": "success"
             },
             {
-                "timestamp": "07:57 AM",
+                "timestamp": "03:37 PM",
+                "title": "Started Sample Lane A 06",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "04:14 PM",
+                "title": "Completed Sample Lane A 09",
+                "description": "Finished in 9s",
+                "type": "success"
+            },
+            {
+                "timestamp": "04:19 PM",
                 "title": "Started Sample Lane A 01",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:57 AM",
-                "title": "Started Sample Lane A 02",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:57 AM",
+                "timestamp": "05:12 PM",
                 "title": "Sample Lane A 02 encountered error",
                 "description": "Re-queued for retry (1/5): Return code 1: =============================================",
                 "type": "failed"
             },
             {
-                "timestamp": "07:57 AM",
+                "timestamp": "05:16 PM",
+                "title": "Started Sample Lane A 08",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "06:05 PM",
                 "title": "Sample Lane A 01 encountered error",
-                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "07:57 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:57 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:57 AM",
-                "title": "Sample Lane A 03 encountered error",
                 "description": "Re-queued for retry (1/5): Return code 1: =============================================",
                 "type": "failed"
             },
             {
-                "timestamp": "07:58 AM",
-                "title": "Rotated Sample Lane A 04",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:58 AM",
-                "title": "Started Sample Lane A 10",
+                "timestamp": "06:08 PM",
+                "title": "Started Sample Lane A 07",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:58 AM",
+                "timestamp": "07:42 PM",
+                "title": "Completed Sample Lane A 10",
+                "description": "Finished in 26s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:45 PM",
                 "title": "Started Sample Lane A 02",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:58 AM",
-                "title": "Sample Lane A 10 encountered error",
-                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "timestamp": "07:51 PM",
+                "title": "Sample Lane A 07 encountered error",
+                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
                 "type": "failed"
             },
             {
-                "timestamp": "07:58 AM",
-                "title": "Rotated Sample Lane A 02",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:58 AM",
+                "timestamp": "07:56 PM",
                 "title": "Started Sample Lane A 01",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:58 AM",
-                "title": "Started Sample Lane A 03",
+                "timestamp": "08:43 PM",
+                "title": "Rotated Sample Lane A 06",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:44 PM",
+                "title": "Started Sample Lane A 07",
                 "description": "Currently running",
                 "type": "start"
             },
             {
-                "timestamp": "07:59 AM",
+                "timestamp": "09:42 PM",
                 "title": "Completed Sample Lane A 01",
-                "description": "Finished in 17s",
+                "description": "Finished in 10s",
                 "type": "success"
             },
             {
-                "timestamp": "07:59 AM",
-                "title": "Rotated Sample Lane A 03",
-                "description": "Skipped (missing dependency), rotated to back of queue",
+                "timestamp": "10:06 PM",
+                "title": "Paradiso closed",
+                "description": "Intraday execution window closed at 10:00 PM; all running tasks forcibly killed and uncompleted reports logged as Failed",
                 "type": "system"
-            },
+            }
+        ]
+    },
+    "20261003": {
+        "status": "WAITING_TO_OPEN",
+        "expected_reports": [
+            "Sample Lane A 01",
+            "Sample Lane A 02",
+            "Sample Lane A 03",
+            "Sample Lane A 04",
+            "Sample Lane A 05",
+            "Sample Lane A 06",
+            "Sample Lane A 07",
+            "Sample Lane A 08",
+            "Sample Lane A 09",
+            "Sample Lane A 10"
+        ],
+        "reports_ran": {},
+        "timeline": [
             {
-                "timestamp": "07:59 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:59 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:59 AM",
-                "title": "Rotated Sample Lane A 04",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:59 AM",
-                "title": "Rotated Sample Lane A 10",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "07:59 AM",
-                "title": "Started Sample Lane A 02",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "07:59 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Completed Sample Lane A 02",
-                "description": "Finished in 19s",
-                "type": "success"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Sample Lane A 03 encountered error",
-                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Rotated Sample Lane A 04",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Rotated Sample Lane A 10",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:00 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Sample Lane A 03 encountered error",
-                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Rotated Sample Lane A 03",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Sample Lane A 10 encountered error",
-                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:01 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Sample Lane A 04 encountered error",
-                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Rotated Sample Lane A 10",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Sample Lane A 03 encountered error",
-                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:02 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Sample Lane A 04 encountered error",
-                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Sample Lane A 10 encountered error",
-                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Sample Lane A 04 encountered error",
-                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Rotated Sample Lane A 03",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:03 AM",
-                "title": "Started Sample Lane A 04",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Sample Lane A 10 encountered error",
-                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Sample Lane A 04 permanently failed",
-                "description": "Exceeded max retries (5/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Started Sample Lane A 03",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Rotated Sample Lane A 10",
-                "description": "Skipped (missing dependency), rotated to back of queue",
-                "type": "system"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Sample Lane A 03 permanently failed",
-                "description": "Exceeded max retries (5/5): Return code 1: =============================================",
-                "type": "failed"
-            },
-            {
-                "timestamp": "08:04 AM",
-                "title": "Started Sample Lane A 10",
-                "description": "Currently running",
-                "type": "start"
-            },
-            {
-                "timestamp": "08:05 AM",
-                "title": "Completed Sample Lane A 10",
-                "description": "Finished in 17s",
-                "type": "success"
-            },
-            {
-                "timestamp": "08:19 AM",
-                "title": "Lane A (Sequential) stopped",
-                "description": "Sequential lane paused by user; active runs terminated",
+                "timestamp": "12:05 AM",
+                "title": "Day Initialized",
+                "description": "Paradiso day initialized for 20261003",
                 "type": "system"
             }
         ]

@@ -314,4 +314,20 @@ The following historical audit reports have had all reported findings independen
 - **Mechanism:** Added `id="metric-b-active"` to the `#view-type-b` Active Workers metric card in `index.html`, bound it in `updateLaneUI('type_b')` in `app.js`, and aligned all 3 `EOD (21:00)` / `EOD Slot (21:00)` labels in `index.html` (lines 168, 535, 570) to `20:30`.
 - **Evidence:** Lane B dynamically updates its in-flight worker count and all EOD schedule references in `index.html` consistently read `20:30`. Verified in `poc_f048_f052_frontend_backend_integrity.py` and `tests/test_audit_fixes.py` (`test_f052_lane_b_active_workers_bound_and_eod_2030_consistent`).
 
+### F-053: Lane A Multi-Slot Concurrency Starvation Cooldown Bypass & Asymmetric Fast-Spinning
+- **Mechanism:** In `IntradayService.tick()`, restricted dispatch selection to unseen candidates (`unseen_candidates = [r for r in self.waitlist if r not in self._cycle_seen_in_pass]`), preventing fast-finishing skipped reports from re-dispatching into freed slots mid-pass while sibling jobs are in-flight. Also invoked `_evaluate_pass_completion()` when mid-pass disabled reports are pruned.
+- **Evidence:** When `max_concurrent_run > 1`, a skipped report rotated to `waitlist` is held until all parallel jobs in the pass conclude, at which point the full pass concludes and starvation cooldown (`rotation_cooldown_seconds`) engages. Verified in `poc_f053_f054_concurrency_spin_and_delete_leak.py` and `tests/test_audit_fixes.py` (`test_f053_multi_slot_seen_reports_do_not_fast_spin_in_same_pass`).
+
+### F-054: `delete_automation` Leaks Runtime Execution State and Storage Run History
+- **Mechanism:** In `AutomationController.delete_automation()`, completely purged all Lane A/B/C runtime tracking sets and dictionaries (`type_c_ran_today`, `type_c_retry_after`, `type_c_warned`, `type_b_exhausted`, `type_b_last_run`, `_cycle_pass_reports`, `_cycle_seen_in_pass`, `_last_rotation_logged`), triggered `_evaluate_pass_completion(today_date)`, and called `Intraday.purge_report_from_day(today_date, name)` to remove stale run records from `reports_ran` and `expected_reports`.
+- **Evidence:** Deleting a report and re-creating it under the same name immediately allows the report to be enqueued and dispatched on lane start without restart or midnight rollover. Verified in `poc_f053_f054_concurrency_spin_and_delete_leak.py` and `tests/test_audit_fixes.py` (`test_f054_delete_automation_purges_runtime_and_intraday_state`).
+
+### F-055: Blueprint `"SF Base"` Replacement Breaks Test Suite
+- **Mechanism:** In `tests/test_api.py:TestAPIEndpoints.setUp()`, defensively seeded `"SF Base"` (`type_a`) in the isolated test sandbox directory whenever absent from the initial catalog, decoupling the test suite from live `storage/automations.json` sample catalog updates.
+- **Evidence:** `POST /api/automation/run` targeting `"SF Base"` returns HTTP 403 Forbidden as expected. Automated test runner `run_tests.py` achieves 100% pass rate (151/151 passing, 0 failures). Verified in `tests/test_api.py:test_trigger_single_automation_run`.
+
+### F-056: Disabling an Idle Lane A Report Stalls Queue Pass Evaluation, Stranding Skipped Reports in Permanent Deadlock
+- **Mechanism:** In `AutomationController.disable_automation()`, invoked `self.intraday_service._evaluate_pass_completion(CLOCK.date_str(), defer_seen_clear=True)` within the mutation lock upon evicting an idle report, and added a defensive check in `IntradayService.tick()` (`if len(self.current_runs) == 0 and len(self.waitlist) > 0 and not unseen_candidates: self._evaluate_pass_completion(today_date)`) to ensure pass completion is evaluated and `_cycle_seen_in_pass` is cleared for the next pass.
+- **Evidence:** Disabling an idle report after all other waiting reports in the pass have skipped immediately engages starvation cooldown and clears `_cycle_seen_in_pass` on the subsequent tick without stranding remaining items in deadlock. Verified in `poc_f056_disable_queue_deadlock.py` and `tests/test_audit_fixes.py` (`test_f056_disabling_idle_report_completes_pass_without_deadlock`).
+
 

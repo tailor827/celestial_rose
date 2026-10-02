@@ -177,8 +177,16 @@
 
                     <!-- Executions Table -->
                     <div class="table-section">
-                        <div class="table-header">
-                            <h2>Today’s Execution</h2>
+                        <div class="table-header" style="flex-wrap: wrap; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                <h2>Today’s Execution</h2>
+                                <div id="dash-lane-filter-group" style="display: inline-flex; gap: 4px; background: rgba(15, 23, 42, 0.6); padding: 3px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                                    <button type="button" class="btn-primary dash-lane-pill active" data-lane="ALL" onclick="setDashboardLaneFilter('ALL')" style="padding: 4px 10px; font-size: 11px; border: none; background: rgba(96, 165, 250, 0.2); color: #60a5fa; font-weight: 600; cursor: pointer;">All Lanes</button>
+                                    <button type="button" class="btn-primary dash-lane-pill" data-lane="type_a" onclick="setDashboardLaneFilter('type_a')" style="padding: 4px 10px; font-size: 11px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Lane A</button>
+                                    <button type="button" class="btn-primary dash-lane-pill" data-lane="type_b" onclick="setDashboardLaneFilter('type_b')" style="padding: 4px 10px; font-size: 11px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Lane B</button>
+                                    <button type="button" class="btn-primary dash-lane-pill" data-lane="type_c" onclick="setDashboardLaneFilter('type_c')" style="padding: 4px 10px; font-size: 11px; border: none; background: transparent; color: var(--text-muted); cursor: pointer;">Lane C</button>
+                                </div>
+                            </div>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <button type="button" class="btn-primary" onclick="openAddReportModal()" style="font-weight: 600; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa;">
                                     <span>+</span> Add Report
@@ -288,6 +296,15 @@
                             <input type="text" id="auto-catalog-search" placeholder="Search report name, owner, or filename..." oninput="filterAutomationsCatalog()">
                         </div>
                         <div class="filter-group">
+                            <label for="auto-lane-filter">Lane:</label>
+                            <select id="auto-lane-filter" onchange="filterAutomationsCatalog()">
+                                <option value="ALL">All Lanes</option>
+                                <option value="type_a">Lane A: Sequential</option>
+                                <option value="type_b">Lane B: Recurring</option>
+                                <option value="type_c">Lane C: Timeslots</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
                             <label for="auto-team-filter">Team:</label>
                             <select id="auto-team-filter" onchange="filterAutomationsCatalog()">
                                 <option value="ALL">All Teams</option>
@@ -308,6 +325,7 @@
                                 <option value="Waiting">Waiting</option>
                                 <option value="Completed">Completed</option>
                                 <option value="Running">Running</option>
+                                <option value="Retrial">Retrial</option>
                                 <option value="Failed">Failed</option>
                                 <option value="Inactive">Inactive / Disabled</option>
                             </select>
@@ -1494,6 +1512,19 @@ tryCatch({
                             <option value="type_c">Lane C — Timeslots (Fixed Schedules / BOD, MID, EOD)</option>
                         </select>
                         <span class="field-hint" id="new-report-type-hint">Executes via FIFO queue or concurrency pool during open operating hours.</span>
+                    </div>
+
+                    <!-- Lane A Dynamic Group: Priority Queue Tier -->
+                    <div id="group-lane-a-config" style="display: block; background: rgba(234, 179, 8, 0.05); border: 1px solid rgba(234, 179, 8, 0.2); border-radius: 8px; padding: 12px;">
+                        <div class="form-group">
+                            <label for="new-report-priority">Queue Priority Tier *</label>
+                            <select id="new-report-priority" class="settings-control">
+                                <option value="P2">P2 — Normal (Standard FIFO Queue — Default)</option>
+                                <option value="P1">P1 — High (Elevated Priority Ahead of Normal)</option>
+                                <option value="P0">P0 — Critical (Front-of-Deck Dispatch)</option>
+                            </select>
+                            <span class="field-hint">Higher-priority reports jump ahead of lower-priority items at the start of each queue pass.</span>
+                        </div>
                     </div>
 
                     <!-- Lane B Dynamic Group: Recurring Interval -->

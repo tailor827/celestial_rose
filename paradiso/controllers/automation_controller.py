@@ -5,6 +5,7 @@ from flask import Flask, jsonify, request
 from models.report import Report
 from services.automation_service import AutomationService
 from services.intraday_service import IntradayService
+from utils.clock import CLOCK
 
 class AutomationController:
     """REST API Controller for automations CRUD operations."""
@@ -112,6 +113,13 @@ class AutomationController:
                     "error": f"Invalid catch_up_policy '{catch_up_policy}': must be one of CATCH_UP_IMMEDIATE, SKIP_UNTIL_NEXT_DAY, WARN_OPERATOR."
                 }), 400
 
+        raw_priority = str(data.get("priority") or "P2").strip().upper()
+        if raw_priority not in ["P0", "P1", "P2"]:
+            return jsonify({
+                "ok": False,
+                "error": f"Invalid priority '{raw_priority}': must be one of 'P0' (Critical), 'P1' (High), or 'P2' (Normal)."
+            }), 400
+
         report = Report(
             name=name,
             filename=filename,
@@ -124,7 +132,8 @@ class AutomationController:
             report_type=report_type,
             interval_minutes=interval_minutes,
             timeslot_tier=timeslot_tier,
-            catch_up_policy=catch_up_policy
+            catch_up_policy=catch_up_policy,
+            priority=raw_priority
         )
         self.automation_service.add(report)
 
@@ -132,7 +141,7 @@ class AutomationController:
         if self.intraday_service and lane_a_active and initial_status == "Waiting" and report_type == "type_a":
             with self.intraday_service._lock:
                 if name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
-                    self.intraday_service.waitlist.append(name)
+                    self.intraday_service._enqueue_lane_a_by_priority(name)
                     self.intraday_service._rotation_cooldown_until = 0.0
                     self.intraday_service._cycle_pass_reports.add(name)
 
@@ -170,6 +179,18 @@ class AutomationController:
                 self.intraday_service.active_runs_type_b.pop(name, None)
                 self.intraday_service.active_runs_type_c.pop(name, None)
                 self.intraday_service.retry_counts.pop(name, None)
+                self.intraday_service.type_c_ran_today.discard(name)
+                self.intraday_service.type_c_retry_after.pop(name, None)
+                self.intraday_service.type_c_warned.discard(name)
+                self.intraday_service.type_b_exhausted.discard(name)
+                self.intraday_service.type_b_last_run.pop(name, None)
+                self.intraday_service._cycle_pass_reports.discard(name)
+                self.intraday_service._cycle_seen_in_pass.discard(name)
+                self.intraday_service._last_rotation_logged.pop(name, None)
+
+                today_date = CLOCK.date_str()
+                self.intraday_service.intraday_repo.purge_report_from_day(today_date, name)
+                self.intraday_service._evaluate_pass_completion(today_date)
 
         self.automation_service.delete(name)
         return jsonify({"ok": True, "message": f"Report '{name}' deleted successfully"}), 200
@@ -206,6 +227,7 @@ class AutomationController:
                 self.intraday_service._cycle_seen_in_pass.discard(name)
                 self.intraday_service.retry_counts.pop(name, None)
                 self.intraday_service.type_c_retry_after.pop(name, None)
+                self.intraday_service._evaluate_pass_completion(CLOCK.date_str(), defer_seen_clear=True)
         elif report.status == "Running":
             return jsonify({
                 "ok": False,
@@ -217,7 +239,6 @@ class AutomationController:
             return jsonify({"ok": False, "error": f"Report '{name}' not found"}), 404
 
         if self.intraday_service:
-            from utils.clock import CLOCK
             today_date = CLOCK.date_str()
             self.intraday_service.intraday_repo.add_timeline_event(
                 date=today_date,
@@ -247,7 +268,6 @@ class AutomationController:
 
         if self.intraday_service:
             with self.intraday_service._lock:
-                from utils.clock import CLOCK
                 today_date = CLOCK.date_str()
                 self.intraday_service.type_b_exhausted.discard(name)
                 self.intraday_service.type_c_ran_today.discard(name)
@@ -259,7 +279,7 @@ class AutomationController:
                     day = self.intraday_service.intraday_repo.get_day(today_date)
                     already_ran = self.intraday_service._get_completed_or_exhausted_reports(day) if day else set()
                     if name not in already_ran and name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
-                        self.intraday_service.waitlist.append(name)
+                        self.intraday_service._enqueue_lane_a_by_priority(name)
                         self.intraday_service.all_completed = False
                         self.intraday_service._rotation_cooldown_until = 0.0
                         self.intraday_service._cycle_pass_reports.add(name)

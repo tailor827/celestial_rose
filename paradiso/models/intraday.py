@@ -147,3 +147,15 @@ class Intraday(StorageBase):
                     data[date]["reports_ran"].pop(report_name, None)
         self.mutate(_mutate)
 
+    def purge_report_from_day(self, date: str, report_name: str) -> None:
+        """Removes a deleted report from expected_reports and reports_ran for the given date."""
+        def _mutate(data):
+            if date in data:
+                if "reports_ran" in data[date] and isinstance(data[date]["reports_ran"], dict):
+                    data[date]["reports_ran"].pop(report_name, None)
+                if "expected_reports" in data[date] and isinstance(data[date]["expected_reports"], list):
+                    data[date]["expected_reports"] = [
+                        r for r in data[date]["expected_reports"] if r != report_name
+                    ]
+        self.mutate(_mutate)
+

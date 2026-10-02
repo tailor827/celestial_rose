@@ -1,8 +1,0 @@
-{
-  "name": "Sample Lane A 08",
-  "status": "Completed",
-  "last_run": "2026-10-02 07:54:27",
-  "duration": "15.2s",
-  "last_output": "Sample Lane A 08 completed in 15.2s. Successfully processed 1563 records for 20261002.",
-  "reason": "Execution completed successfully"
-}

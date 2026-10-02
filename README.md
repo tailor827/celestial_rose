@@ -1,7 +1,7 @@
 # Paradiso
 
 > **Bank-Grade Decoupled Multi-Lane Daemon Scheduling Engine & Observability Platform**  
-> *Certified 100% Audit-Passing Baseline (139/139 Unit Tests — 100% Pass Rate, 0 Active Defects)*
+> *Certified 100% Audit-Passing Baseline (148/148 Unit Tests — 100% Pass Rate, 0 Active Defects)*
 
 ---
 
@@ -14,7 +14,7 @@ graph TD
     UI["Web UI & REST APIs"] --> Controllers["Controllers Layer"]
     Controllers --> IntradaySvc["IntradayService (3-Lane Dispatcher)"]
     
-    IntradaySvc --> LaneA["Lane A: Sequential FIFO (1-at-a-time or Concurrency Pool)"]
+    IntradaySvc --> LaneA["Lane A: Priority-FIFO Queue (P0/P1/P2 & Concurrency Pool)"]
     IntradaySvc --> LaneB["Lane B: Recurring Intervals (Concurrent)"]
     IntradaySvc --> LaneC["Lane C: Pinned Timeslots (BOD / MID / EOD / Custom)"]
     
@@ -34,7 +34,7 @@ graph TD
 
 | Lane | Scheduling Model | Concurrency | Dependency Skips | Manual Run Policy (`/api/automation/run`) |
 |---|---|---|---|---|
-| **Lane A** | **Sequential FIFO Queue** | Configurable concurrency pool (`max_concurrent_run: N`, $1 \le N \le 20$) | Rotated to back of waitlist (`Retrial`, 0 penalty) | **Disabled (HTTP 403 Forbidden)** — autonomous queue only |
+| **Lane A** | **Priority-FIFO Queue (`P0` $\to$ `P1` $\to$ `P2`)** | Configurable concurrency pool (`max_concurrent_run: N`, $1 \le N \le 20$) | Rotated to back of current pass (`Retrial`, 0 penalty); re-sorted by `P0 -> P1 -> P2` at pass completion | **Disabled (HTTP 403 Forbidden)** — autonomous queue only |
 | **Lane B** | **Recurring Intervals** | Concurrent across distinct pipelines (15m, 30m, 60m) | Interval wait cooldown enforced (F-022) | **Allowed (HTTP 200 OK)** during `OPEN` window |
 | **Lane C** | **Pinned Timeslots** | Wall-clock milestone-pinned (BOD 07:00, MID 12:00, EOD 20:30, Custom) | 5-minute backoff cooldown (F-022); mid-day reboot hydration (F-029); Missed window catch-up policy (P2.2) | **Allowed (HTTP 200 OK)** during `OPEN` window |
 
@@ -45,7 +45,7 @@ graph TD
 ### 1. Universal Intraday Window Yielding
 All three scheduling lanes, independent lane starts, and on-demand manual executions strictly yield to the 24-hour intraday lifecycle:
 - **`00:00 – 06:59` (`WAITING_TO_OPEN`)**: All lanes idle. Automated dispatches, manual executions, and lane starts blocked with HTTP `409 Conflict`.
-- **`07:00 – 20:59` (`OPEN`)**: Active execution window for Lane A FIFO queue, Lane B recurring intervals, Lane C timeslots, and manual runs.
+- **`07:00 – 20:59` (`OPEN`)**: Active execution window for Lane A priority-FIFO queue, Lane B recurring intervals, Lane C timeslots, and manual runs.
 - **`21:00 – 21:59` (`WAITING_TO_CLOSE`)**: Evening wrap-up. No new runs launched across any lane. In-flight jobs complete naturally. Manual runs and lane starts blocked with HTTP `409 Conflict`.
 - **`22:00 – 23:59` (`CLOSED`)**: Hard cutoff. Running jobs terminated immediately (`runner.kill_all()`), uncompleted jobs marked `Failed`. Manual runs and lane starts blocked with HTTP `409 Conflict`.
 
@@ -56,7 +56,7 @@ Every report belongs to **strictly one lane** across the entire catalog. Registe
 Attempting to update configuration, interpreter paths, or simulation modes while ANY task is running in Lane A, Lane B, or Lane C is rejected with HTTP `409 Conflict`.
 
 ### 4. Section 12 Report Receipt Contract
-Every pipeline script must write a structured JSON receipt to `paradiso/logs/{name}.json` before terminating. Scripts terminating without a valid receipt are marked as **Contract Violations** and fail terminally after 3 retries. Upstream dependency skips (`SKIPPED`) incur **zero penalty** and never consume error retries.
+Every pipeline script must write a structured JSON receipt to `paradiso/logs/{name}.json` before terminating. Scripts terminating without a valid receipt are marked as **Contract Violations** and fail terminally after `max_retries` (default: 5). Upstream dependency skips (`SKIPPED`) incur **zero penalty** and never consume error retries.
 
 ### 5. Independent Lane Controls & 10s Cooldown
 Operators can independently start and stop Lane A, Lane B, and Lane C via REST endpoints (`/api/paradiso/lane/start`, `/api/paradiso/lane/stop`) with an independent 10-second transition cooldown buffer (`HTTP 429`) and out-of-window gating (`HTTP 409`).
@@ -80,7 +80,7 @@ pip install -r paradiso/requirements.txt
 ```bash
 python paradiso/app.py
 ```
-Open **`http://localhost:5000`** in your browser.
+Open **`http://localhost:8080`** in your browser.
 
 - **Standby Mode (Default)**: Boots safely without background execution. Operators click **"Start Scheduler"** or activate individual lanes.
 - **Autonomous Mode**: Set `scheduler.auto_start: true` in `paradiso/config.yaml` to boot directly into autonomous 24-hour operation.
@@ -89,13 +89,13 @@ Open **`http://localhost:5000`** in your browser.
 
 ## 5. Verification & Testing
 
-### Automated Unit Test Suite (139 Tests)
+### Automated Unit Test Suite (148 Tests)
 ```bash
 python run_tests.py
 # or: py -3 run_tests.py
 ```
 ```
-Ran 139 tests in 7.961s
+Ran 148 tests in 10.42s
 OK
 ```
 
@@ -131,8 +131,9 @@ Final Result: 9/9 suites passed in 8.15s
 ```
 celestial_rose/
 ├── README.md                          # Repository documentation
-├── run_tests.py                       # Root test runner (139 unit tests)
+├── run_tests.py                       # Root test runner (148 unit tests)
 ├── reports/                           # Production report scripts & blueprints
+│   ├── sample_lane_a_01.py .. 10.py   # Lane A: Staggered P0/P1/P2 test pipelines
 │   ├── hourly_liquidity_feed.py       # Lane B: Recurring interval pipeline
 │   ├── eod_ledger_reconciliation.py   # Lane C: Pinned EOD timeslot pipeline
 │   ├── sample_report_blueprint.py     # Python Section 12 receipt blueprint
@@ -162,5 +163,5 @@ celestial_rose/
 ## 7. Further Documentation
 
 - **[Technical Documentation](paradiso/TECHNICAL_DOCUMENTATION.md)**: Exhaustive technical specification, 24-hour lifecycle details, REST API table, Receipt Contract specifications, and failure policies.
-- **[Development Roadmap](paradiso/ROADMAP.md)**: Phase 1 baseline completion, Phase 2 concurrency expansions, Phase 3 cross-lane DAGs, and Phase 4 enterprise observability.
+- **[Development Roadmap](paradiso/ROADMAP.md)**: Phase 1 baseline completion, Phase 2 concurrency expansions, Phase 3 priority queue & cross-lane DAGs, and Phase 4 enterprise observability.
 - **[Developer Handover Context](paradiso/artifacts/dev/dev_session_context.md)**: Development session logs, audit remediation dossiers, and operating invariants.

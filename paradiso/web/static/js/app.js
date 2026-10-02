@@ -631,6 +631,116 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+let currentDashboardLaneFilter = 'ALL';
+
+function setDashboardLaneFilter(lane) {
+    currentDashboardLaneFilter = lane || 'ALL';
+    const pills = document.querySelectorAll('#dash-lane-filter-group .dash-lane-pill');
+    pills.forEach(btn => {
+        const isMatch = btn.getAttribute('data-lane') === currentDashboardLaneFilter;
+        btn.classList.toggle('active', isMatch);
+        if (isMatch) {
+            btn.style.background = 'rgba(96, 165, 250, 0.2)';
+            btn.style.color = '#60a5fa';
+            btn.style.fontWeight = '600';
+        } else {
+            btn.style.background = 'transparent';
+            btn.style.color = 'var(--text-muted)';
+            btn.style.fontWeight = '400';
+        }
+    });
+    renderDashboardTable(window.allAutomations || []);
+}
+
+function formatPriorityBadge(priority) {
+    const p = String(priority || 'P2').toUpperCase();
+    if (p === 'P0') {
+        return `<span class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(244, 63, 94, 0.18); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-weight: 700;">P0 · Critical</span>`;
+    }
+    if (p === 'P1') {
+        return `<span class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(251, 191, 36, 0.16); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.38); font-weight: 700;">P1 · High</span>`;
+    }
+    return `<span class="badge" style="font-size: 10px; padding: 2px 6px; background: rgba(148, 163, 184, 0.12); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25);">P2 · Normal</span>`;
+}
+
+function getPriorityRank(priority) {
+    const p = String(priority || 'P2').toUpperCase();
+    if (p === 'P0') return 0;
+    if (p === 'P1') return 1;
+    return 2;
+}
+
+function renderDashboardTable(automations) {
+    const tbody = document.getElementById('automations-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const items = (automations || []).filter(item => {
+        if (currentDashboardLaneFilter === 'ALL') return true;
+        const rType = (item.report_type || 'type_a').toLowerCase();
+        return rType === currentDashboardLaneFilter;
+    }).sort((a, b) => {
+        const typeA = (a.report_type || 'type_a').toLowerCase();
+        const typeB = (b.report_type || 'type_a').toLowerCase();
+        const rankA = typeA === 'type_a' ? getPriorityRank(a.priority) : 2;
+        const rankB = typeB === 'type_a' ? getPriorityRank(b.priority) : 2;
+        return rankA - rankB;
+    });
+
+    if (items.length === 0) {
+        const laneLabel = currentDashboardLaneFilter === 'ALL' ? '' : ` in ${currentDashboardLaneFilter.replace('type_', 'Lane ').toUpperCase()}`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">No reports configured${laneLabel}. Click <strong>+ Add Report</strong> to register a pipeline.</td></tr>`;
+        return;
+    }
+
+    items.forEach((item, index) => {
+        const tr = document.createElement('tr');
+
+        let badgeClass = 'badge-waiting';
+        const rType = (item.report_type || 'type_a').toLowerCase();
+        const prio = String(item.priority || 'P2').toUpperCase();
+        let typeLabel = `Lane A · ${prio}`;
+        let modeBadgeStyle = 'background: rgba(96, 165, 250, 0.12); border: 1px solid rgba(96, 165, 250, 0.28); color: #60a5fa;';
+        if (rType === 'type_b') {
+            typeLabel = `Lane B · Every ${item.interval_minutes || 30}m`;
+            modeBadgeStyle = 'background: rgba(234, 179, 8, 0.12); border: 1px solid rgba(234, 179, 8, 0.28); color: #fde047;';
+        } else if (rType === 'type_c') {
+            typeLabel = `Lane C · ${item.timeslot_tier || 'Custom'}`;
+            modeBadgeStyle = 'background: rgba(167, 139, 250, 0.12); border: 1px solid rgba(167, 139, 250, 0.28); color: #c084fc;';
+        }
+
+        let execModeHtml = `<span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; ${modeBadgeStyle}">${escapeHtml(typeLabel)}</span>`;
+
+        if (item.status === 'Completed') {
+            badgeClass = 'badge-completed';
+        } else if (item.status === 'Running') {
+            badgeClass = 'badge-running';
+            const execLabel = rType === 'type_a' ? `LANE A · ${prio}` : rType.replace('type_', 'Lane ').toUpperCase();
+            execModeHtml = `<span style="display: inline-flex; align-items: center; font-size: 11px; color: #60a5fa; font-weight: 600; padding: 3px 8px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 4px;"><span class="spinner"></span> Executing (${escapeHtml(execLabel)})</span>`;
+        } else if (item.status === 'Retrial') {
+            badgeClass = 'badge-retrial';
+        } else if (item.status === 'Failed') {
+            badgeClass = 'badge-failed';
+            execModeHtml = `<div style="display: inline-flex; align-items: center; gap: 6px;">${execModeHtml}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 3px 8px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`;
+        } else if (item.status === 'Disabled') {
+            badgeClass = 'badge-disabled';
+            execModeHtml = `<div style="display: inline-flex; align-items: center; gap: 6px;">${execModeHtml}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 3px 8px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`;
+        }
+
+        tr.innerHTML = `
+            <td>${index + 1}</td>
+            <td><strong>${escapeHtml(item.name)}</strong></td>
+            <td>${escapeHtml(item.team)}</td>
+            <td>${escapeHtml(formatTime12(item.scheduled_time))}</td>
+            <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
+            <td>${escapeHtml(item.duration)}</td>
+            <td>${escapeHtml(formatTime12(item.started_at))}</td>
+            <td>${execModeHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
 async function fetchAutomations() {
     try {
         const res = await fetch('/api/automations');
@@ -639,47 +749,7 @@ async function fetchAutomations() {
 
         window.allAutomations = data.automations || [];
 
-        const tbody = document.getElementById('automations-body');
-        if (tbody) {
-            tbody.innerHTML = '';
-            data.automations.forEach((item, index) => {
-                const tr = document.createElement('tr');
-
-                let badgeClass = 'badge-waiting';
-                const rType = (item.report_type || 'type_a').toLowerCase();
-                let typeLabel = 'Sequential (Type A)';
-                if (rType === 'type_b') typeLabel = `Recurring (${item.interval_minutes || 30}m)`;
-                else if (rType === 'type_c') typeLabel = `Timeslot (${item.timeslot_tier || 'Custom'})`;
-
-                let execModeHtml = `<span style="font-size: 11px; color: var(--text-muted); padding: 3px 8px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 4px;">${typeLabel}</span>`;
-
-                if (item.status === 'Completed') {
-                    badgeClass = 'badge-completed';
-                } else if (item.status === 'Running') {
-                    badgeClass = 'badge-running';
-                    execModeHtml = `<span style="display: inline-flex; align-items: center; font-size: 11px; color: #60a5fa; font-weight: 600; padding: 3px 8px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 4px;"><span class="spinner"></span> Executing</span>`;
-                } else if (item.status === 'Retrial') {
-                    badgeClass = 'badge-retrial';
-                } else if (item.status === 'Failed') {
-                    badgeClass = 'badge-failed';
-                } else if (item.status === 'Disabled') {
-                    badgeClass = 'badge-disabled';
-                }
-
-                tr.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td><strong>${escapeHtml(item.name)}</strong></td>
-                    <td>${escapeHtml(item.team)}</td>
-                    <td>${escapeHtml(formatTime12(item.scheduled_time))}</td>
-                    <td><span class="badge ${badgeClass}">${escapeHtml(item.status)}</span></td>
-                    <td>${escapeHtml(item.duration)}</td>
-                    <td>${escapeHtml(formatTime12(item.started_at))}</td>
-                    <td>${execModeHtml}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
+        renderDashboardTable(data.automations);
         renderLaneATable(data.automations);
         renderLaneBTable(data.automations);
         renderLaneCTable(data.automations);
@@ -705,7 +775,10 @@ function formatReportRetries(item) {
 function renderLaneATable(automations) {
     const tbody = document.getElementById('lane-a-body');
     if (!tbody) return;
-    const items = (automations || []).filter(r => (r.report_type || 'type_a').toLowerCase() === 'type_a');
+    const items = (automations || [])
+        .filter(r => (r.report_type || 'type_a').toLowerCase() === 'type_a')
+        .slice()
+        .sort((a, b) => getPriorityRank(a.priority) - getPriorityRank(b.priority));
     tbody.innerHTML = '';
     if (items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">No Type A sequential reports configured in catalog. Click <strong>+ Add Report</strong> to register a pipeline.</td></tr>`;
@@ -721,9 +794,10 @@ function renderLaneATable(automations) {
         else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
 
         const retries = formatReportRetries(item);
+        const prioBadge = formatPriorityBadge(item.priority);
         const policyCell = (item.status === 'Disabled' || item.status === 'Failed')
-            ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
-            : `<span style="font-size: 11px; color: var(--text-muted);">Sequential FIFO</span>`;
+            ? `<div style="display: inline-flex; align-items: center; gap: 6px;">${prioBadge}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`
+            : `<div style="display: inline-flex; align-items: center; gap: 6px;">${prioBadge}<span style="font-size: 11px; color: var(--text-muted);">FIFO</span></div>`;
 
         tr.innerHTML = `
             <td style="color: var(--text-muted);">${index + 1}</td>
@@ -863,16 +937,23 @@ function filterAutomationsCatalog() {
     if (!grid) return;
 
     const searchInput = document.getElementById('auto-catalog-search');
+    const laneSelect = document.getElementById('auto-lane-filter');
     const runtimeSelect = document.getElementById('auto-runtime-filter');
     const statusSelect = document.getElementById('auto-status-filter');
 
     const searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const laneVal = laneSelect ? laneSelect.value : 'ALL';
     const teamVal = teamSelect ? teamSelect.value : 'ALL';
     const runtimeVal = runtimeSelect ? runtimeSelect.value : 'ALL';
     const statusVal = statusSelect ? statusSelect.value : 'ALL';
     const matchCountEl = document.getElementById('auto-match-count');
 
     const filtered = rawList.filter(item => {
+        if (laneVal !== 'ALL') {
+            const rType = (item.report_type || 'type_a').toLowerCase();
+            if (rType !== laneVal) return false;
+        }
+
         if (teamVal !== 'ALL' && (item.team || '') !== teamVal) return false;
         
         if (runtimeVal !== 'ALL') {
@@ -926,6 +1007,18 @@ function filterAutomationsCatalog() {
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
         else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
 
+        const rType = (item.report_type || 'type_a').toLowerCase();
+        const prio = String(item.priority || 'P2').toUpperCase();
+        let laneLabel = `Lane A · ${prio}`;
+        let laneBadgeStyle = 'background: rgba(96, 165, 250, 0.14); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.3);';
+        if (rType === 'type_b') {
+            laneLabel = `Lane B · Every ${item.interval_minutes || 30}m`;
+            laneBadgeStyle = 'background: rgba(234, 179, 8, 0.14); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.3);';
+        } else if (rType === 'type_c') {
+            laneLabel = `Lane C · ${item.timeslot_tier || 'Custom'}`;
+            laneBadgeStyle = 'background: rgba(167, 139, 250, 0.14); color: #c084fc; border: 1px solid rgba(167, 139, 250, 0.3);';
+        }
+
         const isPython = (item.filetype || '').toLowerCase().includes('py');
         const runtimeBadgeClass = isPython ? 'badge-runtime-python' : 'badge-runtime-rscript';
         const runtimeLabel = isPython ? 'Python' : 'Rscript';
@@ -943,6 +1036,10 @@ function filterAutomationsCatalog() {
                 </div>
 
                 <div class="automation-card-meta">
+                    <div class="automation-meta-row">
+                        <span class="automation-meta-label">Lane:</span>
+                        <span class="badge" style="font-size: 10px; padding: 2px 7px; ${laneBadgeStyle}">${escapeHtml(laneLabel)}</span>
+                    </div>
                     <div class="automation-meta-row">
                         <span class="automation-meta-label">Schedule:</span>
                         <span class="automation-meta-val">⏱ ${escapeHtml(formatTime12(item.scheduled_time))}</span>
@@ -986,6 +1083,7 @@ function filterAutomationsCatalog() {
 function handleReportTypeChange(laneType) {
     const laneBadge = document.getElementById('lane-badge');
     const laneHint = document.getElementById('new-report-type-hint');
+    const groupLaneA = document.getElementById('group-lane-a-config');
     const groupLaneB = document.getElementById('group-lane-b-config');
     const groupLaneC = document.getElementById('group-lane-c-config');
 
@@ -1017,10 +1115,13 @@ function handleReportTypeChange(laneType) {
         } else if (laneType === 'type_c') {
             laneHint.innerText = 'Fixed timeslot dispatch with configurable missed catch-up policies.';
         } else {
-            laneHint.innerText = 'Executes via FIFO queue or concurrency pool during open operating hours.';
+            laneHint.innerText = 'Executes via priority-ordered FIFO queue or concurrency pool during open operating hours.';
         }
     }
 
+    if (groupLaneA) {
+        groupLaneA.style.display = (laneType === 'type_a') ? 'block' : 'none';
+    }
     if (groupLaneB) {
         groupLaneB.style.display = (laneType === 'type_b') ? 'block' : 'none';
     }
@@ -1077,6 +1178,9 @@ function openAddReportModal(defaultLane = 'type_a') {
     const typeSelect = document.getElementById('new-report-type');
     const resolvedLane = (defaultLane && ['type_a', 'type_b', 'type_c'].includes(defaultLane)) ? defaultLane : 'type_a';
     if (typeSelect) typeSelect.value = resolvedLane;
+
+    const prioSelect = document.getElementById('new-report-priority');
+    if (prioSelect) prioSelect.value = 'P2';
 
     const filetypeSelect = document.getElementById('new-report-filetype');
     if (filetypeSelect) filetypeSelect.value = 'python';
@@ -1139,6 +1243,7 @@ async function handleAddReportSubmit(e) {
     const name = (document.getElementById('new-report-name')?.value || '').trim();
     const filename = (document.getElementById('new-report-filename')?.value || '').trim();
     const report_type = (document.getElementById('new-report-type')?.value || 'type_a');
+    const priority = (document.getElementById('new-report-priority')?.value || 'P2').toUpperCase();
     const filetype = (document.getElementById('new-report-filetype')?.value || 'python').toLowerCase();
     const dir = (document.getElementById('new-report-dir')?.value || (filetype === 'python' ? '../reports/python' : '../reports/r')).trim();
     const team = (document.getElementById('new-report-team')?.value || 'General').trim();
@@ -1222,6 +1327,7 @@ async function handleAddReportSubmit(e) {
             scheduled_time,
             status,
             report_type,
+            priority,
             interval_minutes,
             timeslot_tier,
             catch_up_policy

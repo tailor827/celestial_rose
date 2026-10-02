@@ -4,7 +4,7 @@
 
 **Paradiso Alter** is a decoupled, thread-safe daemon scheduling engine and Web UI designed to manage three distinct operational execution lanes for automated financial and operational report pipelines:
 
-1. **Lane A (Sequential Queue)**: Configurable concurrency pool ($N \ge 1$, default 1, max 20) FIFO execution within intraday hours (07:00 – 20:59) with multi-slot starvation cooldown coordination, zero-penalty dependency skips, and a 10:00 PM hard cutoff.
+1. **Lane A (Sequential Priority-FIFO Queue)**: Configurable concurrency pool ($N \ge 1$, default 1, max 20) and starvation-safe priority queue (`P0` Critical $\to$ `P1` High $\to$ `P2` Normal, FIFO within tier) executing within intraday hours (07:00 – 20:59) with multi-slot starvation cooldown coordination, zero-penalty dependency skips, and a 10:00 PM hard cutoff.
 2. **Lane B (Recurring at Intervals)**: Concurrent background pipelines triggered periodically at configurable intervals (e.g. 15m, 30m, 60m) with self-overlap protection.
 3. **Lane C (Timeslots)**: Daily wall-clock time-pinned reports (BOD 07:00, Mid-day 12:00, EOD 20:30, or custom `HH:MM`).
 
@@ -29,7 +29,7 @@ graph TD
     Services --> AutoSvc["AutomationService"]
     Services --> ExecSvc["ExecutionService"]
     
-    IntradaySvc --> LaneA["Lane A: Sequential FIFO (1-at-a-time)"]
+    IntradaySvc --> LaneA["Lane A: Priority-FIFO & Concurrency Pool"]
     IntradaySvc --> LaneB["Lane B: Recurring Intervals (Concurrent)"]
     IntradaySvc --> LaneC["Lane C: Timeslot Pinned (BOD / MID / EOD / Custom)"]
     
@@ -67,8 +67,8 @@ stateDiagram-v2
    - Queue execution remains idle waiting for the intraday start threshold (default: 07:00 AM).
 
 2. **`07:00 AM` – `08:59 PM` (`OPEN`)**:
-   - The queue opens. `IntradayService` pops 1 report at a time from `self.waitlist` and executes it via `ExecutionService`.
-   - Strict single-tasking is enforced: only **one report** is allowed to run at any given moment (`len(self.current_runs) == 0`).
+   - The queue opens. `IntradayService` pops up to `max_concurrent_run` reports from `self.waitlist` in `P0 -> P1 -> P2` priority order and executes them via `ExecutionService`.
+   - Slot concurrency is strictly bounded (`len(self.current_runs) <= self.max_concurrent_run`).
 
 3. **`09:00 PM` – `09:59 PM` (`WAITING_TO_CLOSE`)**:
    - The queue stops launching **new** reports from `self.waitlist`.
@@ -111,8 +111,13 @@ If Paradiso restarts after an unexpected crash, reboot, or process termination:
 
 Paradiso Alter orchestrates reports across three distinct execution lanes, each tailored to a specific operational workload:
 
-### Lane A: Sequential FIFO Execution & Concurrency Pool
-- **Policy**: Intraday FIFO execution supporting a configurable concurrency pool (`max_concurrent_run: N`, $1 \le N \le 20$, default `1`).
+### Lane A: Sequential Priority-FIFO Execution & Concurrency Pool
+- **Policy**: Intraday Priority-FIFO execution (`P0` Critical $\to$ `P1` High $\to$ `P2` Normal, FIFO within each tier) supporting a configurable concurrency pool (`max_concurrent_run: N`, $1 \le N \le 20$, default `1`).
+- **Starvation-Safe Per-Pass Priority Ordering (P3.3)**:
+  - On initial queue seeding (`Automations.get_pending_by_type("type_a")`), pending reports are sorted by `P0 -> P1 -> P2` while preserving catalog FIFO order within each tier.
+  - Within an active pass, any report exiting with `Retrial` (dependency skip) or a retryable crash is appended to the **back** of `self.waitlist` behind remaining unseen reports in the pass (`_cycle_seen_in_pass`), guaranteeing a `P0` report with an unready dependency never starves `P1` or `P2` reports.
+  - When a pass completes (`_evaluate_pass_completion`), `self.waitlist` is re-sorted by `_priority_rank` (`P0 -> P1 -> P2`) so `P0` reports are back at the front of the queue for the next pass.
+  - Newly added or re-enabled Lane A reports are inserted via `_enqueue_lane_a_by_priority()` ahead of unseen lower-priority reports without jumping ahead of rotated items in the active pass.
 - **Slot Semaphore & Dynamic Replenishment**: `IntradayService.tick()` computes `available_slots = max_concurrent_run - len(current_runs)`. If available slots exist and the queue is not in starvation cooldown, up to `available_slots` reports are popped from `waitlist` and launched in parallel. As any running job completes or skips, its slot is immediately released and replenished on the subsequent daemon tick.
 - **Execution Window**: 07:00 – 20:59 with evening wrap-up (21:00) and 22:00 hard cutoff.
 - **Dependency Rotation**: Upstream data checks emit `SKIPPED`, transitioning the report to `Retrial` and rotating it to the back of `waitlist` with **zero retry penalty**.
@@ -157,14 +162,14 @@ A report is strictly distinct across all lanes:
 - Report names are globally unique case-insensitively across the entire catalog.
 - Registering a report with an existing name (in any lane) returns HTTP `409 Conflict`.
 
-### Unified Failure & Retry Policy (3x Error Threshold)
+### Unified Failure & Retry Policy (Configurable `max_retries`)
 To eliminate infinite fast-spins while guaranteeing operational resilience:
 1. When a script encounters a genuine runtime failure (non-zero exit code or uncaught exception), `IntradayService` increments `self.retry_counts[name]`.
-2. **Within Threshold (`attempts < 3`)**:
+2. **Within Threshold (`attempts < max_retries`)**:
    - Status transitions to `Retrial`.
    - In Lane A, the report is re-queued to `self.waitlist` to retry later in the window.
    - In Lane B & C, the report will retry on the subsequent interval or scheduled trigger.
-3. **Threshold Reached (`attempts >= 3`)**:
+3. **Threshold Reached (`attempts >= max_retries`)**:
    - The report is marked as terminal **`Failed`** in `automations.json`.
    - A terminal failure entry is recorded in `intraday.json`.
    - The report is halted from further automatic re-queuing for the day.
@@ -176,28 +181,28 @@ To eliminate infinite fast-spins while guaranteeing operational resilience:
 Paradiso Alter supports dynamic management of the report catalog:
 
 ### 1. Registration (`POST /api/automation/add`)
-- Accepts metadata: `name`, `filename`, `filetype` (`python` / `rscript`), `dir`, `team`, `owner`, `scheduled_time`, `status`, `report_type` (`type_a` | `type_b` | `type_c`), `interval_minutes` (for Type B), `timeslot_tier` (`BOD` | `MID` | `EOD` | `CUSTOM`), and optional `catch_up_policy` (`CATCH_UP_IMMEDIATE` | `SKIP_UNTIL_NEXT_DAY` | `WARN_OPERATOR`).
+- Accepts metadata: `name`, `filename`, `filetype` (`python` / `rscript`), `dir`, `team`, `owner`, `scheduled_time`, `status`, `report_type` (`type_a` | `type_b` | `type_c`), `priority` (`P0` | `P1` | `P2`, default `P2` for Type A), `interval_minutes` (for Type B), `timeslot_tier` (`BOD` | `MID` | `EOD` | `CUSTOM`), and optional `catch_up_policy` (`CATCH_UP_IMMEDIATE` | `SKIP_UNTIL_NEXT_DAY` | `WARN_OPERATOR`).
 - **Validation**:
   - Rejects empty `name` or `filename` with HTTP `400 Bad Request`.
   - Rejects directory traversal or unauthorized directory paths with HTTP `400 Bad Request`.
   - Rejects non-canonical `scheduled_time` strings with HTTP `400 Bad Request` (enforces canonical `^([01]\d|2[0-3]):[0-5]\d$`).
-  - Rejects invalid `catch_up_policy` values with HTTP `400 Bad Request`.
+  - Rejects invalid `priority` values (not in `P0`, `P1`, `P2`) or invalid `catch_up_policy` values with HTTP `400 Bad Request`.
 - **Conflict Prevention**: Rejects existing report identifiers with HTTP `409 Conflict` (enforces distinct report invariant across all lanes).
-- **Active Queue Enqueue**: If the intraday scheduler is currently active, `lane_a_active` is true, and `status == "Waiting"` for a Type A report, the report is immediately appended to `intraday_service.waitlist` to execute during the current window.
+- **Active Queue Priority Enqueue**: If `lane_a_active` is true and `status == "Waiting"` for a Type A report, the report is immediately inserted into `intraday_service.waitlist` by priority tier (`_enqueue_lane_a_by_priority`) to execute during the current window.
 
 ### 2. Disabling & Re-Enabling (`POST /api/automation/disable`, `POST /api/automation/enable`)
 - **Disable (`POST /api/automation/disable`)**: Disables an idle report (`{"name": "Report Name"}`). Rejects actively running reports with HTTP `409 Conflict`. Evicts idle reports from waitlist and rotation passes. While disabled, reports cannot be manually triggered via `POST /api/automation/run` (rejected with HTTP `409 Conflict`, F-040).
-- **Enable (`POST /api/automation/enable`)**: Re-enables a disabled or permanently failed report without destructive reset. Restores status to `Waiting`, clears exhausted retry budgets (`type_b_exhausted`, `retry_counts`), and enqueues into Lane A if active (F-043).
+- **Enable (`POST /api/automation/enable`)**: Re-enables a disabled or permanently failed report without destructive reset. Restores status to `Waiting`, clears exhausted retry budgets (`type_b_exhausted`, `retry_counts`), and inserts into Lane A's waitlist by priority tier (`_enqueue_lane_a_by_priority`) if active (F-043).
 
 ### 3. Deletion (`DELETE /api/automation/delete/<name>`)
 - Verifies report existence (HTTP `404 Not Found` if missing).
 - **Active Execution Guardrail (F-034)**: Rejects deletion requests with HTTP `409 Conflict` if the report is currently running across any lane or if the scheduler is active.
-- Thread-safely evicts the report from `intraday_service.waitlist` to prevent orphan runner executions.
+- **Complete State & History Purge (F-054)**: Thread-safely evicts the report from `waitlist`, `current_runs`, `active_runs_type_b`, `active_runs_type_c`, `retry_counts`, `type_c_ran_today`, `type_c_retry_after`, `type_c_warned`, `type_b_exhausted`, `type_b_last_run`, `_cycle_pass_reports`, `_cycle_seen_in_pass`, and `_last_rotation_logged`, and purges the report from today's `reports_ran` and `expected_reports` in `storage/intraday.json` (`Intraday.purge_report_from_day`) so re-created reports with the same name are never starved.
 - Removes report metadata from `storage/automations.json`.
 
 ### 4. Creation Modal UI (`#modal-add-report`)
 - Dark cathedral modal dialog with backdrop blur and input validation.
-- Collects script parameters, lane assignments, timeslot tiers, catch-up policies, team assignments, and runtime engines with inline error feedback.
+- Collects script parameters, lane assignments, Lane A priority tier (`P0 — Critical`, `P1 — High`, `P2 — Normal`), Lane B intervals, Lane C timeslot tiers and catch-up policies, team assignments, and runtime engines with inline error feedback.
 - Hotkey support: dismisses on <kbd>Escape</kbd> or outside click.
 
 ---
@@ -225,28 +230,28 @@ graph LR
 1. **`⌂ Dashboard` (`#view-dashboard`)**:
    - Executive metrics summary (Completed, Running, Retrial, Waiting, Failed) with color-coded progress bars.
    - **Execution Lanes & Control Hub**: Three dedicated lane control cards (Lane A, Lane B, Lane C) featuring live status badges (`● Active`, `○ Standby`), 10-second transition cooldown indicators, aligned `▶ Start` / `⏹ Stop` action buttons, and direct `View ↗` links to lane tabs.
-   - Today's Live Execution table with quick **"+ Add Report"** action button.
+   - **Today's Live Execution Table**: Features per-lane filter pills (`All Lanes`, `Lane A`, `Lane B`, `Lane C`), priority-sorted rows (`P0 -> P1 -> P2`), color-coded execution mode badges (`Lane A · P0`, `Lane B · Every 30m`, `Lane C · EOD`), quick `▶ Enable` recovery buttons, and a **`+ Add Report`** action button.
    - Top Bar quick control pills for each lane alongside the simulation clock and system status.
 
 2. **`📋 Type A: Sequential` (`#view-type-a`)**:
-   - Dedicated dashboard for Bank-grade FIFO intraday pipelines.
-   - Metric cards: Single-threaded execution mode, active slot status, dependency skip counters, 10 PM cutoff countdown.
-   - Independent Start / Stop controls with transition cooldown guardrail.
+   - Dedicated dashboard for Bank-grade Priority-FIFO intraday pipelines.
+   - Metric cards: Execution mode (`1-at-a-time` or `N-at-a-time (Concurrent Pool)`), active slot usage (`X / N Active Slots`), zero-penalty dependency skip info, dynamic `max_retries` error limit (`Nx Limit`), and 10 PM cutoff countdown.
+   - Priority-ordered table (`P0 · Critical`, `P1 · High`, `P2 · Normal`) with independent Start / Stop controls and transition cooldown guardrail.
 
 3. **`🔄 Type B: Recurring` (`#view-type-b`)**:
    - Dedicated monitor for interval background jobs (15m, 30m, 60m).
-   - Metric cards: Multi-threaded concurrent execution, active in-flight count, self-overlap protection status.
+   - Metric cards: Multi-threaded concurrent execution, live active in-flight count (`X In-Flight`), dynamic `max_retries` per cycle (`Nx Per Cycle`), and self-overlap protection status.
    - Independent Start / Stop controls with transition cooldown guardrail.
 
 4. **`⏰ Type C: Timeslots` (`#view-type-c`)**:
    - Dedicated monitor for daily milestone-pinned automations.
-   - Visual milestone cards: BOD (07:00), Mid-day (12:00), EOD (20:30), and Custom timeslots.
+   - Visual milestone cards: BOD (07:00), Mid-day (12:00), EOD (20:30), Custom timeslots, and dynamic `max_retries` penalty card (`Nx Penalty`).
    - Independent Start / Stop controls with transition cooldown guardrail.
 
 5. **`⬡ All Automations` (`#view-automations`)**:
-   - Dedicated catalog view displaying all registered automations across all lanes in a responsive grid.
-   - Real-time text search (name, filename, owner) and dropdown filters (Lane Type, Team, Runtime Engine, Status).
-   - Action controls: **`+ Add Report`** modal trigger and **`↻ Reset All to Waiting`**.
+   - Dedicated catalog view displaying all registered automations across all lanes in a responsive table.
+   - Real-time text search (name, filename, owner) and dropdown filters (**Lane Type** (`All Lanes`, `Lane A: Sequential`, `Lane B: Recurring`, `Lane C: Timeslots`), Team, Runtime Engine, Status).
+   - Action controls: **`+ Add Report`** modal trigger, **`↻ Reset All to Waiting`**, and per-row `▶ Enable` / `⏸ Disable` / `✕` actions.
 
 6. **`⏱ Timeline` (`#view-timeline`)**:
    - Full-page chronological audit trail of all intraday dispatch events with category filters and pagination.
@@ -322,18 +327,17 @@ storage.mutate(lambda data: data[date].setdefault("timeline", []).append(event))
 ### A. `automations.json` (Report Catalog & State)
 ```json
 {
-  "Hourly_Liquidity_Feed": {
-    "name": "Hourly_Liquidity_Feed",
-    "filename": "hourly_liquidity_feed.py",
+  "Sample Lane A 04": {
+    "name": "Sample Lane A 04",
+    "filename": "sample_lane_a_04.py",
     "filetype": "python",
     "dir": "../reports",
     "team": "Treasury",
-    "owner": "Finance Automation",
-    "scheduled_time": "09:00",
+    "owner": "Cy",
+    "scheduled_time": "08:30",
     "status": "Waiting",
-    "report_type": "type_b",
-    "interval_minutes": 15,
-    "timeslot_tier": "CUSTOM",
+    "report_type": "type_a",
+    "priority": "P0",
     "duration": "--",
     "started_at": "--",
     "last_run": "--/--/--",
@@ -380,18 +384,18 @@ storage.mutate(lambda data: data[date].setdefault("timeline", []).append(event))
 | `GET /api/dashboard/stats` | `GET` | Returns report metric counts, execution rates, simulated date/time, and window status. |
 | `GET /api/dashboard/timeline` | `GET` | Returns today's timeline audit events in chronological (oldest-first) order by default. Supports query parameters `?limit=N` and `?order=asc\|desc`. |
 | `GET /api/dashboard/system-status` | `GET` | Returns subsystem operational status and health check across services. |
-| `GET /api/automations` | `GET` | Returns list of all registered reports with current status and metadata. |
-| `POST /api/automation/add` | `POST` | Registers a new report, validates canonical `scheduled_time` (`HH:MM`), validates `catch_up_policy`, enforces uniqueness across all lanes (HTTP 409 if exists), and enqueues into Lane A if active. |
+| `GET /api/automations` | `GET` | Returns list of all registered reports enriched with live `retry_count` and `max_retries`. |
+| `POST /api/automation/add` | `POST` | Registers a new report, validates canonical `scheduled_time` (`HH:MM`), validates `priority` (`P0`\|`P1`\|`P2`) and `catch_up_policy`, enforces uniqueness across all lanes (HTTP 409 if exists), and inserts into Lane A by priority tier if active. |
 | `DELETE /api/automation/delete/<name>` | `DELETE` | Deletes report from catalog and evicts from active waitlist. Rejects active executions with HTTP 409 Conflict. |
 | `POST /api/automation/disable` | `POST` | Disables an idle report by name (`{"name": "Report Name"}`). Rejects actively running reports with HTTP 409 Conflict. |
-| `POST /api/automation/enable` | `POST` | Re-enables a disabled or permanently failed report (`{"name": "Report Name"}`), restoring status to Waiting, clearing exhaustion tracking, without destructive reset (F-043). |
+| `POST /api/automation/enable` | `POST` | Re-enables a disabled or permanently failed report (`{"name": "Report Name"}`), restoring status to Waiting, clearing exhaustion tracking, and inserting into Lane A by priority tier without destructive reset (F-043). |
 | `POST /api/automations/reset` | `POST` | Resets all reports to `Waiting`, kills active processes, sets Standby mode. |
 | `POST /api/paradiso/start` | `POST` | Starts or resumes intraday queue scheduler in active mode across all lanes. |
 | `POST /api/paradiso/stop` | `POST` | Pauses execution, clears `waitlist`, kills running subprocesses across all lanes. |
 | `GET /api/paradiso/status` | `GET` | Returns `{"ok": true, "running": boolean}` daemon status. |
 | `POST /api/paradiso/lane/start` | `POST` | Starts a specific lane (`{"lane": "type_a"\|"type_b"\|"type_c"}`). Returns HTTP `409 Conflict` outside `OPEN` window (07:00–20:59) unless `force_open: true`. Enforces independent 10s cooldown (HTTP 429). |
-| `POST /api/paradiso/lane/stop` | `POST` | Stops a specific lane (`{"lane": "type_a"\|"type_b"\|"type_c"}`). Enforces independent 10s cooldown (HTTP 429). |
-| `GET /api/paradiso/lanes/status` | `GET` | Returns live running status, active process count, and remaining cooldown per lane (`type_a`, `type_b`, `type_c`). |
+| `POST /api/paradiso/lane/stop` | `POST` | Stops a specific lane (`{"lane": "type_a"\|"type_b"\|"type_c"}`). Enforces independent 10s cooldown (HTTP 429) and terminates daemon loop when all lanes are stopped (F-048). |
+| `GET /api/paradiso/lanes/status` | `GET` | Returns live running status, active process count, `max_concurrent_run`, `max_retries`, and remaining cooldown per lane (`type_a`, `type_b`, `type_c`). |
 | `POST /api/automation/run` | `POST` | Triggers on-demand report execution. Returns HTTP `403 Forbidden` for Type A (sequential); returns HTTP `409 Conflict` outside `OPEN` window (07:00–20:59) or if report is `Disabled`, `Failed`, or exhausted (F-040, F-043); returns `200 OK` and dispatches for Type B and Type C during `OPEN`. |
 | `GET /api/executions/history` | `GET` | Returns historical execution runs across all dates. |
 | `GET /api/executions/log/<name>` | `GET` | Returns detailed log output for specified report. Sandboxed: blocks directory traversal (`..`, `/`, `\`) with HTTP 400. |
@@ -430,20 +434,34 @@ python run_tests.py
 # or: py -3 -m unittest discover tests (from paradiso/)
 ```
 
-#### Coverage Breakdown (139 Automated Tests)
-- **`tests/test_audit_fixes.py`** (97 tests):
+#### Coverage Breakdown (151 Automated Tests)
+- **`tests/test_audit_fixes.py`** (109 tests):
+  - **Batch 11 & 12 Remediations (F-053 through F-056)**:
+    - **F-056 (Idle Report Disable Pass Completion & Deadlock Prevention)**: Invokes `_evaluate_pass_completion()` on `POST /api/automation/disable` and defensively in `IntradayService.tick()` when `len(current_runs) == 0`, `len(waitlist) > 0`, and `not unseen_candidates`, preventing skipped reports from being stranded when an operator disables the last unseen report in a pass.
+    - **F-053 (Multi-Slot Concurrency Pass Boundary & Starvation Cooldown Protection)**: Prevents `IntradayService.tick()` from re-dispatching reports already evaluated in the current pass (`r in _cycle_seen_in_pass`) into freed concurrency slots while sibling pass tasks are still in flight, ensuring pass boundaries and starvation cooldowns engage deterministically when `max_concurrent_run > 1`.
+    - **F-054 (Complete Runtime & Intraday State Purge on Automation Deletion)**: Evicts deleted report names from all Lane A/B/C runtime tracking sets (`type_c_ran_today`, `type_c_retry_after`, `type_c_warned`, `type_b_exhausted`, `type_b_last_run`, `_cycle_pass_reports`, `_cycle_seen_in_pass`) and today's `intraday.json` record (`purge_report_from_day`) so re-created reports are never starved.
+    - **F-055 (Isolated Test Fixture Seeding in `test_api.py`)**: Seeds the `"SF Base"` Type A fixture in `TestAPIEndpoints.setUp()` so regression tests remain independent of live catalog changes in `storage/automations.json`.
+  - **Phase 3.3 & Phase 2 UI Enhancements**:
+    - **Lane A Priority Queue Tiers (`P3.3`)**: `P0 -> P1 -> P2` priority sorting in `Automations.get_pending_by_type`, API validation (`HTTP 400` on invalid priority), mid-pass priority insertion (`_enqueue_lane_a_by_priority`), and starvation-safe pass completion re-sorting (`_evaluate_pass_completion`).
+    - **Per-Lane Filter & Dynamic Retry Telemetry**: Dashboard per-lane filter pills (`#dash-lane-filter-group`), All Automations lane filter (`#auto-lane-filter`), priority modal selector (`#new-report-priority`), and dynamic `max_retries` binding across Lane A/B/C metric cards and `/api/paradiso/lanes/status`.
+  - **Batch 10 Remediations (F-048 through F-052)**:
+    - **F-048**: Stopping all active lanes via `/api/paradiso/lane/stop` terminates the daemon loop and unlocks settings & simulation clock reset.
+    - **F-049**: Web UI exposes `/api/automation/enable` via `enableReport()` and styles `Disabled` badges in the catalog.
+    - **F-050**: `GET /api/automations` returns live `retry_count` and `max_retries`, and UI renders accurate retry counts via `formatReportRetries()`.
+    - **F-051**: `triggerClockReset()` surfaces `HTTP 409` errors and `handleAddReportSubmit()` triggers global `showToast()`.
+    - **F-052**: `#view-type-b` Active Workers card dynamically binds to `metric-b-active` and aligns all EOD labels to `20:30`.
   - **Batch 9 Remediations (F-044, F-045, F-046, F-047)**:
     - **F-044 (Operating Window Override Leak in Lane A)**: Prohibits `force_open` (operating window override from other lanes) from causing newly added Type A automations to enter the active execution waitlist when Lane A is stopped. Waitlist addition is strictly bound to `self.intraday_service.lane_a_active`.
     - **F-045 (Re-Enabled Lane C Autonomous Dispatch Starvation)**: Clears `type_c_ran_today`, `type_c_warned`, and `type_c_retry_after` sets inside `enable_automation()`, ensuring re-enabled Failed timeslot reports are re-armed for autonomous intraday execution.
     - **F-046 (Zero-Interval Input Validation Bypass)**: Differentiates falsy `0` from unset `None`, enforcing strict validation `interval_minutes >= 1` and returning HTTP 400 Bad Request on `interval_minutes: 0`.
     - **F-047 (Timeslot Tier Resolution Desync)**: Prioritizes explicit `rep.scheduled_time` over hardcoded tier defaults during Lane C evaluation, and synchronizes UI presets (`BOD: 07:00`, `MID: 12:00`, `EOD: 20:30`) across frontend templates and scripts.
-  - **3-Lane Add Report Modal & Form Verification**: DOM structure, dynamic lane switcher (Lane A sequential/pool, Lane B recurring interval, Lane C timeslot & catch-up policy), client-side validation, ESC-key dismissal, and REST API payload persistence (`POST /api/automation/add` returning 201 Created).
+  - **3-Lane Add Report Modal & Form Verification**: DOM structure, dynamic lane switcher (Lane A priority/pool, Lane B recurring interval, Lane C timeslot & catch-up policy), client-side validation, ESC-key dismissal, and REST API payload persistence (`POST /api/automation/add` returning 201 Created).
   - **Phase 2.1 & Phase 2.2**: Lane A concurrency pool (`max_concurrent_run`: multi-dispatch, slot replenishment, settings hot-reload, bounds validation, starvation cooldown coordination), Lane C missed window catch-up policies (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, `WARN_OPERATOR`), grace window verification, per-report policy overrides, settings validation and dynamic hot-reload.
   - **Batch 7 Remediations & Anti-Rearm Fix (F-040, F-041, F-042, F-043)**: Manual run disabled report bypass prevention (`POST /api/automation/run` returns HTTP 409 Conflict, F-040), Lane B terminal Failed and exhausted retry report suppression preventing infinite dispatch loops (F-041), simulation clock reset BG-001 idle-only guardrail enforcement (`POST /api/settings/simulation/reset` returns HTTP 409 Conflict when active, F-042), and manual run Failed report rejection with explicit administrative re-enablement preventing silent auto-dispatch resurrection (F-043).
   - **Batch 6 Remediations (F-037, F-038, F-039)**: Canonical 24-hour `scheduled_time` regex validation (`^([01]\d|2[0-3]):[0-5]\d$`), defensive runtime timeslot normalization (12-hr AM/PM and unpadded hours), API retention and catalog persistence of `catch_up_policy`, and operational reset `type_c_warned` clearance in `reset_all_reports()`.
   - **Batch 4 & 5 Remediations (F-031 to F-036)**: Cold boot Lane C leak prevention (F-031), partial-day cutoff preservation without log wipe (F-032), `force_open` stickiness and cross-lane leakage elimination (F-033), active Type B/C deletion 409 guardrail (F-034), Lane B cold boot historical time handling (F-035), non-destructive automation enabling (F-036).
   - **Vulnerabilities V-01 to V-05**: Automation disabling idle-only 409 guard and waitlist eviction (V-01), Lane B mid-day reboot last-run hydration (V-02), Lane A retry callback lane scoping (V-03), Type A waitlist bleed prevention (V-04), manual run 400/404 parameter validation (V-05).
-  - **Phase 1 Baseline & Historical Defect Protections**: 3-Lane architecture (per-lane independent start/stop, 10s transition cooldown, distinct report enforcement with HTTP 409, manual run policies, 3x genuine retry limits, zero-penalty dependency skips), universal intraday window yielding across all lanes, Section 12 exact receipt naming parity (F-021), Lane B/C rapid spin elimination & skip throttling (F-022), BG-001 multi-lane idle settings guardrail (F-023), canonical lane identifier validation (F-024), clock defeat device removal (F-025), out-of-window lane start 409 gating (F-026), EOD timeslot 20:30 consistency (F-027), pre-existing closed day record cleansing (F-028), mid-day restart Lane C timeslot hydration (F-029), Web UI HTTP 409 toast handling (F-030), path traversal prevention, storage corruption protection, PID tracking & orphan cleanup, past days reconciliation, timeline limit/order pagination, in-app documentation rendering, and testing UI segregation.
+  - **Phase 1 Baseline & Historical Defect Protections**: 3-Lane architecture (per-lane independent start/stop, 10s transition cooldown, distinct report enforcement with HTTP 409, manual run policies, genuine retry limits, zero-penalty dependency skips), universal intraday window yielding across all lanes, Section 12 exact receipt naming parity (F-021), Lane B/C rapid spin elimination & skip throttling (F-022), BG-001 multi-lane idle settings guardrail (F-023), canonical lane identifier validation (F-024), clock defeat device removal (F-025), out-of-window lane start 409 gating (F-026), EOD timeslot 20:30 consistency (F-027), pre-existing closed day record cleansing (F-028), mid-day restart Lane C timeslot hydration (F-029), Web UI HTTP 409 toast handling (F-030), path traversal prevention, storage corruption protection, PID tracking & orphan cleanup, past days reconciliation, timeline limit/order pagination, in-app documentation rendering, and testing UI segregation.
 - **`tests/test_api.py`** (16 tests): REST controllers, auto_start startup validation, stats metadata, add/delete automations, waitlist queue synchronization, manual run 403 protection.
 - **`tests/test_services.py`** (14 tests): Intraday lifecycle, 10 PM cutoff, cold boot after midnight reset, queue rotation on skipped dependencies, process suppression on shutdown, rapid restart protection.
 - **`tests/test_settings.py`** (7 tests): Configuration persistence, secret masking, hot-reloading of time windows and clock speeds, deadlock-free simulation mode toggling, validation error enforcement.

@@ -19,6 +19,7 @@ class Report:
     interval_minutes: int = 30
     timeslot_tier: str = "CUSTOM" # "BOD", "MID", "EOD", "CUSTOM"
     catch_up_policy: Optional[str] = None
+    priority: str = "P2" # Strictly one of: "P0" (Critical), "P1" (High), "P2" (Normal)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -28,6 +29,10 @@ class Report:
         raw_type = str(data.get("report_type") or data.get("type") or "type_a").lower()
         if raw_type not in ("type_a", "type_b", "type_c"):
             raw_type = "type_a"
+
+        raw_priority = str(data.get("priority") or "P2").strip().upper()
+        if raw_priority not in ("P0", "P1", "P2"):
+            raw_priority = "P2"
 
         return cls(
             name=data.get("name", ""),
@@ -45,6 +50,7 @@ class Report:
             report_type=raw_type,
             interval_minutes=int(data.get("interval_minutes") or 30),
             timeslot_tier=str(data.get("timeslot_tier") or "CUSTOM").upper(),
-            catch_up_policy=str(data["catch_up_policy"]).upper() if data.get("catch_up_policy") else None
+            catch_up_policy=str(data["catch_up_policy"]).upper() if data.get("catch_up_policy") else None,
+            priority=raw_priority
         )
 

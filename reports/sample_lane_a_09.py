@@ -29,8 +29,8 @@ REPORT_NAME = "Sample Lane A 09"
 # Automatic date determination (defaults to today's date YYYYMMDD)
 TODAY = datetime.now().strftime("%Y%m%d")
 
-# Simulated execution parameters (15-30s runtime, equal 1/3 outcome distribution)
-SLEEP_SECONDS = round(random.uniform(15.0, 30.0), 1)
+# Simulated execution parameters (staggered 6-12s fast runtime, equal 1/3 outcome distribution)
+SLEEP_SECONDS = round(random.uniform(6.0, 12.0), 1)
 OUTCOME = random.choice(["complete", "retry", "fail"])
 
 
