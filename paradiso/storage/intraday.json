@@ -1018,5 +1018,688 @@
                 "type": "system"
             }
         ]
+    },
+    "20261002": {
+        "status": "OPEN",
+        "expected_reports": [
+            "Sample Lane A 01",
+            "Sample Lane A 02",
+            "Sample Lane A 03",
+            "Sample Lane A 04",
+            "Sample Lane A 05",
+            "Sample Lane A 06",
+            "Sample Lane A 07",
+            "Sample Lane A 08",
+            "Sample Lane A 09",
+            "Sample Lane A 10"
+        ],
+        "reports_ran": {
+            "Sample Lane A 08": {
+                "started_at": "2026-10-02 07:54:11 AM",
+                "finished_at": "2026-10-02 07:54:27 AM",
+                "result": "completed",
+                "duration": "15s",
+                "reason": "Sample Lane A 08 completed in 15.2s. Successfully processed 1563 records for 20261002."
+            },
+            "Sample Lane A 07": {
+                "started_at": "2026-10-02 07:54:11 AM",
+                "finished_at": "2026-10-02 07:54:31 AM",
+                "result": "completed",
+                "duration": "19s",
+                "reason": "Sample Lane A 07 completed in 19.9s. Successfully processed 2256 records for 20261002."
+            },
+            "Sample Lane A 05": {
+                "started_at": "2026-10-02 07:56:12 AM",
+                "finished_at": "2026-10-02 07:56:34 AM",
+                "result": "completed",
+                "duration": "22s",
+                "reason": "Sample Lane A 05 completed in 22.0s. Successfully processed 1245 records for 20261002."
+            },
+            "Sample Lane A 06": {
+                "started_at": "2026-10-02 07:56:12 AM",
+                "finished_at": "2026-10-02 07:56:41 AM",
+                "result": "completed",
+                "duration": "28s",
+                "reason": "Sample Lane A 06 completed in 28.9s. Successfully processed 1899 records for 20261002."
+            },
+            "Sample Lane A 09": {
+                "started_at": "2026-10-02 07:56:42 AM",
+                "finished_at": "2026-10-02 07:57:07 AM",
+                "result": "completed",
+                "duration": "25s",
+                "reason": "Sample Lane A 09 completed in 25.2s. Successfully processed 2055 records for 20261002."
+            },
+            "Sample Lane A 01": {
+                "started_at": "2026-10-02 07:58:42 AM",
+                "finished_at": "2026-10-02 07:59:00 AM",
+                "result": "completed",
+                "duration": "17s",
+                "reason": "Sample Lane A 01 completed in 17.2s. Successfully processed 1540 records for 20261002."
+            },
+            "Sample Lane A 02": {
+                "started_at": "2026-10-02 07:59:42 AM",
+                "finished_at": "2026-10-02 08:00:01 AM",
+                "result": "completed",
+                "duration": "19s",
+                "reason": "Sample Lane A 02 completed in 19.0s. Successfully processed 1991 records for 20261002."
+            },
+            "Sample Lane A 04": {
+                "started_at": "2026-10-02 08:03:43 AM",
+                "finished_at": "2026-10-02 08:04:06 AM",
+                "result": "failed",
+                "duration": "22s",
+                "reason": "Exceeded max retries (5/5): Return code 1: ============================================================\nRunning: Sample Lane A 04 | Date: 20261002\n============================================================\n[08:03:43] Checking upstream dependencies for date 20261002 (target outcome: fail, duration: 22.8s)...\n[08:03:43] Starting data processing for 20261002 (22.8s)...\n[-] FAILED: Unhandled exception in Sample Lane A 04: Simulated processing failure in Sample Lane A 04 after 22.8s\nTraceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 04 after 22.8s"
+            },
+            "Sample Lane A 03": {
+                "started_at": "2026-10-02 08:04:13 AM",
+                "finished_at": "2026-10-02 08:04:31 AM",
+                "result": "failed",
+                "duration": "17s",
+                "reason": "Exceeded max retries (5/5): Return code 1: ============================================================\nRunning: Sample Lane A 03 | Date: 20261002\n============================================================\n[08:04:13] Checking upstream dependencies for date 20261002 (target outcome: fail, duration: 17.7s)...\n[08:04:13] Starting data processing for 20261002 (17.7s)...\n[-] FAILED: Unhandled exception in Sample Lane A 03: Simulated processing failure in Sample Lane A 03 after 17.7s\nTraceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_03.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_03.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 03 after 17.7s"
+            },
+            "Sample Lane A 10": {
+                "started_at": "2026-10-02 08:04:43 AM",
+                "finished_at": "2026-10-02 08:05:01 AM",
+                "result": "completed",
+                "duration": "17s",
+                "reason": "Sample Lane A 10 completed in 17.3s. Successfully processed 1786 records for 20261002."
+            }
+        },
+        "timeline": [
+            {
+                "timestamp": "07:52 AM",
+                "title": "Day Initialized",
+                "description": "Paradiso day initialized for 20261002",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:52 AM",
+                "title": "Lane A (Sequential) started",
+                "description": "Sequential queue execution initiated for 10 pending report(s)",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:52 AM",
+                "title": "Started Sample Lane A 01",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:52 AM",
+                "title": "Started Sample Lane A 02",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Sample Lane A 01 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Rotated Sample Lane A 02",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Rotated Sample Lane A 03",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Sample Lane A 04 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Started Sample Lane A 05",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:53 AM",
+                "title": "Started Sample Lane A 06",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Sample Lane A 05 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Sample Lane A 06 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Started Sample Lane A 07",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Started Sample Lane A 08",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Completed Sample Lane A 08",
+                "description": "Finished in 15s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Completed Sample Lane A 07",
+                "description": "Finished in 19s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Started Sample Lane A 09",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:54 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Rotated Sample Lane A 09",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Started Sample Lane A 01",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Started Sample Lane A 02",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Rotated Sample Lane A 01",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Rotated Sample Lane A 02",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:55 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Rotated Sample Lane A 04",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Rotated Sample Lane A 03",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Started Sample Lane A 05",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Started Sample Lane A 06",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Completed Sample Lane A 05",
+                "description": "Finished in 22s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Completed Sample Lane A 06",
+                "description": "Finished in 28s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Started Sample Lane A 09",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:56 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Completed Sample Lane A 09",
+                "description": "Finished in 25s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Started Sample Lane A 01",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Started Sample Lane A 02",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Sample Lane A 02 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Sample Lane A 01 encountered error",
+                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:57 AM",
+                "title": "Sample Lane A 03 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Rotated Sample Lane A 04",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Started Sample Lane A 02",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Sample Lane A 10 encountered error",
+                "description": "Re-queued for retry (1/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Rotated Sample Lane A 02",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Started Sample Lane A 01",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:58 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Completed Sample Lane A 01",
+                "description": "Finished in 17s",
+                "type": "success"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Rotated Sample Lane A 03",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Rotated Sample Lane A 04",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Started Sample Lane A 02",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "07:59 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Completed Sample Lane A 02",
+                "description": "Finished in 19s",
+                "type": "success"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Sample Lane A 03 encountered error",
+                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Rotated Sample Lane A 04",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:00 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Sample Lane A 03 encountered error",
+                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Rotated Sample Lane A 03",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Sample Lane A 10 encountered error",
+                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:01 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Sample Lane A 04 encountered error",
+                "description": "Re-queued for retry (2/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Sample Lane A 03 encountered error",
+                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:02 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Sample Lane A 04 encountered error",
+                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Sample Lane A 10 encountered error",
+                "description": "Re-queued for retry (3/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Sample Lane A 04 encountered error",
+                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Rotated Sample Lane A 03",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:03 AM",
+                "title": "Started Sample Lane A 04",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Sample Lane A 10 encountered error",
+                "description": "Re-queued for retry (4/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Sample Lane A 04 permanently failed",
+                "description": "Exceeded max retries (5/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Started Sample Lane A 03",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Rotated Sample Lane A 10",
+                "description": "Skipped (missing dependency), rotated to back of queue",
+                "type": "system"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Sample Lane A 03 permanently failed",
+                "description": "Exceeded max retries (5/5): Return code 1: =============================================",
+                "type": "failed"
+            },
+            {
+                "timestamp": "08:04 AM",
+                "title": "Started Sample Lane A 10",
+                "description": "Currently running",
+                "type": "start"
+            },
+            {
+                "timestamp": "08:05 AM",
+                "title": "Completed Sample Lane A 10",
+                "description": "Finished in 17s",
+                "type": "success"
+            },
+            {
+                "timestamp": "08:19 AM",
+                "title": "Lane A (Sequential) stopped",
+                "description": "Sequential lane paused by user; active runs terminated",
+                "type": "system"
+            }
+        ]
     }
 }

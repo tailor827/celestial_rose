@@ -277,10 +277,22 @@ let transitionCooldownRemaining = 0;
 let transitionCooldownTimer = null;
 
 const lanesState = {
-    type_a: { running: false, cooldown: 0, timer: null, active_runs: 0, max_concurrent_run: 1 },
-    type_b: { running: false, cooldown: 0, timer: null, active_runs: 0 },
-    type_c: { running: false, cooldown: 0, timer: null, active_runs: 0 }
+    type_a: { running: false, cooldown: 0, timer: null, active_runs: 0, max_concurrent_run: 1, max_retries: 3 },
+    type_b: { running: false, cooldown: 0, timer: null, active_runs: 0, max_retries: 3 },
+    type_c: { running: false, cooldown: 0, timer: null, active_runs: 0, max_retries: 3 }
 };
+
+function formatOrdinal(n) {
+    const num = parseInt(n, 10) || 3;
+    const mod100 = num % 100;
+    if (mod100 >= 11 && mod100 <= 13) return `${num}th`;
+    switch (num % 10) {
+        case 1: return `${num}st`;
+        case 2: return `${num}nd`;
+        case 3: return `${num}rd`;
+        default: return `${num}th`;
+    }
+}
 
 function normalizeLaneKey(lane) {
     const l = String(lane || '').toLowerCase();
@@ -402,6 +414,7 @@ function updateLaneUI(laneKey) {
     const tabSuffix = laneKey === 'type_a' ? 'a' : (laneKey === 'type_b' ? 'b' : 'c');
     const isRunning = s.running;
     const inCooldown = s.cooldown > 0;
+    const maxRetries = s.max_retries || 3;
 
     // 1. Top bar elements
     const topStartBtn = document.getElementById(`btn-top-start-${laneKey}`);
@@ -467,7 +480,7 @@ function updateLaneUI(laneKey) {
     configureBtn(tabStartBtn, tabStopBtn, false);
     configureStatus(tabBadge);
 
-    // 4. Lane A specific Concurrency Pool metrics
+    // 4. Lane-specific metric cards
     if (laneKey === 'type_a') {
         const maxSlots = s.max_concurrent_run || 1;
         const modeBadge = document.getElementById('lane-a-mode-badge');
@@ -496,12 +509,25 @@ function updateLaneUI(laneKey) {
         if (slotsSub) {
             slotsSub.innerText = `Max ${maxSlots} in-flight process${maxSlots > 1 ? 'es' : ''} permitted`;
         }
+        const retriesNumA = document.getElementById('metric-a-retries-num');
+        if (retriesNumA) retriesNumA.innerText = `${maxRetries}x Limit`;
+        const retriesSubA = document.getElementById('metric-a-retries-sub');
+        if (retriesSubA) retriesSubA.innerText = `Terminal failure on ${formatOrdinal(maxRetries)} genuine crash`;
     } else if (laneKey === 'type_b') {
         const activeWorkers = document.getElementById('metric-b-active');
         if (activeWorkers) {
             activeWorkers.innerText = `${s.active_runs || 0} In-Flight`;
             activeWorkers.style.color = (s.active_runs || 0) > 0 ? '#34d399' : (isRunning ? '#60a5fa' : 'var(--text-muted)');
         }
+        const retriesNumB = document.getElementById('metric-b-retries-num');
+        if (retriesNumB) retriesNumB.innerText = `${maxRetries}x Per Cycle`;
+        const retriesSubB = document.getElementById('metric-b-retries-sub');
+        if (retriesSubB) retriesSubB.innerText = `Genuine errors retry up to ${maxRetries}x`;
+    } else if (laneKey === 'type_c') {
+        const retriesNumC = document.getElementById('metric-c-retries-num');
+        if (retriesNumC) retriesNumC.innerText = `${maxRetries}x Penalty`;
+        const retriesSubC = document.getElementById('metric-c-retries-sub');
+        if (retriesSubC) retriesSubC.innerText = `${maxRetries}x retries per scheduled timeslot`;
     }
 }
 
@@ -523,6 +549,9 @@ async function fetchLanesStatus() {
             lanesState[k].active_runs = laneInfo.running_count || 0;
             if (laneInfo.max_concurrent_run) {
                 lanesState[k].max_concurrent_run = laneInfo.max_concurrent_run;
+            }
+            if (laneInfo.max_retries) {
+                lanesState[k].max_retries = laneInfo.max_retries;
             }
             if (laneInfo.cooldown_remaining && laneInfo.cooldown_remaining > 0 && lanesState[k].cooldown <= 0) {
                 startLaneCooldown(k, laneInfo.cooldown_remaining);
@@ -654,6 +683,13 @@ async function fetchAutomations() {
         renderLaneATable(data.automations);
         renderLaneBTable(data.automations);
         renderLaneCTable(data.automations);
+        if (data.automations && data.automations.length > 0 && data.automations[0].max_retries) {
+            const mr = data.automations[0].max_retries;
+            ['type_a', 'type_b', 'type_c'].forEach(k => {
+                lanesState[k].max_retries = mr;
+                updateLaneUI(k);
+            });
+        }
         filterAutomationsCatalog();
     } catch (e) {
         console.error('Automations poll failed:', e);

@@ -1,0 +1,8 @@
+{
+  "name": "Sample Lane A 04",
+  "status": "Failed",
+  "last_run": "2026-10-02 08:04:06",
+  "duration": "22.8s",
+  "last_output": "FAILED: Unhandled exception in Sample Lane A 04: Simulated processing failure in Sample Lane A 04 after 22.8s",
+  "reason": "Traceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_04.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 04 after 22.8s\n"
+}

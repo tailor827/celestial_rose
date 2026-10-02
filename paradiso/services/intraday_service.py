@@ -1245,18 +1245,21 @@ class IntradayService:
                     "running_count": len(self.current_runs),
                     "running_reports": list(self.current_runs.keys()),
                     "pending_count": len(self.waitlist),
-                    "max_concurrent_run": self.max_concurrent_run
+                    "max_concurrent_run": self.max_concurrent_run,
+                    "max_retries": self.max_retries
                 },
                 "type_b": {
                     "active": self.lane_b_active,
                     "running_count": len(self.active_runs_type_b),
                     "running_reports": list(self.active_runs_type_b.keys()),
+                    "max_retries": self.max_retries
                 },
                 "type_c": {
                     "active": self.lane_c_active,
                     "running_count": len(self.active_runs_type_c),
                     "running_reports": list(self.active_runs_type_c.keys()),
-                    "completed_today": list(self.type_c_ran_today)
+                    "completed_today": list(self.type_c_ran_today),
+                    "max_retries": self.max_retries
                 }
             }
 
