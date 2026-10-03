@@ -46,7 +46,7 @@ class ExecutionController:
 
                 rep_status = getattr(report, "status", "")
                 is_exhausted = bool(name in getattr(self.intraday_service, "type_b_exhausted", set()))
-                if rep_status in ("Disabled", "Failed") or is_exhausted:
+                if rep_status in ("Disabled", "Inactive", "Failed") or is_exhausted:
                     status_label = "Failed" if is_exhausted else rep_status
                     return jsonify({
                         "ok": False,
@@ -58,7 +58,7 @@ class ExecutionController:
                     return jsonify({"ok": False, "error": f"Unable to execute '{name}': report is already running or scheduler state invalid."}), 409
             else:
                 rep_status = getattr(report, "status", "")
-                if rep_status in ("Disabled", "Failed"):
+                if rep_status in ("Disabled", "Inactive", "Failed"):
                     return jsonify({
                         "ok": False,
                         "error": f"Cannot execute report '{name}': report is {rep_status}. Re-enable it before running."

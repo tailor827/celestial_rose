@@ -45,15 +45,15 @@ class Automations(StorageBase):
         return [r.name for r in reports if r.status == "Waiting"]
 
     def get_pending(self) -> List[str]:
-        """Returns report names that are in a non-terminal state (not Completed and not Disabled)."""
+        """Returns report names that are in a non-terminal state (not Completed, Disabled, or Inactive)."""
         reports = self.get_all(serialized=False)
-        return [r.name for r in reports if r.status not in ["Completed", "Disabled"]]
+        return [r.name for r in reports if r.status not in ["Completed", "Disabled", "Inactive"]]
 
     def set_waiting_all(self) -> List[str]:
         updated_waiting = []
         def _mutate(data):
             for k, v in data.items():
-                if v.get("status") != "Disabled":
+                if v.get("status") not in ("Disabled", "Inactive"):
                     v["status"] = "Waiting"
                     updated_waiting.append(k)
         self.mutate(_mutate)
@@ -67,7 +67,10 @@ class Automations(StorageBase):
     def get_pending_by_type(self, report_type: str) -> List[str]:
         """Returns pending non-terminal reports for a specific lane (sorted by P0 -> P1 -> P2 for type_a)."""
         target_type = report_type.lower()
-        pending = [r for r in self.get_all(serialized=False) if r.report_type == target_type and r.status not in ["Completed", "Disabled"]]
+        pending = [
+            r for r in self.get_all(serialized=False)
+            if r.report_type == target_type and r.status not in ["Completed", "Disabled", "Inactive"]
+        ]
         if target_type == "type_a":
             prio_map = {"P0": 0, "P1": 1, "P2": 2}
             pending.sort(key=lambda r: prio_map.get(str(getattr(r, "priority", "P2")).upper(), 2))

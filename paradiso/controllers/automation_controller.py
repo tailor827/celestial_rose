@@ -46,6 +46,14 @@ class AutomationController:
         if not name or not filename:
             return jsonify({"ok": False, "error": "Name and filename are required"}), 400
 
+        # Validate report name against path traversal, separators, and unsafe filesystem/glob characters
+        unsafe_name_chars = set('/\\:*?"<>|[]')
+        if name in (".", "..") or ".." in name or any(ch in unsafe_name_chars or ord(ch) < 32 for ch in name):
+            return jsonify({
+                "ok": False,
+                "error": "Invalid report name: must not contain path separators ('/', '\\'), traversal sequences ('..'), or special characters (: * ? \" < > | [ ])."
+            }), 400
+
         # Validate filename against path traversal and separators
         if "/" in filename or "\\" in filename or ".." in filename or Path(filename).is_absolute():
             return jsonify({"ok": False, "error": "Invalid filename: must be a plain filename without directory separators or traversal characters."}), 400
@@ -61,7 +69,7 @@ class AutomationController:
             return jsonify({"ok": False, "error": "Invalid filename: R report filename must end with .r or .R"}), 400
 
         # Whitelist permitted directories (Python vs R hygiene)
-        raw_dir = str(data.get("dir") or ("../reports/python" if filetype == "python" else "../reports/r")).strip()
+        raw_dir = str(data.get("dir") or "../reports").strip()
         ALLOWED_DIRS = {"../reports", "../reports/python", "../reports/r", "reports", "reports/python", "reports/r"}
         if raw_dir not in ALLOWED_DIRS:
             return jsonify({"ok": False, "error": f"Invalid directory '{raw_dir}': must be an authorized reports directory (e.g. '../reports', '../reports/python', '../reports/r')."}), 400
@@ -260,8 +268,8 @@ class AutomationController:
         if not report:
             return jsonify({"ok": False, "error": f"Report '{name}' not found"}), 404
 
-        if report.status not in ("Disabled", "Failed"):
-            return jsonify({"ok": False, "error": f"Report '{name}' is not disabled or failed (current status: {report.status})"}), 400
+        if report.status not in ("Disabled", "Inactive", "Failed"):
+            return jsonify({"ok": False, "error": f"Report '{name}' is not disabled, inactive, or failed (current status: {report.status})"}), 400
 
         success = self.automation_service.enable(name)
         if not success:

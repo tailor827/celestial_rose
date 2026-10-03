@@ -66,9 +66,9 @@ if (length(file_arg) > 0) {
 } else {
   script_dir <- getwd()
 }
-workspace_dir <- dirname(script_dir)
-
-paradiso_logs_dir <- file.path(workspace_dir, "paradiso", "logs")
+workspace_dir <- if (tolower(basename(script_dir)) %in% c("python", "r")) dirname(dirname(script_dir)) else dirname(script_dir)
+env_logs_dir <- Sys.getenv("PARADISO_LOGS_DIR", unset = "")
+paradiso_logs_dir <- if (nchar(env_logs_dir) > 0) env_logs_dir else file.path(workspace_dir, "paradiso", "logs")
 if (!dir.exists(paradiso_logs_dir)) {
   dir.create(paradiso_logs_dir, recursive = TRUE, showWarnings = FALSE)
 }

@@ -43,6 +43,7 @@ class IntradayService:
         self.lane_c_active: bool = False
         self.force_open: bool = False
         self._active_date: str = CLOCK.date_str()
+        self._hydrate_retry_counts(self._active_date)
         self._hydrate_type_b_last_run(self._active_date)
         self._hydrate_type_c_ran_today(self._active_date)
 
@@ -122,7 +123,8 @@ class IntradayService:
             self._consecutive_starvation_passes = 0
             self._rotation_cooldown_until = 0.0
             if reset_pass:
-                self._cycle_seen_in_pass.clear()
+                self._cycle_seen_in_pass = set(self.current_runs.keys())
+                self._cycle_completions_in_pass = 0
                 self._cycle_skips_in_pass = 0
                 self._cycle_errors_in_pass = 0
                 if len(self.waitlist) > 1:
@@ -291,6 +293,26 @@ class IntradayService:
                 if parsed_dt <= now_dt:
                     self.type_b_last_run[rep.name] = parsed_dt
 
+    def _hydrate_retry_counts(self, date: str) -> None:
+        """Hydrates in-memory retry_counts from persisted automations catalog and intraday storage for the specified date."""
+        import re
+        day = self.intraday_repo.get_day(date)
+        if day and day.status == Intraday.CLOSED:
+            return
+        pattern = re.compile(r"(?:Error \(attempt|Exceeded max retries \()\s*(\d+)\s*/\s*(\d+)")
+        for rep in self.automation_service.get_all():
+            if rep.status in ("Retrial", "Failed") and rep.last_output:
+                if day or (rep.last_run and any(d_fmt in str(rep.last_run) for d_fmt in [date, CLOCK.formatted_date()])):
+                    m = pattern.search(str(rep.last_output))
+                    if m:
+                        self.retry_counts[rep.name] = max(self.retry_counts.get(rep.name, 0), int(m.group(1)))
+        if day and day.reports_ran:
+            for name, run_data in day.reports_ran.items():
+                reason = getattr(run_data, "reason", None) or (run_data.get("reason") if isinstance(run_data, dict) else "") or ""
+                m = pattern.search(str(reason))
+                if m:
+                    self.retry_counts[name] = max(self.retry_counts.get(name, 0), int(m.group(1)))
+
     def _hydrate_type_c_ran_today(self, date: str) -> None:
         """Hydrates in-memory type_c_ran_today from persisted reports_ran in intraday storage for the specified date."""
         day = self.intraday_repo.get_day(date)
@@ -328,8 +350,41 @@ class IntradayService:
                         excluded.add(name)
         return excluded
 
+    def _sync_active_date_on_action(self, today_date: str) -> bool:
+        """Synchronizes self._active_date when an action occurs on a new calendar day, preventing a false midnight rollover on the next tick()."""
+        if today_date > self._active_date:
+            self._active_date = today_date
+            self._reconcile_past_days(today_date)
+            all_active = list(self.current_runs.keys()) + list(self.active_runs_type_b.keys()) + list(self.active_runs_type_c.keys())
+            if all_active:
+                self.execution_service.runner.kill_all()
+                for r_name in all_active:
+                    self.automation_service.update_status(
+                        name=r_name,
+                        status="Failed",
+                        last_output="Forcibly terminated at midnight rollover"
+                    )
+                self.current_runs.clear()
+                self.active_runs_type_b.clear()
+                self.active_runs_type_c.clear()
+            self.retry_counts.clear()
+            self.waitlist.clear()
+            self._rotation_cooldown_until = 0.0
+            self._consecutive_starvation_passes = 0
+            self.type_b_last_run.clear()
+            self.type_b_exhausted.clear()
+            self.type_c_ran_today.clear()
+            self.type_c_retry_after.clear()
+            self.type_c_warned.clear()
+            self.day_closed = False
+            return True
+        elif today_date < self._active_date:
+            self._active_date = today_date
+        return False
+
     def _get_or_init_day(self, today_date: str, status: str, force_open: bool = False, is_new_day: bool = False) -> IntradayDay:
         """Retrieves today's day record, resetting prematurely finalized or stale records during WAITING_TO_OPEN or forced open."""
+        self._sync_active_date_on_action(today_date)
         day = self.intraday_repo.get_day(today_date)
         is_stale_or_premature = False
 
@@ -351,6 +406,7 @@ class IntradayService:
         )
 
         if not day or is_stale_or_premature:
+            self.retry_counts.clear()
             waiting = self.automation_service.set_waiting_all()
             effective_status = Intraday.OPEN if force_open else status
             day = IntradayDay(
@@ -367,6 +423,7 @@ class IntradayService:
             )
             self.intraday_repo.add_day(day)
         elif not has_day_init:
+            self.retry_counts.clear()
             waiting = self.automation_service.set_waiting_all()
             for r_name, r_run in (day.reports_ran or {}).items():
                 r_res = getattr(r_run, "result", None) or (r_run.get("result") if isinstance(r_run, dict) else "")
@@ -419,9 +476,10 @@ class IntradayService:
         """Starts an individual execution lane (type_a, type_b, or type_c)."""
         norm = self._normalize_lane(lane)
         with self._lock:
+            today_date = CLOCK.date_str()
+            self._sync_active_date_on_action(today_date)
             if force_open:
                 self.force_open = True
-            today_date = CLOCK.date_str()
             self._reconcile_past_days(today_date)
 
             for r in self.automation_service.get_all():
@@ -439,6 +497,7 @@ class IntradayService:
 
             status = self.resolve_status()
             day = self._get_or_init_day(today_date, status, force_open=force_open)
+            self._hydrate_retry_counts(today_date)
 
             if norm == "type_a":
                 self.lane_a_active = True
@@ -551,19 +610,24 @@ class IntradayService:
     def start_fresh_run(self, force_open: bool = False):
         """Initiates fresh run across all lanes for backward compatibility."""
         with self._lock:
+            today_date = CLOCK.date_str()
+            self._sync_active_date_on_action(today_date)
             self.lane_a_active = True
             self.lane_b_active = True
             self.lane_c_active = True
             self.force_open = force_open
-            today_date = CLOCK.date_str()
-            self.retry_counts.clear()
 
             # Reconcile historical days stuck in OPEN
             self._reconcile_past_days(today_date)
 
             # Recover any reports left in "Running" status from crashed session
             for r in self.automation_service.get_all():
-                if r.status == "Running":
+                if (
+                    r.status == "Running"
+                    and r.name not in self.current_runs
+                    and r.name not in self.active_runs_type_b
+                    and r.name not in self.active_runs_type_c
+                ):
                     self.automation_service.update_status(
                         name=r.name,
                         status="Waiting",
@@ -572,6 +636,7 @@ class IntradayService:
 
             status = self.resolve_status()
             day = self._get_or_init_day(today_date, status, force_open=self.force_open)
+            self._hydrate_retry_counts(today_date)
             pending = self.automation_service.get_pending_by_type("type_a")
             already_ran = self._get_completed_or_exhausted_reports(day)
             queue_items = [r for r in pending if r not in already_ran and r not in self.current_runs]
@@ -614,6 +679,8 @@ class IntradayService:
     def reset_all_reports(self):
         """Resets all scheduled reports to Waiting, kills running processes, and sets scheduler to Standby."""
         with self._lock:
+            today_date = CLOCK.date_str()
+            self._active_date = today_date
             self.lane_a_active = False
             self.lane_b_active = False
             self.lane_c_active = False
@@ -641,7 +708,6 @@ class IntradayService:
             self.active_runs_type_c.clear()
 
             waiting = self.automation_service.set_waiting_all()
-            today_date = CLOCK.date_str()
             day = self.intraday_repo.get_day(today_date)
             if day:
                 day.reports_ran = {}
@@ -710,8 +776,9 @@ class IntradayService:
                     self._last_rotation_logged.clear()
                 self.day_closed = False
             else:
-                # Same day: if day was prematurely closed or stale, ensure clean day
-                if day and day.status == Intraday.CLOSED and (status == Intraday.WAITING_TO_OPEN or self.force_open or status == Intraday.OPEN):
+                # Same day: if day was prematurely closed, uninitialized, or stale, ensure clean day
+                has_day_init = any(e.title == "Day Initialized" for e in getattr(day, "timeline", []))
+                if day and (not has_day_init or (day.status == Intraday.CLOSED and (status == Intraday.WAITING_TO_OPEN or self.force_open or status == Intraday.OPEN))):
                     day = self._get_or_init_day(today_date, status, force_open=self.force_open)
                 elif day and day.status != status and not self.force_open:
                     self.intraday_repo.update_status(today_date, status)
@@ -761,7 +828,7 @@ class IntradayService:
                                     break
                                 self.waitlist.remove(next_report)
                                 rep = self.automation_service.get_by_name(next_report)
-                                if not rep or rep.status == "Disabled":
+                                if not rep or rep.status in ("Disabled", "Inactive"):
                                     self._cycle_pass_reports.discard(next_report)
                                     self._evaluate_pass_completion(today_date)
                                     continue
@@ -775,7 +842,7 @@ class IntradayService:
                     for rep in b_reports:
                         if rep.name in self.type_b_exhausted:
                             continue
-                        if rep.status in ("Disabled", "Failed"):
+                        if rep.status in ("Disabled", "Inactive", "Failed"):
                             if rep.status == "Failed":
                                 self.type_b_exhausted.add(rep.name)
                             continue
@@ -804,7 +871,7 @@ class IntradayService:
                     now_time_str = CLOCK.time_24_str()
 
                     for rep in c_reports:
-                        if rep.status in ("Completed", "Disabled", "Skipped"):
+                        if rep.status in ("Completed", "Disabled", "Inactive", "Skipped"):
                             continue
                         if rep.name in self.active_runs_type_c:
                             continue
@@ -894,7 +961,12 @@ class IntradayService:
     def _close_day(self, date: str):
         """Terminate lingering processes and mark remaining uncompleted reports as failed at 10:00 PM cutoff."""
         self.execution_service.runner.kill_all()
-        running_reports = set(self.current_runs.keys()) | set(self.active_runs_type_b.keys()) | set(self.active_runs_type_c.keys())
+        running_map = {
+            **self.current_runs,
+            **self.active_runs_type_b,
+            **self.active_runs_type_c,
+        }
+        running_reports = set(running_map.keys())
         self.current_runs.clear()
         self.active_runs_type_b.clear()
         self.active_runs_type_c.clear()
@@ -904,10 +976,11 @@ class IntradayService:
         all_reports = self.automation_service.get_all()
 
         for r in all_reports:
-            if r.status == "Disabled":
+            if r.status in ("Disabled", "Inactive"):
                 continue
             if r.name in running_reports or (r.name not in already_ran and r.status != "Completed"):
                 reason = "Forcibly terminated: breached 10:00 PM cutoff (exceeded grace window)" if r.name in running_reports else "Not completed before 10:00 PM cutoff"
+                started_at = running_map[r.name] if r.name in running_reports else "--"
                 self.automation_service.update_status(
                     name=r.name,
                     status="Failed",
@@ -917,15 +990,31 @@ class IntradayService:
                     date=date,
                     report_name=r.name,
                     run=ReportRun(
-                        started_at=CLOCK.formatted_now(),
+                        started_at=started_at,
                         finished_at=CLOCK.formatted_now(),
                         result="failed",
                         duration="0s",
                         reason=reason
                     )
                 )
+            elif r.status in ("Waiting", "Retrial", "Running"):
+                prior_run = day.reports_ran.get(r.name) if day else None
+                final_status = "Completed" if (prior_run and prior_run.result == "completed") else "Failed"
+                self.automation_service.update_status(
+                    name=r.name,
+                    status=final_status,
+                    last_output=f"{r.last_output} (Closed at 10:00 PM cutoff)" if r.last_output else "Closed at 10:00 PM cutoff"
+                )
         self.waitlist.clear()
         self.type_c_retry_after.clear()
+        self._consecutive_starvation_passes = 0
+        self._rotation_cooldown_until = 0.0
+        self._cycle_pass_reports.clear()
+        self._cycle_seen_in_pass.clear()
+        self._cycle_completions_in_pass = 0
+        self._cycle_skips_in_pass = 0
+        self._cycle_errors_in_pass = 0
+        self._last_rotation_logged.clear()
         self.intraday_repo.add_timeline_event(
             date=date,
             title="Paradiso closed",
@@ -935,7 +1024,7 @@ class IntradayService:
 
     def _trigger_report(self, report_name: str, date: str):
         rep = self.automation_service.get_by_name(report_name)
-        if rep and rep.status == "Disabled":
+        if rep and rep.status in ("Disabled", "Inactive"):
             self._cycle_pass_reports.discard(report_name)
             return
 
@@ -953,7 +1042,9 @@ class IntradayService:
 
         def _on_good(name: str, duration_str: str, output: str):
             with self._lock:
-                started_at = self.current_runs.pop(name, CLOCK.formatted_now())
+                if name not in self.current_runs:
+                    return
+                started_at = self.current_runs.pop(name)
                 log = ReportLog(name).from_json(default_stdout=output)
 
                 if log.status == "Completed":
@@ -962,6 +1053,12 @@ class IntradayService:
                     self._cycle_pass_reports.discard(name)
                     self._cycle_seen_in_pass.discard(name)
                     self.wake_lane_a_queue()
+                    self.automation_service.update_status(
+                        name=name,
+                        status="Completed",
+                        duration=duration_str,
+                        last_output=log.last_output
+                    )
 
                     self.intraday_repo.add_report_run(
                         date=date,
@@ -984,6 +1081,7 @@ class IntradayService:
                 elif ReportLog.is_dependency_skip(log.status, log.last_output or output):
                     # Non-completed dependency skip / retrial: Rotate to back of waitlist if scheduler active
                     self._cycle_skips_in_pass += 1
+                    self._cycle_seen_in_pass.add(name)
                     scheduler_is_active = self.lane_a_active and (self.resolve_status() == Intraday.OPEN or self.force_open)
                     if scheduler_is_active:
                         self.waitlist.append(name)
@@ -1017,15 +1115,21 @@ class IntradayService:
             attempts = self.retry_counts.get(name, 0) + 1
             self.retry_counts[name] = attempts
 
-            if attempts < self.max_retries and scheduler_is_active:
-                self.waitlist.append(name)
+            if attempts < self.max_retries:
+                self._cycle_seen_in_pass.add(name)
+                if scheduler_is_active:
+                    self.waitlist.append(name)
                 self.automation_service.update_status(
                     name=name,
                     status="Retrial",
                     duration=duration_str,
                     last_output=f"Error (attempt {attempts}/{self.max_retries}): {error}"
                 )
-                desc = f"Re-queued for retry ({attempts}/{self.max_retries}): {error[:60]}"
+                desc = (
+                    f"Re-queued for retry ({attempts}/{self.max_retries}): {error[:60]}"
+                    if scheduler_is_active
+                    else f"Retry pending ({attempts}/{self.max_retries}, scheduler paused/closing): {error[:60]}"
+                )
                 self.intraday_repo.add_timeline_event(
                     date=date,
                     title=f"{name} encountered error",
@@ -1063,7 +1167,9 @@ class IntradayService:
 
         def _on_fail(name: str, duration_str: str, error: str):
             with self._lock:
-                started_at = self.current_runs.pop(name, CLOCK.formatted_now())
+                if name not in self.current_runs:
+                    return
+                started_at = self.current_runs.pop(name)
                 log = ReportLog(name).from_json(default_stdout=error)
                 scheduler_is_active = self.lane_a_active and (self.resolve_status() == Intraday.OPEN or self.force_open)
 
@@ -1076,6 +1182,7 @@ class IntradayService:
                 if is_dependency_skip:
                     # Dependency skip / wait: Rotate to back of waitlist WITHOUT incrementing retry_counts
                     self._cycle_skips_in_pass += 1
+                    self._cycle_seen_in_pass.add(name)
                     if scheduler_is_active:
                         self.waitlist.append(name)
                     self.automation_service.update_status(
@@ -1119,7 +1226,9 @@ class IntradayService:
 
         def _on_good(name: str, duration_str: str, output: str):
             with self._lock:
-                started_at = self.active_runs_type_b.pop(name, CLOCK.formatted_now())
+                if name not in self.active_runs_type_b:
+                    return
+                started_at = self.active_runs_type_b.pop(name)
                 self.type_b_last_run[name] = CLOCK.now()
                 log = ReportLog(name).from_json(default_stdout=output)
 
@@ -1127,6 +1236,12 @@ class IntradayService:
                     if name not in self.type_b_exhausted:
                         self.retry_counts[name] = 0
                     self.wake_lane_a_queue()
+                    self.automation_service.update_status(
+                        name=name,
+                        status="Completed",
+                        duration=duration_str,
+                        last_output=log.last_output
+                    )
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -1207,7 +1322,9 @@ class IntradayService:
 
         def _on_fail(name: str, duration_str: str, error: str):
             with self._lock:
-                started_at = self.active_runs_type_b.pop(name, CLOCK.formatted_now())
+                if name not in self.active_runs_type_b:
+                    return
+                started_at = self.active_runs_type_b.pop(name)
                 self.type_b_last_run[name] = CLOCK.now()
                 log = ReportLog(name).from_json(default_stdout=error)
                 if ReportLog.is_dependency_skip(log.status, error) or ReportLog.is_dependency_skip(log.status, log.last_output):
@@ -1243,7 +1360,9 @@ class IntradayService:
 
         def _on_good(name: str, duration_str: str, output: str):
             with self._lock:
-                started_at = self.active_runs_type_c.pop(name, CLOCK.formatted_now())
+                if name not in self.active_runs_type_c:
+                    return
+                started_at = self.active_runs_type_c.pop(name)
                 log = ReportLog(name).from_json(default_stdout=output)
 
                 if log.status == "Completed":
@@ -1251,6 +1370,12 @@ class IntradayService:
                     self.type_c_retry_after.pop(name, None)
                     self.retry_counts[name] = 0
                     self.wake_lane_a_queue()
+                    self.automation_service.update_status(
+                        name=name,
+                        status="Completed",
+                        duration=duration_str,
+                        last_output=log.last_output
+                    )
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -1332,7 +1457,9 @@ class IntradayService:
 
         def _on_fail(name: str, duration_str: str, error: str):
             with self._lock:
-                started_at = self.active_runs_type_c.pop(name, CLOCK.formatted_now())
+                if name not in self.active_runs_type_c:
+                    return
+                started_at = self.active_runs_type_c.pop(name)
                 log = ReportLog(name).from_json(default_stdout=error)
                 if ReportLog.is_dependency_skip(log.status, error) or ReportLog.is_dependency_skip(log.status, log.last_output):
                     self.type_c_retry_after[name] = CLOCK.now() + timedelta(seconds=300)
@@ -1363,15 +1490,16 @@ class IntradayService:
         if (
             not report
             or report.report_type == "type_a"
-            or getattr(report, "status", "") in ("Disabled", "Failed")
+            or getattr(report, "status", "") in ("Disabled", "Inactive", "Failed")
             or name in self.type_b_exhausted
         ):
             return False
         with self._lock:
+            today_date = CLOCK.date_str()
             status = self.resolve_status()
             if status != Intraday.OPEN and not self.force_open:
                 return False
-            today_date = CLOCK.date_str()
+            self._get_or_init_day(today_date, status, force_open=self.force_open)
             if report.report_type == "type_b":
                 if name in self.active_runs_type_b:
                     return False

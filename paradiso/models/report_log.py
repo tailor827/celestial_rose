@@ -21,23 +21,59 @@ class ReportLog:
         self.last_output = ""
         self.reason = ""
 
+    def _is_safe_name(self) -> bool:
+        """Returns False if report name contains path traversal, separators, or unsafe glob/filesystem characters."""
+        if not self.name or self.name in (".", "..") or ".." in self.name:
+            return False
+        unsafe_chars = set('/\\:*?"<>|[]')
+        if any(ch in unsafe_chars or ord(ch) < 32 for ch in self.name):
+            return False
+        return True
+
+    def _is_confined_path(self, candidate: Path) -> bool:
+        """Verifies that a candidate path resolves strictly within self.log_dir."""
+        try:
+            base_resolved = self.log_dir.resolve()
+            cand_resolved = candidate.resolve()
+            return cand_resolved.parent == base_resolved
+        except Exception:
+            return False
+
     def find_latest_log_file(self) -> Optional[Path]:
-        """Finds direct {name}.json or latest glob matching {name}_*.json file."""
+        """Finds direct {name}.json or latest glob matching {name}_*.json file confined to self.log_dir."""
+        if not self._is_safe_name():
+            return None
         exact_file = self.log_dir / f"{self.name}.json"
-        if exact_file.exists():
+        if self._is_confined_path(exact_file) and exact_file.exists():
             return exact_file
 
-        pattern_files = sorted(list(self.log_dir.glob(f"{self.name}_*.json")))
-        if pattern_files:
-            return pattern_files[-1]
+        try:
+            pattern_files = sorted([
+                p for p in self.log_dir.glob(f"{self.name}_*.json")
+                if self._is_confined_path(p)
+            ])
+            if pattern_files:
+                return pattern_files[-1]
+        except Exception:
+            pass
 
         return None
 
     def clean_slate(self):
-        """Removes or truncates existing log files for this report before a fresh run."""
+        """Removes or truncates existing log files for this report before a fresh run (strictly confined to self.log_dir)."""
+        if not self._is_safe_name():
+            return
         exact_file = self.log_dir / f"{self.name}.json"
-        pattern_files = list(self.log_dir.glob(f"{self.name}_*.json"))
-        for f in [exact_file] + pattern_files:
+        candidates = []
+        if self._is_confined_path(exact_file):
+            candidates.append(exact_file)
+        try:
+            for p in self.log_dir.glob(f"{self.name}_*.json"):
+                if self._is_confined_path(p):
+                    candidates.append(p)
+        except Exception:
+            pass
+        for f in candidates:
             try:
                 f.unlink(missing_ok=True)
             except Exception:
@@ -48,9 +84,18 @@ class ReportLog:
                     pass
 
     def has_valid_receipt(self) -> bool:
-        """Returns True if a non-empty receipt exists on disk."""
+        """Returns True if a non-empty, syntactically valid JSON receipt object exists on disk."""
         latest = self.find_latest_log_file()
-        return bool(latest and latest.exists() and latest.stat().st_size > 0)
+        if not (latest and latest.exists() and latest.stat().st_size > 0):
+            return False
+        try:
+            with open(latest, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict) or not data:
+                return False
+            return any(k in data for k in ("status", "last_output", "message", "reason", "log"))
+        except Exception:
+            return False
 
     DEPENDENCY_MARKERS = (
         "SKIPPED",
@@ -91,9 +136,18 @@ class ReportLog:
         try:
             with open(log_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                raw_status = data.get("status")
-                if raw_status:
-                    self.status = "Skipped" if raw_status in ("Skipped", "Retrial") else raw_status
+                if not isinstance(data, dict):
+                    raise ValueError("Receipt payload is not a JSON object")
+                raw_status = str(data.get("status") or "").strip()
+                norm_status = raw_status.lower()
+                if norm_status in ("completed", "complete", "success", "ok", "passed"):
+                    self.status = "Completed"
+                elif norm_status in ("skipped", "skip", "retrial", "retry", "waiting"):
+                    self.status = "Skipped"
+                elif norm_status in ("failed", "fail", "error", "errored"):
+                    self.status = "Failed"
+                elif raw_status:
+                    self.status = raw_status
                 else:
                     self.status = self.parse_output(default_stdout)
                 self.last_run = data.get("last_run") or data.get("timestamp") or "--"

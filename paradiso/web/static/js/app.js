@@ -723,7 +723,7 @@ function renderDashboardTable(automations) {
         } else if (item.status === 'Failed') {
             badgeClass = 'badge-failed';
             execModeHtml = `<div style="display: inline-flex; align-items: center; gap: 6px;">${execModeHtml}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 3px 8px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`;
-        } else if (item.status === 'Disabled') {
+        } else if (item.status === 'Disabled' || item.status === 'Inactive') {
             badgeClass = 'badge-disabled';
             execModeHtml = `<div style="display: inline-flex; align-items: center; gap: 6px;">${execModeHtml}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 3px 8px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`;
         }
@@ -792,11 +792,11 @@ function renderLaneATable(automations) {
         else if (item.status === 'Running') badgeClass = 'badge-running';
         else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
-        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+        else if (item.status === 'Disabled' || item.status === 'Inactive') badgeClass = 'badge-disabled';
 
         const retries = formatReportRetries(item);
         const prioBadge = formatPriorityBadge(item.priority);
-        const policyCell = (item.status === 'Disabled' || item.status === 'Failed')
+        const policyCell = (item.status === 'Disabled' || item.status === 'Inactive' || item.status === 'Failed')
             ? `<div style="display: inline-flex; align-items: center; gap: 6px;">${prioBadge}<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button></div>`
             : `<div style="display: inline-flex; align-items: center; gap: 6px;">${prioBadge}<span style="font-size: 11px; color: var(--text-muted);">FIFO</span></div>`;
 
@@ -829,12 +829,12 @@ function renderLaneBTable(automations) {
         else if (item.status === 'Running') badgeClass = 'badge-running';
         else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
-        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+        else if (item.status === 'Disabled' || item.status === 'Inactive') badgeClass = 'badge-disabled';
 
         const retries = formatReportRetries(item);
         const interval = item.interval_minutes || 30;
         const lastOut = item.last_output && item.last_output !== 'Unavailable' ? item.last_output : (item.status === 'Waiting' ? 'Staged for recurring dispatch' : '--');
-        const actionBtn = (item.status === 'Disabled' || item.status === 'Failed')
+        const actionBtn = (item.status === 'Disabled' || item.status === 'Inactive' || item.status === 'Failed')
             ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
             : `<button type="button" class="btn-primary" onclick="runReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">▶ Run Now</button>`;
 
@@ -868,7 +868,7 @@ function renderLaneCTable(automations) {
         else if (item.status === 'Running') badgeClass = 'badge-running';
         else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
-        else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+        else if (item.status === 'Disabled' || item.status === 'Inactive') badgeClass = 'badge-disabled';
 
         const retries = formatReportRetries(item);
         const tier = (item.timeslot_tier || 'CUSTOM').toUpperCase();
@@ -877,7 +877,7 @@ function renderLaneCTable(automations) {
         else if (tier === 'MID') tierBadge = `<span class="badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">MID (${escapeHtml(item.scheduled_time || '12:00')})</span>`;
         else if (tier === 'EOD') tierBadge = `<span class="badge" style="background: rgba(244, 63, 94, 0.15); color: #f43f5e;">EOD (${escapeHtml(item.scheduled_time || '20:30')})</span>`;
 
-        const actionBtn = (item.status === 'Disabled' || item.status === 'Failed')
+        const actionBtn = (item.status === 'Disabled' || item.status === 'Inactive' || item.status === 'Failed')
             ? `<button type="button" class="btn-primary" onclick="enableReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: #34d399; cursor: pointer;">▶ Enable</button>`
             : `<button type="button" class="btn-primary" onclick="runReport('${escapeHtml(item.name)}')" style="padding: 4px 10px; font-size: 11px; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.35); color: #60a5fa; cursor: pointer;">▶ Run Now</button>`;
 
@@ -1007,6 +1007,7 @@ function filterAutomationsCatalog() {
         else if (item.status === 'Retrial') badgeClass = 'badge-retrial';
         else if (item.status === 'Failed') badgeClass = 'badge-failed';
         else if (item.status === 'Disabled') badgeClass = 'badge-disabled';
+        else if (item.status === 'Inactive') badgeClass = 'badge-disabled';
 
         const rType = (item.report_type || 'type_a').toLowerCase();
         const prio = String(item.priority || 'P2').toUpperCase();
@@ -1063,7 +1064,7 @@ function filterAutomationsCatalog() {
             <div class="automation-card-actions">
                 <span style="font-size: 11px; color: var(--text-muted);">Last: ${escapeHtml(item.last_run || '--')}</span>
                 <div style="display: flex; gap: 6px;">
-                    ${(item.status === 'Disabled' || item.status === 'Failed') ? `
+                    ${(item.status === 'Disabled' || item.status === 'Inactive' || item.status === 'Failed') ? `
                     <button type="button" class="btn-card-action" onclick="enableReport('${escapeHtml(item.name)}')" title="Re-enable report for scheduling" style="color: #34d399; border-color: rgba(52, 211, 153, 0.35);">
                         ▶ Enable
                     </button>` : ''}
@@ -1154,7 +1155,7 @@ function handleFileTypeChange(filetype) {
 
     if (dirInput) {
         if (!dirInput.value || dirInput.value === '../reports' || dirInput.value === '../reports/python' || dirInput.value === '../reports/r') {
-            dirInput.value = isPy ? '../reports/python' : '../reports/r';
+            dirInput.value = '../reports';
         }
     }
 }
@@ -1187,7 +1188,7 @@ function openAddReportModal(defaultLane = 'type_a') {
     if (filetypeSelect) filetypeSelect.value = 'python';
 
     const dirInput = document.getElementById('new-report-dir');
-    if (dirInput) dirInput.value = '../reports/python';
+    if (dirInput) dirInput.value = '../reports';
 
     const teamInput = document.getElementById('new-report-team');
     if (teamInput) teamInput.value = 'General';
@@ -1246,7 +1247,7 @@ async function handleAddReportSubmit(e) {
     const report_type = (document.getElementById('new-report-type')?.value || 'type_a');
     const priority = (document.getElementById('new-report-priority')?.value || 'P2').toUpperCase();
     const filetype = (document.getElementById('new-report-filetype')?.value || 'python').toLowerCase();
-    const dir = (document.getElementById('new-report-dir')?.value || (filetype === 'python' ? '../reports/python' : '../reports/r')).trim();
+    const dir = (document.getElementById('new-report-dir')?.value || '../reports').trim();
     const team = (document.getElementById('new-report-team')?.value || 'General').trim();
     const owner = (document.getElementById('new-report-owner')?.value || 'User').trim();
     const scheduled_time = (document.getElementById('new-report-time')?.value || '08:30').trim();
@@ -1261,6 +1262,14 @@ async function handleAddReportSubmit(e) {
     if (!name || !filename) {
         if (errEl) {
             errEl.innerText = 'Report name and filename are required.';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    if (name.includes('/') || name.includes('\\') || name.includes('..') || /[:*?"<>|\[\]]/.test(name)) {
+        if (errEl) {
+            errEl.innerText = 'Report name cannot contain path separators (/ or \\), "..", or reserved filesystem/glob characters.';
             errEl.style.display = 'block';
         }
         return;
@@ -2220,7 +2229,7 @@ async function openLogModal(reportName) {
     modal.classList.add('active');
 
     try {
-        const res = await fetch(`/api/executions/log/${reportName}`);
+        const res = await fetch(`/api/executions/log/${encodeURIComponent(reportName)}`);
         const data = await res.json();
         if (data.ok && data.log) {
             const l = data.log;

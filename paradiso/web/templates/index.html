@@ -1305,7 +1305,8 @@
                                 </div>
 
                                 <!-- Python Code Snippet -->
-                                <pre id="code-snippet-python" class="guide-code-block"><code>import sys
+                                <pre id="code-snippet-python" class="guide-code-block"><code>import os
+import sys
 import json
 from pathlib import Path
 from datetime import datetime
@@ -1314,7 +1315,9 @@ REPORT_NAME = "My_Custom_Report"
 
 def write_receipt(status: str, message: str, deliverable: str = None):
     # Receipts must be written to paradiso/logs/{REPORT_NAME}.json
-    base_dir = Path(__file__).resolve().parent.parent / "paradiso" / "logs"
+    script_dir = Path(__file__).resolve().parent
+    workspace_dir = script_dir.parent.parent if script_dir.name.lower() in ("python", "r") else script_dir.parent
+    base_dir = Path(os.environ.get("PARADISO_LOGS_DIR") or (workspace_dir / "paradiso" / "logs"))
     base_dir.mkdir(parents=True, exist_ok=True)
     receipt_file = base_dir / f"{REPORT_NAME}.json"
     
@@ -1665,7 +1668,7 @@ tryCatch({
                         </div>
                         <div class="form-group">
                             <label for="new-report-dir">Script Directory</label>
-                            <input type="text" id="new-report-dir" class="settings-control" value="../reports/python" placeholder="../reports/python">
+                            <input type="text" id="new-report-dir" class="settings-control" value="../reports" placeholder="../reports">
                             <span class="field-hint">Authorized reports directory</span>
                         </div>
                     </div>

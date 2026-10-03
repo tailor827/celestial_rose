@@ -154,9 +154,13 @@ class Runner:
     def run_python(self, script_path: Path, callback_good: Callable, callback_fail: Callable, name: str = "report"):
         try:
             start_time = time.time()
+            proc_env = os.environ.copy()
+            target_logs = getattr(self, "log_dir", None) or proc_env.get("PARADISO_LOGS_DIR") or (BASE_DIR / "logs")
+            proc_env["PARADISO_LOGS_DIR"] = str(Path(target_logs).resolve())
             process = subprocess.Popen(
                 [str(self.python_exe), str(script_path)],
                 cwd=str(BASE_DIR),
+                env=proc_env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True
@@ -183,9 +187,13 @@ class Runner:
 
         try:
             start_time = time.time()
+            proc_env = os.environ.copy()
+            target_logs = getattr(self, "log_dir", None) or proc_env.get("PARADISO_LOGS_DIR") or (BASE_DIR / "logs")
+            proc_env["PARADISO_LOGS_DIR"] = str(Path(target_logs).resolve())
             process = subprocess.Popen(
                 [str(self.rscript_exe), str(script_path)],
                 cwd=str(BASE_DIR),
+                env=proc_env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True

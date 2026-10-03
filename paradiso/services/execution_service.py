@@ -66,6 +66,9 @@ class ExecutionService:
                 pass
 
         def _on_good(duration_str: str, output: str):
+            curr_rep = self.automation_service.get_by_name(name)
+            if curr_rep and curr_rep.status == "Waiting" and curr_rep.last_output == "Stopped by user":
+                return
             has_receipt = report_logger.has_valid_receipt()
             if has_receipt:
                 script_log = ReportLog(name, log_dir=self.log_dir).from_json(default_stdout=output)
@@ -103,6 +106,9 @@ class ExecutionService:
                         callback_fail(name, duration_str, err_msg)
 
         def _on_fail(duration_str: str, error: str):
+            curr_rep = self.automation_service.get_by_name(name)
+            if curr_rep and curr_rep.status == "Waiting" and curr_rep.last_output == "Stopped by user":
+                return
             has_receipt = report_logger.has_valid_receipt()
             if has_receipt:
                 script_log = ReportLog(name, log_dir=self.log_dir).from_json(default_stdout=error)
@@ -139,6 +145,11 @@ class ExecutionService:
             error_msg = f"Report script not found on disk: {script_path}"
             _on_fail("0s", error_msg)
             return False
+
+        try:
+            self.runner.log_dir = report_logger.log_dir
+        except Exception:
+            pass
 
         if report.filetype.lower() == "r":
             self.runner.run_r(script_path, callback_good=_on_good, callback_fail=_on_fail, name=name)
