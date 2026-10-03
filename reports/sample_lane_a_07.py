@@ -72,8 +72,8 @@ def run_report() -> str:
 # 3. PARADISO AUTOMATION ENGINE (Boilerplate — Do Not Modify)
 # ==============================================================================
 SCRIPT_DIR = Path(__file__).resolve().parent
-WORKSPACE_DIR = SCRIPT_DIR.parent
-PARADISO_LOGS = WORKSPACE_DIR / "paradiso" / "logs"
+WORKSPACE_DIR = SCRIPT_DIR.parent.parent if SCRIPT_DIR.name.lower() in ("python", "r") else SCRIPT_DIR.parent
+PARADISO_LOGS = Path(os.environ.get("PARADISO_LOGS_DIR") or (WORKSPACE_DIR / "paradiso" / "logs"))
 PARADISO_LOGS.mkdir(parents=True, exist_ok=True)
 RECEIPT_FILE = PARADISO_LOGS / f"{REPORT_NAME}.json"
 

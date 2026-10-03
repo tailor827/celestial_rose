@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PARADISO - Execution Dashboard</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20261003_theme5">
+    <link rel="stylesheet" href="/static/css/style.css?v=20261003_theme6">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&display=swap" rel="stylesheet">
     <script>
         (function() {
@@ -1322,11 +1322,15 @@ def write_receipt(status: str, message: str, deliverable: str = None):
     receipt_file = base_dir / f"{REPORT_NAME}.json"
     
     data = {
+        "name": REPORT_NAME,
         "report_name": REPORT_NAME,
         "status": status,  # "Completed" | "Retrial" | "Failed"
+        "last_run": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "timestamp": datetime.now().strftime("%Y-%m-%d %I:%M:%S %p"),
         "deliverable": deliverable or "None",
-        "message": message
+        "last_output": message,
+        "message": message,
+        "reason": message
     }
     with open(receipt_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
@@ -1363,15 +1367,28 @@ if __name__ == "__main__":
                                 <pre id="code-snippet-r" class="guide-code-block" style="display: none;"><code>report_name &lt;- "My_Custom_R_Report"
 
 write_receipt &lt;- function(status, message, deliverable = "None") {
-  logs_dir &lt;- file.path("..", "paradiso", "logs")
-  if (!dir.exists(logs_dir)) dir.create(logs_dir, recursive = TRUE)
+  args_all &lt;- commandArgs(trailingOnly = FALSE)
+  file_arg &lt;- grep("^--file=", args_all, value = TRUE)
+  script_dir &lt;- if (length(file_arg) &gt; 0) dirname(normalizePath(sub("^--file=", "", file_arg[1]))) else getwd()
+  workspace_dir &lt;- if (tolower(basename(script_dir)) %in% c("python", "r")) dirname(dirname(script_dir)) else dirname(script_dir)
+  env_logs &lt;- Sys.getenv("PARADISO_LOGS_DIR", unset = "")
+  logs_dir &lt;- if (nchar(env_logs) &gt; 0) env_logs else file.path(workspace_dir, "paradiso", "logs")
+  if (!dir.exists(logs_dir)) dir.create(logs_dir, recursive = TRUE, showWarnings = FALSE)
   receipt_path &lt;- file.path(logs_dir, paste0(report_name, ".json"))
-  
+
+  clean_str &lt;- function(s) {
+    s &lt;- gsub("\\\\", "\\\\\\\\", s)
+    s &lt;- gsub('"', '\\\\"', s)
+    s &lt;- gsub("\r", "", s)
+    s &lt;- gsub("\n", "\\\\n", s)
+    return(s)
+  }
+  now_str &lt;- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
   receipt_json &lt;- sprintf(
-    '{\n  "report_name": "%s",\n  "status": "%s",\n  "timestamp": "%s",\n  "deliverable": "%s",\n  "message": "%s"\n}',
-    report_name, status, format(Sys.time(), "%Y-%m-%d %I:%M:%S %p"), deliverable, message
+    '{\n  "name": "%s",\n  "report_name": "%s",\n  "status": "%s",\n  "last_run": "%s",\n  "deliverable": "%s",\n  "last_output": "%s",\n  "message": "%s"\n}',
+    clean_str(report_name), clean_str(report_name), clean_str(status), now_str, clean_str(deliverable), clean_str(message), clean_str(message)
   )
-  writeLines(receipt_json, con = receipt_path)
+  writeLines(receipt_json, con = receipt_path, useBytes = TRUE)
 }
 
 cat(sprintf("[%s] Starting %s...\n", Sys.time(), report_name))
@@ -1381,7 +1398,7 @@ data_source_ready &lt;- TRUE # Replace with file.exists() or SQL check
 if (!data_source_ready) {
   cat("SKIPPED: Missing dependency 'daily_feed.csv'\n")
   write_receipt("Retrial", "daily_feed.csv not yet present")
-  quit(status = 0)
+  quit(save = "no", status = 0)
 }
 
 # 2. Extract & Transform
@@ -1391,10 +1408,10 @@ tryCatch({
   
   write_receipt("Completed", "R report computed successfully", deliverable = "deliverable.csv")
   cat(sprintf("[%s] %s finished successfully.\n", Sys.time(), report_name))
-  quit(status = 0)
+  quit(save = "no", status = 0)
 }, error = function(e) {
   write_receipt("Failed", paste("Execution error:", e$message))
-  quit(status = 1)
+  quit(save = "no", status = 1)
 })</code></pre>
                             </div>
                         </div>
@@ -1778,7 +1795,7 @@ tryCatch({
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=20260906_4"></script>
+    <script src="/static/js/app.js?v=20261003_theme6"></script>
 </body>
 </html>
 

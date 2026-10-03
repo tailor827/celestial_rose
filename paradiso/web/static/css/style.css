@@ -531,26 +531,30 @@ body {
     gap: 12px;
     max-height: clamp(130px, calc(100vh - 570px), 260px);
     overflow-y: auto;
+    overflow-x: hidden;
     padding-right: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--card-border) transparent;
 }
 
-/* Custom dark scrollbar for timeline list */
+/* Custom theme-aware scrollbar for timeline list */
 .timeline-list::-webkit-scrollbar {
     width: 4px;
+    height: 4px;
 }
 
 .timeline-list::-webkit-scrollbar-track {
-    background: #0b0e16;
+    background: var(--bg-dark);
     border-radius: 2px;
 }
 
 .timeline-list::-webkit-scrollbar-thumb {
-    background: #1c2536;
+    background: var(--card-border);
     border-radius: 2px;
 }
 
 .timeline-list::-webkit-scrollbar-thumb:hover {
-    background: #28354d;
+    background: var(--text-dim);
 }
 
 .timeline-item {
@@ -558,8 +562,9 @@ body {
     gap: 10px;
     font-size: 12px;
     padding-left: 10px;
-    border-left: 2px solid #1c2536;
+    border-left: 2px solid var(--card-border);
     transition: border-color 0.2s ease;
+    min-width: 0;
 }
 
 .timeline-item.event-success { border-left-color: #10b981; }
@@ -569,12 +574,18 @@ body {
 
 .timeline-time {
     color: var(--text-muted);
-    min-width: 45px;
+    min-width: 58px;
+    white-space: nowrap;
+    flex-shrink: 0;
     font-family: monospace;
 }
 
 .timeline-content {
     color: #cbd5e1;
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* Dashboard Today's Timeline Expand Button */
@@ -2656,6 +2667,63 @@ html[data-theme="sepia"] .btn-copy-code:hover {
 html[data-theme="light"] .guide-faq-item,
 html[data-theme="sepia"] .guide-faq-item {
     border-bottom-color: var(--card-border);
+}
+
+/* Modal & Log Viewer Console Daylight Overrides (light & sepia) */
+html[data-theme="light"] .modal-overlay,
+html[data-theme="sepia"] .modal-overlay {
+    background: rgba(15, 23, 42, 0.45);
+}
+
+html[data-theme="light"] .modal-card,
+html[data-theme="sepia"] .modal-card {
+    background: var(--card-bg);
+    border-color: var(--card-border);
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+}
+
+html[data-theme="light"] .modal-header,
+html[data-theme="sepia"] .modal-header,
+html[data-theme="light"] .modal-footer,
+html[data-theme="sepia"] .modal-footer {
+    background: var(--bg-dark);
+    border-color: var(--card-border);
+}
+
+html[data-theme="light"] .modal-close:hover,
+html[data-theme="sepia"] .modal-close:hover {
+    color: var(--text-primary);
+    background: rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme="light"] .log-meta-bar,
+html[data-theme="sepia"] .log-meta-bar {
+    background: var(--bg-dark);
+    border-color: var(--card-border);
+    color: var(--text-primary);
+}
+
+html[data-theme="light"] .console-wrapper,
+html[data-theme="sepia"] .console-wrapper {
+    background: var(--bg-dark);
+    border-color: var(--card-border);
+    box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.06);
+}
+
+html[data-theme="light"] .console-header,
+html[data-theme="sepia"] .console-header {
+    background: var(--card-bg);
+    border-bottom-color: var(--card-border);
+}
+
+html[data-theme="light"] .console-title,
+html[data-theme="sepia"] .console-title {
+    color: var(--text-muted);
+}
+
+html[data-theme="light"] .console-content,
+html[data-theme="sepia"] .console-content {
+    color: #047857;
 }
 
 /* --------------------------------------------------------------------------

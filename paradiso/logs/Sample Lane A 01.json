@@ -1,8 +1,8 @@
 {
   "name": "Sample Lane A 01",
-  "status": "Completed",
-  "last_run": "2026-10-02 23:30:36",
-  "duration": "10.5s",
-  "last_output": "Sample Lane A 01 completed in 10.5s. Successfully processed 1557 records for 20261002.",
-  "reason": "Execution completed successfully"
+  "status": "Retrial",
+  "last_run": "2026-10-03 21:28:38",
+  "duration": "7.4s",
+  "last_output": "SKIPPED: Missing dependency for Sample Lane A 01 on 20261003 (waiting for upstream data)",
+  "reason": "Dependencies not yet available. Re-queued for queue rotation."
 }

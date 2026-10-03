@@ -1,8 +1,8 @@
 {
   "name": "Sample Lane A 06",
-  "status": "Retrial",
-  "last_run": "2026-10-02 23:30:30",
-  "duration": "30.4s",
-  "last_output": "SKIPPED: Missing dependency for Sample Lane A 06 on 20261002 (waiting for upstream data)",
-  "reason": "Dependencies not yet available. Re-queued for queue rotation."
+  "status": "Failed",
+  "last_run": "2026-10-03 21:28:46",
+  "duration": "33.3s",
+  "last_output": "FAILED: Unhandled exception in Sample Lane A 06: Simulated processing failure in Sample Lane A 06 after 33.3s",
+  "reason": "Traceback (most recent call last):\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_06.py\", line 115, in main\n    summary_msg = run_report()\n                  ^^^^^^^^^^^^\n  File \"C:\\Users\\desktop\\Documents\\work\\celestial_rose\\paradiso\\..\\reports\\sample_lane_a_06.py\", line 64, in run_report\n    raise RuntimeError(f\"Simulated processing failure in {REPORT_NAME} after {SLEEP_SECONDS}s\")\nRuntimeError: Simulated processing failure in Sample Lane A 06 after 33.3s\n"
 }

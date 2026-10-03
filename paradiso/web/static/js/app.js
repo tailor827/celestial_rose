@@ -2237,6 +2237,8 @@ async function openLogModal(reportName) {
             
             if (l.status === 'Completed') status.className = 'badge badge-completed';
             else if (l.status === 'Failed') status.className = 'badge badge-failed';
+            else if (l.status === 'Retrial') status.className = 'badge badge-retrial';
+            else if (l.status === 'Running') status.className = 'badge badge-running';
             else status.className = 'badge badge-waiting';
 
             duration.innerText = l.duration || '--';

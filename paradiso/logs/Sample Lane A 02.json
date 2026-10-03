@@ -1,0 +1,8 @@
+{
+  "name": "Sample Lane A 02",
+  "status": "Retrial",
+  "last_run": "2026-10-03 21:28:29",
+  "duration": "28.4s",
+  "last_output": "SKIPPED: Missing dependency for Sample Lane A 02 on 20261003 (waiting for upstream data)",
+  "reason": "Dependencies not yet available. Re-queued for queue rotation."
+}
