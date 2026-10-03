@@ -4089,6 +4089,650 @@ class TestAuditFixes(unittest.TestCase):
             intra_svc.tick()
         self.assertEqual(len(intra_svc._cycle_seen_in_pass), 0)
 
+    def test_f057_reenabled_failed_report_clears_seen_flag_and_dispatches_by_priority(self):
+        """F-057: Re-enabling a Failed P0 report clears it from _cycle_seen_in_pass so it executes ahead of P2 reports."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc.max_retries = 1
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "P0_Crit",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "P2_Norm",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P2"
+        })
+
+        intra_svc.start_lane("type_a", force_open=True)
+        dispatches = []
+        def mock_trigger(name, date):
+            dispatches.append(name)
+            intra_svc.current_runs[name] = "09:00:00"
+            intra_svc._cycle_seen_in_pass.add(name)
+
+        intra_svc._trigger_report = mock_trigger
+        intra_svc.tick()
+        self.assertEqual(dispatches, ["P0_Crit"])
+
+        # Simulate P0_Crit failing permanently
+        intra_svc.current_runs.pop("P0_Crit")
+        intra_svc._cycle_errors_in_pass += 1
+        intra_svc._cycle_pass_reports.discard("P0_Crit")
+        auto_svc.update_status("P0_Crit", "Failed", last_output="Exceeded max retries (1/1)")
+        intra_svc._evaluate_pass_completion(today)
+
+        # Re-enable P0_Crit
+        res_en = self.client.post("/api/automation/enable", json={"name": "P0_Crit"})
+        self.assertEqual(res_en.status_code, 200)
+        self.assertNotIn("P0_Crit", intra_svc._cycle_seen_in_pass)
+        self.assertEqual(list(intra_svc.waitlist), ["P0_Crit", "P2_Norm"])
+
+        intra_svc.tick()
+        self.assertEqual(dispatches[-1], "P0_Crit")
+
+    def test_f058_drained_pass_resets_counters_and_preserves_subsequent_cooldown(self):
+        """F-058: When the final report in a pass completes or fails, pass counters reset so later skipped reports engage cooldown."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc.rotation_cooldown_seconds = 30.0
+        intra_svc._override_cooldown = 30.0
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "Initial_Rep",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        intra_svc.start_lane("type_a", force_open=True)
+        dispatches = []
+        def mock_trigger(name, date):
+            dispatches.append(name)
+            intra_svc.current_runs[name] = "09:00:00"
+            intra_svc._cycle_seen_in_pass.add(name)
+
+        intra_svc._trigger_report = mock_trigger
+        intra_svc.tick()
+        intra_svc.current_runs.pop("Initial_Rep")
+        intra_svc._cycle_completions_in_pass += 1
+        intra_svc._cycle_pass_reports.discard("Initial_Rep")
+        auto_svc.update_status("Initial_Rep", "Completed", last_output="Success")
+        intra_svc._evaluate_pass_completion(today)
+        self.assertEqual(intra_svc._cycle_completions_in_pass, 0)
+
+        self.client.post("/api/automation/add", json={
+            "name": "New_Skip_Rep",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+        intra_svc.tick()
+        intra_svc.current_runs.pop("New_Skip_Rep")
+        intra_svc.waitlist.append("New_Skip_Rep")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc._evaluate_pass_completion(today)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time())
+
+    def test_f059_lifecycle_methods_reset_skips_and_errors_in_pass(self):
+        """F-059: start_lane, stop_lane, start_fresh_run, and reset_all_reports reset _cycle_skips_in_pass and _cycle_errors_in_pass."""
+        intra_svc = self.paradiso.intraday_service
+
+        for action in (
+            lambda: intra_svc.stop_lane("type_a"),
+            lambda: intra_svc.start_lane("type_a", force_open=True),
+            lambda: intra_svc.start_fresh_run(force_open=True),
+            lambda: intra_svc.reset_all_reports()
+        ):
+            intra_svc._cycle_errors_in_pass = 2
+            intra_svc._cycle_skips_in_pass = 3
+            action()
+            self.assertEqual(intra_svc._cycle_errors_in_pass, 0)
+            self.assertEqual(intra_svc._cycle_skips_in_pass, 0)
+
+    def test_f060_disable_pass_completion_clears_seen_set_immediately_preserving_p0_priority(self):
+        """F-060: Disabling the last unseen report in a pass immediately clears _cycle_seen_in_pass so newly added P2 reports do not invert P0 order."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc.rotation_cooldown_seconds = 30.0
+        intra_svc._override_cooldown = 30.0
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "RepB_P0",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "RepC_P1",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+
+        intra_svc.start_lane("type_a", force_open=True)
+        dispatches = []
+        def mock_trigger(name, date):
+            dispatches.append(name)
+            intra_svc.current_runs[name] = "09:00:00"
+            intra_svc._cycle_seen_in_pass.add(name)
+
+        intra_svc._trigger_report = mock_trigger
+        intra_svc.tick()
+        intra_svc.current_runs.pop("RepB_P0")
+        intra_svc.waitlist.append("RepB_P0")
+        intra_svc._cycle_skips_in_pass += 1
+        intra_svc._evaluate_pass_completion(today)
+
+        res_dis = self.client.post("/api/automation/disable", json={"name": "RepC_P1"})
+        self.assertEqual(res_dis.status_code, 200)
+        self.assertEqual(len(intra_svc._cycle_seen_in_pass), 0)
+
+        self.client.post("/api/automation/add", json={
+            "name": "RepD_P2",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P2"
+        })
+        self.assertEqual(list(intra_svc.waitlist), ["RepB_P0", "RepD_P2"])
+        intra_svc.tick()
+        self.assertEqual(dispatches[-1], "RepB_P0")
+
+    def test_p32_adaptive_starvation_backoff_progressive_and_capped(self):
+        """P3.2: Consecutive all-skip passes in Lane A progressively scale cooldown (B -> 2B -> 4B -> 8B) and cap at max cooldown."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc._override_cooldown = 10.0
+        intra_svc._override_max_cooldown = 50.0
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "Dep_Wait_1",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Dep_Wait_2",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+
+        intra_svc.start_lane("type_a", force_open=True)
+
+        def run_all_skip_pass():
+            for rep_name in ["Dep_Wait_1", "Dep_Wait_2"]:
+                intra_svc._cycle_seen_in_pass.add(rep_name)
+                intra_svc._cycle_skips_in_pass += 1
+            t_before = time.time()
+            intra_svc._evaluate_pass_completion(today)
+            return intra_svc._rotation_cooldown_until - t_before
+
+        # Pass 1: 10s * 2^0 = 10s
+        d1 = run_all_skip_pass()
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 1)
+        self.assertAlmostEqual(d1, 10.0, delta=1.0)
+
+        # Pass 2: 10s * 2^1 = 20s
+        d2 = run_all_skip_pass()
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 2)
+        self.assertAlmostEqual(d2, 20.0, delta=1.0)
+
+        # Pass 3: 10s * 2^2 = 40s
+        d3 = run_all_skip_pass()
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 3)
+        self.assertAlmostEqual(d3, 40.0, delta=1.0)
+
+        # Pass 4: 10s * 2^3 = 80s -> capped at _override_max_cooldown = 50s
+        d4 = run_all_skip_pass()
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 4)
+        self.assertAlmostEqual(d4, 50.0, delta=1.0)
+
+        # Verify get_lanes_status exposes consecutive_starvation_passes and cooldown_remaining_seconds
+        status_payload = intra_svc.get_lanes_status()
+        self.assertEqual(status_payload["type_a"]["consecutive_starvation_passes"], 4)
+        self.assertGreater(status_payload["type_a"]["cooldown_remaining_seconds"], 40.0)
+
+    def test_p32_event_driven_wakeup_on_completion_add_and_enable(self):
+        """P3.2: Lane A immediately wakes from adaptive backoff when a report completes in Lane A/B/C or when a report is added/enabled."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc._override_cooldown = 30.0
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "Blocked_Lane_A",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Upstream_Lane_B",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_b",
+            "interval_minutes": 15
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Upstream_Lane_C",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_c",
+            "timeslot_tier": "BOD",
+            "scheduled_time": "07:00"
+        })
+
+        intra_svc.start_fresh_run(force_open=True)
+
+        # Put Lane A into Pass #3 adaptive backoff (120s sleep)
+        for _ in range(3):
+            intra_svc._cycle_seen_in_pass.add("Blocked_Lane_A")
+            intra_svc._cycle_skips_in_pass += 1
+            intra_svc._evaluate_pass_completion(today)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 3)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time() + 100.0)
+
+        # 1. Lane B report completes -> wakes Lane A immediately!
+        import json
+        receipt_b = self.app_logs / "Upstream_Lane_B.json"
+        receipt_b.write_text(json.dumps({
+            "name": "Upstream_Lane_B",
+            "status": "Completed",
+            "last_run": "2026-10-03 09:00:00",
+            "duration": "1.2s",
+            "last_output": "Upstream feed ready"
+        }), encoding="utf-8")
+
+        def mock_exec_b(name, callback_good, callback_fail):
+            callback_good(name, "1.2s", "Upstream feed ready")
+            return True
+
+        orig_exec = intra_svc.execution_service.execute_report
+        intra_svc.execution_service.execute_report = mock_exec_b
+        try:
+            intra_svc._trigger_type_b_report("Upstream_Lane_B", today)
+        finally:
+            intra_svc.execution_service.execute_report = orig_exec
+
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 0)
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+
+        # Re-engage backoff (Pass #2 = 60s)
+        for _ in range(2):
+            intra_svc._cycle_seen_in_pass.add("Blocked_Lane_A")
+            intra_svc._cycle_skips_in_pass += 1
+            intra_svc._evaluate_pass_completion(today)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 2)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time() + 50.0)
+
+        # 2. Lane C report completes -> wakes Lane A immediately!
+        receipt_c = self.app_logs / "Upstream_Lane_C.json"
+        receipt_c.write_text(json.dumps({
+            "name": "Upstream_Lane_C",
+            "status": "Completed",
+            "last_run": "2026-10-03 09:05:00",
+            "duration": "0.8s",
+            "last_output": "BOD snapshot ready"
+        }), encoding="utf-8")
+
+        def mock_exec_c(name, callback_good, callback_fail):
+            callback_good(name, "0.8s", "BOD snapshot ready")
+            return True
+
+        intra_svc.execution_service.execute_report = mock_exec_c
+        try:
+            intra_svc._trigger_type_c_report("Upstream_Lane_C", today)
+        finally:
+            intra_svc.execution_service.execute_report = orig_exec
+
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 0)
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+
+        # Re-engage backoff (Pass #2 = 60s)
+        for _ in range(2):
+            intra_svc._cycle_seen_in_pass.add("Blocked_Lane_A")
+            intra_svc._cycle_skips_in_pass += 1
+            intra_svc._evaluate_pass_completion(today)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 2)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time() + 50.0)
+
+        # 3. Adding a new Lane A report via API wakes Lane A and resets consecutive passes
+        res_add = self.client.post("/api/automation/add", json={
+            "name": "Fresh_Lane_A",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P1"
+        })
+        self.assertEqual(res_add.status_code, 201)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 0)
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+
+        # Disable Fresh_Lane_A, re-engage backoff, then Enable Fresh_Lane_A -> wakes Lane A!
+        self.client.post("/api/automation/disable", json={"name": "Fresh_Lane_A"})
+        for _ in range(2):
+            intra_svc._cycle_seen_in_pass.add("Blocked_Lane_A")
+            intra_svc._cycle_skips_in_pass += 1
+            intra_svc._evaluate_pass_completion(today)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 2)
+        self.assertGreater(intra_svc._rotation_cooldown_until, time.time() + 50.0)
+
+        res_en = self.client.post("/api/automation/enable", json={"name": "Fresh_Lane_A"})
+        self.assertEqual(res_en.status_code, 200)
+        self.assertEqual(intra_svc._consecutive_starvation_passes, 0)
+        self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+
+    def test_f061_mid_pass_cross_lane_completion_prevents_cooldown_and_wakes_p0(self):
+        """F-061: Mid-pass cross-lane completion clears pre-wakeup seen/skip tracking and re-sorts waitlist by priority."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.max_concurrent_run = 1
+        intra_svc._override_cooldown = 30.0
+        today = CLOCK.date_str()
+
+        self.client.post("/api/automation/add", json={
+            "name": "Rep_P0",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P0"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Rep_P2",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_a",
+            "priority": "P2"
+        })
+        self.client.post("/api/automation/add", json={
+            "name": "Feed_B",
+            "filename": "sample_report_blueprint.py",
+            "filetype": "python",
+            "dir": "../reports",
+            "report_type": "type_b",
+            "interval_minutes": 30
+        })
+
+        callbacks = {}
+        orig_exec = intra_svc.execution_service.execute_report
+        def fake_exec(name, callback_good=None, callback_fail=None):
+            auto_svc.update_status(name=name, status="Running", started_at=CLOCK.time_str())
+            callbacks[name] = (callback_good, callback_fail)
+            return True
+
+        intra_svc.execution_service.execute_report = fake_exec
+        try:
+            intra_svc.start_lane("type_a", force_open=True)
+            intra_svc.start_lane("type_b", force_open=True)
+
+            intra_svc.tick()
+            self.assertIn("Rep_P0", callbacks)
+            self.assertIn("Feed_B", callbacks)
+
+            # Rep_P0 skips before Feed_B finishes
+            cb_good_p0, _ = callbacks.pop("Rep_P0")
+            (self.app_logs / "Rep_P0.json").write_text(json.dumps({
+                "name": "Rep_P0", "status": "Retrial", "last_output": "SKIPPED: waiting for Feed_B"
+            }), encoding="utf-8")
+            auto_svc.update_status(name="Rep_P0", status="Retrial", duration="1s", last_output="SKIPPED")
+            cb_good_p0("Rep_P0", "1s", "SKIPPED")
+            self.assertIn("Rep_P0", intra_svc._cycle_seen_in_pass)
+
+            # Feed_B completes mid-pass -> wakes Lane A, clears Rep_P0 from _cycle_seen_in_pass, and re-sorts P0 first
+            cb_good_b, _ = callbacks.pop("Feed_B")
+            (self.app_logs / "Feed_B.json").write_text(json.dumps({
+                "name": "Feed_B", "status": "Completed", "last_output": "Feed_B delivered"
+            }), encoding="utf-8")
+            auto_svc.update_status(name="Feed_B", status="Completed", duration="1s", last_output="OK")
+            cb_good_b("Feed_B", "1s", "OK")
+
+            self.assertEqual(len(intra_svc._cycle_seen_in_pass), 0)
+            self.assertEqual(list(intra_svc.waitlist), ["Rep_P0", "Rep_P2"])
+            self.assertEqual(intra_svc._rotation_cooldown_until, 0.0)
+        finally:
+            intra_svc.execution_service.execute_report = orig_exec
+
+    def test_f062_validate_config_rejects_invalid_retries_cooldown_booleans_and_nulls(self):
+        """F-062: validate_config rejects invalid max_retries, max_rotation_cooldown_seconds, booleans, and null scheduler fields."""
+        for bad_payload in [
+            {"scheduler": {"max_retries": 0}},
+            {"scheduler": {"max_retries": -1}},
+            {"scheduler": {"max_retries": "abc"}},
+            {"scheduler": {"max_retries": True}},
+            {"scheduler": {"max_rotation_cooldown_seconds": 0}},
+            {"scheduler": {"max_rotation_cooldown_seconds": -10}},
+            {"scheduler": {"rotation_cooldown_seconds": 60, "max_rotation_cooldown_seconds": 30}},
+            {"scheduler": {"lane_c_catch_up_grace_minutes": None}},
+            {"scheduler": {"intraday_start_time": None}},
+            {"scheduler": {"lane_c_catch_up_policy": None}},
+        ]:
+            ok, err = validate_config(bad_payload)
+            self.assertFalse(ok, f"Expected validate_config to reject {bad_payload}")
+            self.assertTrue(bool(err))
+
+    def test_f063_failed_report_with_cutoff_in_error_message_is_excluded(self):
+        """F-063: Reports that exhaust max_retries with 'cutoff' in their error output are treated as exhausted, not re-queued."""
+        intra_svc = self.paradiso.intraday_service
+        today = CLOCK.date_str()
+        intra_svc.intraday_repo.add_report_run(
+            date=today,
+            report_name="Rep_Cutoff_Err",
+            run=ReportRun(
+                started_at="09:00:00",
+                finished_at="09:00:05",
+                result="failed",
+                duration="5s",
+                reason="Exceeded max retries (2/2): SQL Error: missing EOD cutoff date in ledger table"
+            )
+        )
+        day = intra_svc.intraday_repo.get_day(today)
+        excluded = intra_svc._get_completed_or_exhausted_reports(day)
+        self.assertIn("Rep_Cutoff_Err", excluded)
+
+    def test_f064_pre_start_timeline_event_on_new_day_still_initializes_day_and_recovers_running(self):
+        """F-064: Pre-start timeline events on a new day do not skip set_waiting_all(), and start_lane recovers crashed Running reports."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        auto_svc.add(Report(
+            name="Rep_Daily_A", filename="sample_report_blueprint.py", filetype="python",
+            dir="../reports", status="Completed", last_run="2026-10-02 10:00:00 AM",
+            report_type="type_a", priority="P0"
+        ))
+        auto_svc.add(Report(
+            name="Rep_Aux", filename="sample_report_blueprint.py", filetype="python",
+            dir="../reports", status="Waiting", report_type="type_a", priority="P2"
+        ))
+        auto_svc.add(Report(
+            name="Rep_Crashed_A", filename="sample_report_blueprint.py", filetype="python",
+            dir="../reports", status="Running", last_run="2026-10-02 11:00:00 AM",
+            report_type="type_a", priority="P1"
+        ))
+
+        res = self.client.post("/api/automation/disable", json={"name": "Rep_Aux"})
+        self.assertEqual(res.status_code, 200)
+
+        intra_svc.start_lane("type_a", force_open=True)
+        self.assertEqual(auto_svc.get_by_name("Rep_Daily_A").status, "Waiting")
+        self.assertEqual(auto_svc.get_by_name("Rep_Crashed_A").status, "Waiting")
+        self.assertEqual(auto_svc.get_by_name("Rep_Aux").status, "Disabled")
+        self.assertIn("Rep_Daily_A", list(intra_svc.waitlist))
+        self.assertIn("Rep_Crashed_A", list(intra_svc.waitlist))
+
+    def test_f065_manual_run_while_standby_enters_retrial_before_max_retries(self):
+        """F-065: Manual run of Lane B/C report while lane is in Standby enters Retrial on attempt 1/max_retries instead of Failed."""
+        intra_svc = self.paradiso.intraday_service
+        auto_svc = intra_svc.automation_service
+        for r in list(auto_svc.get_all()):
+            auto_svc.delete(r.name)
+
+        intra_svc.stop_scheduler()
+        intra_svc.max_retries = 5
+        auto_svc.add(Report(
+            name="Rep_Manual_B", filename="sample_report_blueprint.py", filetype="python",
+            dir="../reports", status="Waiting", report_type="type_b", interval_minutes=15
+        ))
+        auto_svc.add(Report(
+            name="Rep_Manual_C", filename="sample_report_blueprint.py", filetype="python",
+            dir="../reports", status="Waiting", report_type="type_c", scheduled_time="08:30", timeslot_tier="CUSTOM"
+        ))
+
+        orig_exec = intra_svc.execution_service.execute_report
+        def fake_exec(name, callback_good=None, callback_fail=None):
+            auto_svc.update_status(name=name, status="Running", started_at=CLOCK.time_str())
+            (self.app_logs / f"{name}.json").write_text(json.dumps({
+                "name": name, "status": "Failed", "last_output": "Transient network timeout"
+            }), encoding="utf-8")
+            auto_svc.update_status(name=name, status="Failed", duration="1s", last_output="Transient network timeout")
+            callback_fail(name, "1s", "Transient network timeout")
+            return True
+
+        intra_svc.execution_service.execute_report = fake_exec
+        try:
+            with patch.object(CLOCK, "time_24_str", return_value="09:00"):
+                self.assertTrue(intra_svc.trigger_manual_run("Rep_Manual_B"))
+                self.assertTrue(intra_svc.trigger_manual_run("Rep_Manual_C"))
+            self.assertEqual(auto_svc.get_by_name("Rep_Manual_B").status, "Retrial")
+            self.assertNotIn("Rep_Manual_B", intra_svc.type_b_exhausted)
+            self.assertEqual(auto_svc.get_by_name("Rep_Manual_C").status, "Retrial")
+            self.assertNotIn("Rep_Manual_C", intra_svc.type_c_ran_today)
+        finally:
+            intra_svc.execution_service.execute_report = orig_exec
+
+    def test_timeline_date_filter_and_available_dates(self):
+        """Timeline endpoint supports ?date=<YYYYMMDD|ALL|TODAY> and returns available_dates sorted newest first."""
+        intra_svc = self.paradiso.intraday_service
+        today_str = CLOCK.date_str()
+        intra_svc.intraday_repo.add_timeline_event("20260930", "Past Day 1 Open", "Opened 20260930", "system")
+        intra_svc.intraday_repo.add_timeline_event("20261001", "Past Day 2 Run", "Completed report on 20261001", "success")
+        intra_svc.intraday_repo.add_timeline_event(today_str, "Today Event", "Today scheduler active", "system")
+
+        # Default (today)
+        res_today = self.client.get("/api/dashboard/timeline")
+        self.assertEqual(res_today.status_code, 200)
+        data_today = res_today.get_json()
+        self.assertTrue(data_today["ok"])
+        self.assertEqual(data_today["selected_date"], today_str)
+        self.assertIn("20260930", data_today["available_dates"])
+        self.assertIn("20261001", data_today["available_dates"])
+        self.assertIn(today_str, data_today["available_dates"])
+        self.assertEqual(data_today["available_dates"], sorted(data_today["available_dates"], reverse=True))
+        self.assertTrue(all(evt.get("date") == today_str for evt in data_today["timeline"]))
+        self.assertTrue(any(evt.get("title") == "Today Event" for evt in data_today["timeline"]))
+
+        # Specific past date
+        res_past = self.client.get("/api/dashboard/timeline?date=20261001")
+        self.assertEqual(res_past.status_code, 200)
+        data_past = res_past.get_json()
+        self.assertEqual(len(data_past["timeline"]), 1)
+        self.assertEqual(data_past["timeline"][0]["title"], "Past Day 2 Run")
+        self.assertEqual(data_past["timeline"][0]["date"], "20261001")
+
+        # All dates
+        res_all = self.client.get("/api/dashboard/timeline?date=ALL")
+        self.assertEqual(res_all.status_code, 200)
+        data_all = res_all.get_json()
+        titles_all = [evt["title"] for evt in data_all["timeline"]]
+        self.assertIn("Past Day 1 Open", titles_all)
+        self.assertIn("Past Day 2 Run", titles_all)
+        self.assertIn("Today Event", titles_all)
+
+    def test_execution_history_date_filter_and_available_dates(self):
+        """Execution history endpoint supports ?date=<YYYYMMDD|ALL|TODAY> and returns available_dates."""
+        from models.intraday import ReportRun
+        intra_svc = self.paradiso.intraday_service
+        today_str = CLOCK.date_str()
+
+        intra_svc.intraday_repo.add_report_run("20260930", "Rep_Alpha", ReportRun(
+            started_at="08:00:00 AM", finished_at="08:01:00 AM", result="completed", duration="60s"
+        ))
+        intra_svc.intraday_repo.add_report_run(today_str, "Rep_Beta", ReportRun(
+            started_at="09:00:00 AM", finished_at="09:00:30 AM", result="failed", duration="30s", reason="Exit 1"
+        ))
+
+        # All dates (default)
+        res_all = self.client.get("/api/executions/history")
+        self.assertEqual(res_all.status_code, 200)
+        data_all = res_all.get_json()
+        self.assertTrue(data_all["ok"])
+        self.assertIn("20260930", data_all["available_dates"])
+        self.assertIn(today_str, data_all["available_dates"])
+        dates_in_all = {item["date"] for item in data_all["history"]}
+        self.assertIn("20260930", dates_in_all)
+        self.assertIn(today_str, dates_in_all)
+
+        # Specific past date
+        res_past = self.client.get("/api/executions/history?date=20260930")
+        self.assertEqual(res_past.status_code, 200)
+        data_past = res_past.get_json()
+        self.assertEqual(len(data_past["history"]), 1)
+        self.assertEqual(data_past["history"][0]["report_name"], "Rep_Alpha")
+        self.assertEqual(data_past["history"][0]["date"], "20260930")
+
+        # TODAY filter
+        res_today = self.client.get("/api/executions/history?date=TODAY")
+        self.assertEqual(res_today.status_code, 200)
+        data_today = res_today.get_json()
+        self.assertTrue(all(item["date"] == today_str for item in data_today["history"]))
+        self.assertTrue(any(item["report_name"] == "Rep_Beta" for item in data_today["history"]))
+
 if __name__ == "__main__":
     unittest.main()
 

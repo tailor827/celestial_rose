@@ -40,30 +40,30 @@ flowchart TD
 
 ### Phase 1: Core 3-Lane Engine & Guardrail Baseline (v1.0 — Current)
 > [!NOTE]
-> **Status: 100% COMPLETE & AUDIT PASSED** (148/148 Unit Tests Passing — 0 Active Audit Defects across F-001 to F-052)
+> **Status: 100% COMPLETE & AUDIT PASSED** (162/162 Unit Tests Passing — 0 Active Audit Defects across F-001 to F-065)
 
 - [x] **Lane A (Sequential Queue & Concurrency Pool):**
   - Priority-aware FIFO queue execution (`P0` $\to$ `P1` $\to$ `P2`) within intraday window (07:00 – 20:59) with 22:00 hard cutoff.
-  - Zero-penalty dependency skip rotation (`Retrial`) and genuine error retries (configurable `max_retries`).
+  - Zero-penalty dependency skip rotation (`Retrial`) and genuine error retries (configurable `max_retries`), with strict prefix-based retry-exhaustion filtering (`F-063`).
   - Manual run prevention (`HTTP 403 Forbidden`).
-  - Pre-existing closed day record cleansing on boot / start (F-028, F-032).
+  - Pre-existing closed or uninitialized day record reconciliation and crashed `Running` recovery on boot / lane start (F-028, F-032, F-064).
 - [x] **Lane B (Recurring Intervals):**
   - Interval-based background pipelines with self-overlap prevention (`active_runs_type_b`).
   - Rapid spin elimination: interval cooldown tracking on dependency skips (F-022).
   - Exhausted/Failed report isolation preventing infinite recurring loop and accidental manual re-arming (F-041, F-043).
-  - On-demand manual execution permitted (`HTTP 200`).
+  - On-demand manual execution permitted (`HTTP 200`), honoring full `max_retries` budget even while the lane is in Standby (F-065).
 - [x] **Lane C (Pinned Timeslots):**
   - Wall-clock time-pinned reports (BOD 07:00, MID 12:00, EOD 20:30, Custom `HH:MM`).
   - Once-per-day execution enforcement (`type_c_ran_today`).
   - Rapid spin elimination: 5-minute backoff cooldown on skips and retryable errors (F-022).
   - Mid-day reboot hydration from storage preventing duplicate dispatches (F-029, F-031, F-045).
-  - On-demand manual execution permitted (`HTTP 200` during `OPEN`).
+  - On-demand manual execution permitted (`HTTP 200` during `OPEN`), honoring full `max_retries` budget even while the lane is in Standby (F-065).
 - [x] **Cross-Lane Security & Invariants:**
   - **Universal Intraday Window Yielding:** All lanes (Lane A, B, C), manual runs, and independent lane starts strictly yield to 07:00–21:00 intraday window, with `WAITING_TO_CLOSE` wrap-up and `22:00` hard cutoff (F-026, F-033, F-044).
   - **Clock Subsystem Integrity:** Cleaned of all `sys.argv` inspection and spoofed timestamp logic (F-025).
   - **Distinct Report Invariant:** A report exists in strictly one lane across the entire catalog (`HTTP 409 Conflict` on duplicate names).
   - **Per-Lane Controls & Daemon Lifecycle:** Independent Start/Stop endpoints (`POST /api/paradiso/lane/start`, `POST /api/paradiso/lane/stop`) with 10-second transition cooldown buffer (`HTTP 429`), automatically stopping the background daemon loop and releasing configuration locks when all lanes are stopped (F-048).
-  - **BG-001 Multi-Lane Guardrail:** Idle-only configuration and simulation clock reset mutations enforced across all lanes via `has_active_runs` (F-023, F-042, F-051).
+  - **BG-001 Multi-Lane Guardrail & Config Validation:** Idle-only configuration and simulation clock reset mutations enforced across all lanes via `has_active_runs` (F-023, F-042, F-051), with strict non-null, non-boolean schema validation across all scheduler parameters (`max_retries`, `max_rotation_cooldown_seconds`, time windows, and catch-up settings, F-062).
   - **API Validation:** Strict canonical lane identifier enforcement (`VALID_LANES`, F-024) and interval bounds validation (F-046).
   - **Section 12 Receipt Parity:** Exact 1-to-1 filename matching between script `REPORT_NAME` and `storage/automations.json` (F-021).
   - **EOD 20:30 Consistency:** Complete alignment of EOD milestone timing across docs, UI, config, and scheduler (F-027, F-047, F-052).
@@ -95,7 +95,7 @@ flowchart TD
 |---|---|---|
 | **Cross-Lane Dependency DAG** | Allows a report in one lane to depend on reports in another (e.g. Lane C EOD Ledger Reconciliation blocked until Lane B Hourly Feed completes its 17:00 batch). Evaluated without cross-locking. | Eliminates manual sequencing between recurring data feeds and end-of-day ledgers. |
 | **Lane A Priority Queuing (`P0`/`P1`/`P2`)** `[DONE - VERIFIED]` | Introduces priority tiers (`P0` Critical, `P1` High, `P2` Normal) within Lane A's queue. Starvation-safe per-pass ordering: `get_pending_by_type("type_a")` and pass boundaries (`_evaluate_pass_completion`) sort `P0 -> P1 -> P2` (FIFO within tier), while mid-pass skips rotate to the back of the current pass so `P0` dependency skips never starve `P1`/`P2` reports. Newly added or re-enabled reports insert ahead of unseen lower-priority reports via `_enqueue_lane_a_by_priority`. | Prevents non-urgent batches from delaying time-critical regulatory extracts without risking dependency starvation. |
-| **Adaptive Starvation Backoff** | Dynamically adjust queue cooldowns based on dependency resolution history rather than fixed timers. | Lowers latency for dependent batches when upstream files arrive early. |
+| **Adaptive Starvation Backoff** `[DONE - VERIFIED]` | Progressive exponential backoff ($B \times 2^{n-1}$, capped at `max_rotation_cooldown_seconds` default 300s) across consecutive starved passes (`_consecutive_starvation_passes`), paired with event-driven instant wakeup (`wake_lane_a_queue()`) whenever any report completes in Lane A/B/C or a report is added/re-enabled. Upstream completions clear pre-wakeup seen/skip pass state and re-sort `waitlist` by priority so skipped `P0` reports wake immediately (F-061). | Eliminates CPU/subprocess thrashing during long upstream waits while achieving 0ms wakeup latency when data arrives. |
 
 ---
 
@@ -122,9 +122,9 @@ flowchart TD
     ├── Distinct Report Invariant              [DONE]
     ├── Independent Lane Controls              [DONE]
     ├── Universal Intraday Window Yielding     [DONE]
-    └── F-001 - F-052 Audit Remediations       [DONE - VERIFIED]
+    └── F-001 - F-065 Audit Remediations       [DONE - VERIFIED]
 
-[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 148/148 TESTS PASSING]
+[Phase 2: Concurrency & Scheduling v1.1] ═════ [IN PROGRESS - 162/162 TESTS PASSING]
     ├── [P2.1] Lane A Concurrency Expansion    [DONE - VERIFIED]
     ├── [P2.2] Lane C Missed Window Catch-up   [DONE - VERIFIED]
     ├── [UI] 3-Lane Add Report Modal & Form    [DONE - VERIFIED]
@@ -135,7 +135,7 @@ flowchart TD
 
 [Phase 3: Cross-Lane & Priority v1.2] ════════ [IN PROGRESS]
     ├── [P3.1] Cross-Lane Dependency DAG       [QUEUED]
-    ├── [P3.2] Adaptive Starvation Backoff     [QUEUED]
+    ├── [P3.2] Adaptive Starvation Backoff     [DONE - VERIFIED]
     └── [P3.3] Lane A Priority Tiers           [DONE - VERIFIED]
 
 [Phase 4: Enterprise v2.0] ═══════════════════ [FUTURE]

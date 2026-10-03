@@ -20,19 +20,30 @@ def _deep_merge(target: dict, source: dict) -> dict:
             target[k] = v
     return target
 
+import math
+
 def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
     sched = cfg.get("scheduler", {})
+    if not isinstance(sched, dict):
+        return False, "scheduler configuration must be an object."
+
     if "job_interval_seconds" in sched:
+        raw_interval = sched["job_interval_seconds"]
+        if raw_interval is None or isinstance(raw_interval, bool):
+            return False, "scheduler.job_interval_seconds must be numeric."
         try:
-            val = float(sched["job_interval_seconds"])
-            if val <= 0:
+            val = float(raw_interval)
+            if not math.isfinite(val) or val <= 0:
                 return False, "scheduler.job_interval_seconds must be a positive number."
         except (ValueError, TypeError):
             return False, "scheduler.job_interval_seconds must be numeric."
 
     if "max_concurrent_run" in sched:
+        raw_conc = sched["max_concurrent_run"]
+        if raw_conc is None or isinstance(raw_conc, bool) or (isinstance(raw_conc, float) and not raw_conc.is_integer()):
+            return False, "scheduler.max_concurrent_run must be an integer."
         try:
-            val = int(sched["max_concurrent_run"])
+            val = int(raw_conc)
             if val < 1:
                 return False, "scheduler.max_concurrent_run must be an integer >= 1."
             if val > 20:
@@ -40,56 +51,93 @@ def validate_config(cfg: dict) -> Tuple[bool, Optional[str]]:
         except (ValueError, TypeError):
             return False, "scheduler.max_concurrent_run must be an integer."
 
-    if "rotation_cooldown_seconds" in sched:
+    if "max_retries" in sched:
+        raw_retries = sched["max_retries"]
+        if raw_retries is None or isinstance(raw_retries, bool) or (isinstance(raw_retries, float) and not raw_retries.is_integer()):
+            return False, "scheduler.max_retries must be an integer >= 1."
         try:
-            val = float(sched["rotation_cooldown_seconds"])
-            if val < 0:
+            val = int(raw_retries)
+            if val < 1:
+                return False, "scheduler.max_retries must be an integer >= 1."
+        except (ValueError, TypeError):
+            return False, "scheduler.max_retries must be an integer >= 1."
+
+    base_cooldown_val = None
+    if "rotation_cooldown_seconds" in sched:
+        raw_cd = sched["rotation_cooldown_seconds"]
+        if raw_cd is None or isinstance(raw_cd, bool):
+            return False, "scheduler.rotation_cooldown_seconds must be numeric."
+        try:
+            val = float(raw_cd)
+            if not math.isfinite(val) or val < 0:
                 return False, "scheduler.rotation_cooldown_seconds must be a non-negative number."
+            base_cooldown_val = val
         except (ValueError, TypeError):
             return False, "scheduler.rotation_cooldown_seconds must be numeric."
 
+    if "max_rotation_cooldown_seconds" in sched:
+        raw_max_cd = sched["max_rotation_cooldown_seconds"]
+        if raw_max_cd is None or isinstance(raw_max_cd, bool):
+            return False, "scheduler.max_rotation_cooldown_seconds must be a positive number."
+        try:
+            max_cd_val = float(raw_max_cd)
+            if not math.isfinite(max_cd_val) or max_cd_val <= 0:
+                return False, "scheduler.max_rotation_cooldown_seconds must be a positive number."
+            if base_cooldown_val is not None and max_cd_val < base_cooldown_val:
+                return False, "scheduler.max_rotation_cooldown_seconds must be >= scheduler.rotation_cooldown_seconds."
+        except (ValueError, TypeError):
+            return False, "scheduler.max_rotation_cooldown_seconds must be numeric."
+
     time_regex = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+    for field_name in ("intraday_start_time", "intraday_idle_time", "intraday_close_time"):
+        if field_name in sched:
+            t_val = sched[field_name]
+            if not isinstance(t_val, str) or not time_regex.match(t_val):
+                return False, f"scheduler.{field_name} must be in 24-hour HH:MM format (e.g., '07:00')."
+
     start_time = sched.get("intraday_start_time")
     idle_time = sched.get("intraday_idle_time")
     close_time = sched.get("intraday_close_time")
-
-    for field_name, t_val in [
-        ("intraday_start_time", start_time),
-        ("intraday_idle_time", idle_time),
-        ("intraday_close_time", close_time)
-    ]:
-        if t_val is not None and not (isinstance(t_val, str) and time_regex.match(t_val)):
-            return False, f"scheduler.{field_name} must be in 24-hour HH:MM format (e.g., '07:00')."
 
     if start_time and idle_time and close_time:
         if not (start_time < idle_time <= close_time):
             return False, "Scheduler times must satisfy: intraday_start_time < intraday_idle_time <= intraday_close_time."
 
-    if "lane_c_catch_up_policy" in sched and sched["lane_c_catch_up_policy"] is not None:
-        policy = str(sched["lane_c_catch_up_policy"]).strip().upper()
+    if "lane_c_catch_up_policy" in sched:
+        raw_policy = sched["lane_c_catch_up_policy"]
         allowed_policies = {"CATCH_UP_IMMEDIATE", "SKIP_UNTIL_NEXT_DAY", "WARN_OPERATOR"}
-        if policy not in allowed_policies:
+        if not isinstance(raw_policy, str) or raw_policy.strip().upper() not in allowed_policies:
             return False, f"scheduler.lane_c_catch_up_policy must be one of: {', '.join(sorted(allowed_policies))}."
 
-    if "lane_c_catch_up_grace_minutes" in sched and sched["lane_c_catch_up_grace_minutes"] is not None:
+    if "lane_c_catch_up_grace_minutes" in sched:
+        raw_grace = sched["lane_c_catch_up_grace_minutes"]
+        if raw_grace is None or isinstance(raw_grace, bool) or (isinstance(raw_grace, float) and not raw_grace.is_integer()):
+            return False, "scheduler.lane_c_catch_up_grace_minutes must be a non-negative integer."
         try:
-            val = int(sched["lane_c_catch_up_grace_minutes"])
+            val = int(raw_grace)
             if val < 0:
                 return False, "scheduler.lane_c_catch_up_grace_minutes must be a non-negative integer."
         except (ValueError, TypeError):
             return False, "scheduler.lane_c_catch_up_grace_minutes must be an integer."
 
     log_cfg = cfg.get("logging", {})
+    if not isinstance(log_cfg, dict):
+        return False, "logging configuration must be an object."
     if "level" in log_cfg:
         allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-        if str(log_cfg["level"]).upper() not in allowed:
+        if not isinstance(log_cfg["level"], str) or log_cfg["level"].upper() not in allowed:
             return False, f"logging.level must be one of: {', '.join(sorted(allowed))}."
 
     sim_cfg = cfg.get("simulation", {})
+    if not isinstance(sim_cfg, dict):
+        return False, "simulation configuration must be an object."
     if "speed_multiplier" in sim_cfg:
+        raw_speed = sim_cfg["speed_multiplier"]
+        if raw_speed is None or isinstance(raw_speed, bool):
+            return False, "simulation.speed_multiplier must be numeric."
         try:
-            val = float(sim_cfg["speed_multiplier"])
-            if val <= 0:
+            val = float(raw_speed)
+            if not math.isfinite(val) or val <= 0:
                 return False, "simulation.speed_multiplier must be a positive number."
         except (ValueError, TypeError):
             return False, "simulation.speed_multiplier must be numeric."

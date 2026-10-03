@@ -141,8 +141,9 @@ class AutomationController:
         if self.intraday_service and lane_a_active and initial_status == "Waiting" and report_type == "type_a":
             with self.intraday_service._lock:
                 if name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
+                    self.intraday_service._cycle_seen_in_pass.discard(name)
                     self.intraday_service._enqueue_lane_a_by_priority(name)
-                    self.intraday_service._rotation_cooldown_until = 0.0
+                    self.intraday_service.wake_lane_a_queue(reset_pass=False)
                     self.intraday_service._cycle_pass_reports.add(name)
 
         return jsonify({"ok": True, "message": f"Report '{name}' created successfully", "report": report.to_dict()}), 201
@@ -227,7 +228,7 @@ class AutomationController:
                 self.intraday_service._cycle_seen_in_pass.discard(name)
                 self.intraday_service.retry_counts.pop(name, None)
                 self.intraday_service.type_c_retry_after.pop(name, None)
-                self.intraday_service._evaluate_pass_completion(CLOCK.date_str(), defer_seen_clear=True)
+                self.intraday_service._evaluate_pass_completion(CLOCK.date_str())
         elif report.status == "Running":
             return jsonify({
                 "ok": False,
@@ -274,6 +275,7 @@ class AutomationController:
                 self.intraday_service.type_c_retry_after.pop(name, None)
                 self.intraday_service.type_c_warned.discard(name)
                 self.intraday_service.retry_counts.pop(name, None)
+                self.intraday_service._cycle_seen_in_pass.discard(name)
                 self.intraday_service.intraday_repo.clear_non_completed_run(today_date, name)
                 if report.report_type == "type_a" and self.intraday_service.lane_a_active:
                     day = self.intraday_service.intraday_repo.get_day(today_date)
@@ -281,7 +283,7 @@ class AutomationController:
                     if name not in already_ran and name not in self.intraday_service.waitlist and name not in self.intraday_service.current_runs:
                         self.intraday_service._enqueue_lane_a_by_priority(name)
                         self.intraday_service.all_completed = False
-                        self.intraday_service._rotation_cooldown_until = 0.0
+                        self.intraday_service.wake_lane_a_queue(reset_pass=False)
                         self.intraday_service._cycle_pass_reports.add(name)
 
                 self.intraday_service.intraday_repo.add_timeline_event(

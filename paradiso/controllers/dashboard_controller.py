@@ -79,7 +79,13 @@ class DashboardController:
         }), 200
 
     def get_timeline(self):
-        timeline = self.intraday_service.get_today_timeline()
+        date_arg = request.args.get("date")
+        if hasattr(self.intraday_service, "get_timeline_by_date"):
+            timeline = self.intraday_service.get_timeline_by_date(date_arg)
+        else:
+            timeline = self.intraday_service.get_today_timeline()
+
+        total = len(timeline)
         order = request.args.get("order", "asc").lower()
         if order == "desc":
             timeline = list(reversed(timeline))
@@ -98,7 +104,26 @@ class DashboardController:
             except (ValueError, TypeError):
                 pass
 
-        return jsonify({"ok": True, "timeline": timeline}), 200
+        today_date = CLOCK.date_str()
+        available_dates = (
+            self.intraday_service.get_available_dates()
+            if hasattr(self.intraday_service, "get_available_dates")
+            else [today_date]
+        )
+        selected_date = (
+            today_date
+            if not date_arg or date_arg.upper() == "TODAY"
+            else ("ALL" if date_arg.upper() == "ALL" else date_arg)
+        )
+
+        return jsonify({
+            "ok": True,
+            "timeline": timeline,
+            "total": total,
+            "selected_date": selected_date,
+            "today_date": today_date,
+            "available_dates": available_dates
+        }), 200
 
     def get_system_status(self):
         return jsonify({

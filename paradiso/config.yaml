@@ -25,5 +25,5 @@ executables:
   python_path: ''
   rscript_path: ''
 simulation:
-  enabled: true
+  enabled: false
   speed_multiplier: 600

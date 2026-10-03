@@ -121,8 +121,8 @@ Paradiso Alter orchestrates reports across three distinct execution lanes, each 
 - **Slot Semaphore & Dynamic Replenishment**: `IntradayService.tick()` computes `available_slots = max_concurrent_run - len(current_runs)`. If available slots exist and the queue is not in starvation cooldown, up to `available_slots` reports are popped from `waitlist` and launched in parallel. As any running job completes or skips, its slot is immediately released and replenished on the subsequent daemon tick.
 - **Execution Window**: 07:00 – 20:59 with evening wrap-up (21:00) and 22:00 hard cutoff.
 - **Dependency Rotation**: Upstream data checks emit `SKIPPED`, transitioning the report to `Retrial` and rotating it to the back of `waitlist` with **zero retry penalty**.
-- **Multi-Slot Starvation Cooldown Coordination**: When multiple reports run in parallel, pass completion evaluation (`_evaluate_pass_completion`) is deferred while any jobs remain in flight (`len(self.current_runs) > 0`). Starvation cooldown is only engaged once all concurrent tasks in the pass have concluded, preventing premature cooldown triggers or pass desynchronization.
-- **Hot-Reloading & Validation**: `max_concurrent_run` can be dynamically updated via `POST /api/settings` while idle, validated to ensure bounds $1 \le N \le 20$.
+- **Multi-Slot Starvation Cooldown & Adaptive Backoff with Event-Driven Wakeup (P3.2, F-061)**: When multiple reports run in parallel, pass completion evaluation (`_evaluate_pass_completion`) is deferred while any jobs remain in flight (`len(self.current_runs) > 0`). When every report in a pass skips due to unready dependencies, consecutive starved passes (`_consecutive_starvation_passes`) scale the cooldown exponentially ($B \times 2^{n-1}$, capped at `max_rotation_cooldown_seconds` default `300s`). Whenever any report completes in Lane A, Lane B, or Lane C (`wake_lane_a_queue()`), backoff is immediately cancelled, pre-wakeup seen/skip pass tracking is cleared, and `self.waitlist` is re-sorted by priority (`P0 -> P1 -> P2`) for 0ms wakeup latency.
+- **Hot-Reloading & Validation**: `max_concurrent_run`, `rotation_cooldown_seconds`, and `max_rotation_cooldown_seconds` can be dynamically updated via `POST /api/settings` while idle.
 - **Manual Execution**: Returns HTTP `403 Forbidden` (`{"ok": false, "error": "Manual execution is disabled for intraday sequential reports. Paradiso manages execution automatically."}`).
 
 ### Lane B: Recurring Intervals
@@ -412,9 +412,10 @@ Configuration is persisted in `config.yaml` and loaded via `utils/config.py`. Th
 ### Key Configuration Directives
 - **`scheduler.auto_start`**: `true` boots directly into Autonomous 24-hr mode; `false` boots into Standby mode.
 - **`scheduler.max_concurrent_run`**: Maximum concurrent executions permitted in Lane A concurrency pool (range: `1` to `20`, default: `1`). Hot-reloaded into `IntradayService`.
+- **`scheduler.rotation_cooldown_seconds` / `scheduler.max_rotation_cooldown_seconds`**: Base starvation cooldown (`30.0s` default) and adaptive exponential backoff cap (`300.0s` default) for Lane A dependency rotation passes. Hot-reloaded into `IntradayService`.
 - **`scheduler.intraday_start_time` / `intraday_idle_time` / `intraday_close_time`**: 24-hour `HH:MM` strings defining intraday state transitions. Hot-reloaded into `IntradayService`.
 - **`scheduler.job_interval_seconds`**: Daemon loop polling interval in real-time mode (defaults to 0.5s when simulation mode is active).
-- **`scheduler.max_retries`**: Maximum consecutive retry attempts for failing scripts before transitioning to terminal `Failed` state (default: `5`).
+- **`scheduler.max_retries`**: Maximum consecutive retry attempts for failing scripts before transitioning to terminal `Failed` state (default: `5`, validated as integer $\ge 1$).
 - **`scheduler.lane_c_catch_up_policy`**: Default catch-up policy for pinned timeslots missed while offline (`CATCH_UP_IMMEDIATE`, `SKIP_UNTIL_NEXT_DAY`, or `WARN_OPERATOR`). Hot-reloaded into `IntradayService`.
 - **`scheduler.lane_c_catch_up_grace_minutes`**: Grace window in minutes past scheduled milestone to consider on-time (default: `15`). Hot-reloaded into `IntradayService`.
 - **`simulation.enabled` / `simulation.speed_multiplier`**: Enables accelerated simulation (default `600.0` = 10 simulated minutes per real second). Hot-reloaded into `CLOCK`.
@@ -434,14 +435,24 @@ python run_tests.py
 # or: py -3 -m unittest discover tests (from paradiso/)
 ```
 
-#### Coverage Breakdown (151 Automated Tests)
-- **`tests/test_audit_fixes.py`** (109 tests):
-  - **Batch 11 & 12 Remediations (F-053 through F-056)**:
+#### Coverage Breakdown (162 Automated Tests)
+- **`tests/test_audit_fixes.py`** (120 tests):
+  - **Batch 11, 12, 13 & 14 Remediations (F-053 through F-065)**:
+    - **F-061 (Mid-Pass Cross-Lane Completion Wakeup & Priority Re-Sort)**: Upstream completions in Lane A/B/C invoke `wake_lane_a_queue(reset_pass=True)`, clearing `_cycle_seen_in_pass`, resetting `_cycle_skips_in_pass = 0`, and re-sorting `waitlist` by priority rank so skipped `P0` reports wake immediately without triggering end-of-pass cooldown.
+    - **F-062 (Settings Schema Validation Hardening)**: Validates `max_retries` ($\ge 1$ integer), `max_rotation_cooldown_seconds` ($> 0$ and $\ge$ `rotation_cooldown_seconds`), and rejects `bool` and `null` (`None`) across all scheduler time, interval, concurrency, and catch-up parameters.
+    - **F-063 (Retry-Exhausted Script Failure Filter)**: Checks `reason.startswith("Exceeded max retries")` before cutoff classification in `_get_completed_or_exhausted_reports()`, preventing permanently failed scripts whose error output mentions `"cutoff"` from re-queueing infinitely.
+    - **F-064 (Pre-Start Timeline Event Day Initialization & Crash Recovery)**: Detects bare day records created by pre-start timeline events (`not has_day_init`) in `_get_or_init_day()` to run `set_waiting_all()` while preserving pre-start events and same-day completions, and recovers crashed `Running` reports in `start_lane()`.
+    - **F-065 (Manual Run Retry Accounting in Standby)**: Decouples retry-count exhaustion from `scheduler_is_active` in Lane B and Lane C `_handle_failure` callbacks so manual runs (`POST /api/automation/run`) while a lane is in Standby transition to `Retrial` until `max_retries` is reached.
+    - **F-057 (Re-Enabled Failed Report Seen-State Clearance)**: Clears `name` from `_cycle_seen_in_pass` on terminal completion/failure and in `POST /api/automation/enable` and `POST /api/automation/add`, ensuring re-enabled `P0` reports are never bypassed by lower-priority `P2` reports.
+    - **F-058 (Drained Pass Counter Reset)**: Resets `_cycle_completions_in_pass`, `_cycle_skips_in_pass`, `_cycle_errors_in_pass`, and `_cycle_seen_in_pass` in `_evaluate_pass_completion()` when `_cycle_pass_reports` becomes empty so subsequently added/enabled reports that skip properly engage starvation cooldown.
+    - **F-059 (Lifecycle Pass Counter Reset Parity)**: Resets `_cycle_skips_in_pass = 0` and `_cycle_errors_in_pass = 0` across `start_lane("type_a")`, `stop_lane("type_a")`, `start_fresh_run()`, and `reset_all_reports()`.
+    - **F-060 (Immediate Pass Seen-Set Clearance on Disable)**: Unconditionally clears `_cycle_seen_in_pass` in `_evaluate_pass_completion()` when `disable_automation()` completes a pass, preventing priority inversion if a lower-priority report is added or enabled before the next tick.
     - **F-056 (Idle Report Disable Pass Completion & Deadlock Prevention)**: Invokes `_evaluate_pass_completion()` on `POST /api/automation/disable` and defensively in `IntradayService.tick()` when `len(current_runs) == 0`, `len(waitlist) > 0`, and `not unseen_candidates`, preventing skipped reports from being stranded when an operator disables the last unseen report in a pass.
     - **F-053 (Multi-Slot Concurrency Pass Boundary & Starvation Cooldown Protection)**: Prevents `IntradayService.tick()` from re-dispatching reports already evaluated in the current pass (`r in _cycle_seen_in_pass`) into freed concurrency slots while sibling pass tasks are still in flight, ensuring pass boundaries and starvation cooldowns engage deterministically when `max_concurrent_run > 1`.
     - **F-054 (Complete Runtime & Intraday State Purge on Automation Deletion)**: Evicts deleted report names from all Lane A/B/C runtime tracking sets (`type_c_ran_today`, `type_c_retry_after`, `type_c_warned`, `type_b_exhausted`, `type_b_last_run`, `_cycle_pass_reports`, `_cycle_seen_in_pass`) and today's `intraday.json` record (`purge_report_from_day`) so re-created reports are never starved.
     - **F-055 (Isolated Test Fixture Seeding in `test_api.py`)**: Seeds the `"SF Base"` Type A fixture in `TestAPIEndpoints.setUp()` so regression tests remain independent of live catalog changes in `storage/automations.json`.
-  - **Phase 3.3 & Phase 2 UI Enhancements**:
+  - **Phase 3.2, Phase 3.3 & Phase 2 UI Enhancements**:
+    - **Adaptive Starvation Backoff with Event-Driven Wakeup (`P3.2`)**: Progressive exponential backoff ($B \times 2^{n-1}$) capped at `max_rotation_cooldown_seconds` and instant wakeup via `wake_lane_a_queue()`.
     - **Lane A Priority Queue Tiers (`P3.3`)**: `P0 -> P1 -> P2` priority sorting in `Automations.get_pending_by_type`, API validation (`HTTP 400` on invalid priority), mid-pass priority insertion (`_enqueue_lane_a_by_priority`), and starvation-safe pass completion re-sorting (`_evaluate_pass_completion`).
     - **Per-Lane Filter & Dynamic Retry Telemetry**: Dashboard per-lane filter pills (`#dash-lane-filter-group`), All Automations lane filter (`#auto-lane-filter`), priority modal selector (`#new-report-priority`), and dynamic `max_retries` binding across Lane A/B/C metric cards and `/api/paradiso/lanes/status`.
   - **Batch 10 Remediations (F-048 through F-052)**:

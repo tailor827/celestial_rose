@@ -72,8 +72,24 @@ class ExecutionController:
         }), 403
 
     def get_execution_history(self):
-        history = self.intraday_service.get_all_execution_history()
-        return jsonify({"ok": True, "history": history}), 200
+        from utils.clock import CLOCK
+        date_arg = request.args.get("date")
+        try:
+            history = self.intraday_service.get_all_execution_history(date_arg)
+        except TypeError:
+            history = self.intraday_service.get_all_execution_history()
+        today_date = CLOCK.date_str()
+        available_dates = (
+            self.intraday_service.get_available_dates()
+            if hasattr(self.intraday_service, "get_available_dates")
+            else sorted({item.get("date", today_date) for item in history} | {today_date}, reverse=True)
+        )
+        return jsonify({
+            "ok": True,
+            "history": history,
+            "today_date": today_date,
+            "available_dates": available_dates
+        }), 200
 
     def get_execution_log(self, name: str):
         # Prevent directory traversal attacks

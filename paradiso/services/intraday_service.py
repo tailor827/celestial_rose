@@ -46,15 +46,17 @@ class IntradayService:
         self._hydrate_type_b_last_run(self._active_date)
         self._hydrate_type_c_ran_today(self._active_date)
 
-        # Queue pass tracking and starvation cooldown (F-005)
+        # Queue pass tracking and starvation cooldown (F-005 & P3.2 Adaptive Backoff)
         self._cycle_pass_reports: Set[str] = set()
         self._cycle_seen_in_pass: Set[str] = set()
         self._cycle_completions_in_pass: int = 0
         self._cycle_skips_in_pass: int = 0
         self._cycle_errors_in_pass: int = 0
+        self._consecutive_starvation_passes: int = 0
         self._rotation_cooldown_until: float = 0.0
         self._last_rotation_logged: Dict[str, float] = {}
         self.rotation_cooldown_seconds: float = float(CONFIG.get("scheduler", {}).get("rotation_cooldown_seconds", 30.0))
+        self.max_rotation_cooldown_seconds: float = float(CONFIG.get("scheduler", {}).get("max_rotation_cooldown_seconds", 300.0))
 
     @property
     def has_active_runs(self) -> bool:
@@ -85,18 +87,47 @@ class IntradayService:
             self.max_retries = int(sched.get("max_retries", self.max_retries))
             self.max_concurrent_run = int(sched.get("max_concurrent_run", self.max_concurrent_run))
             self.rotation_cooldown_seconds = float(sched.get("rotation_cooldown_seconds", self.rotation_cooldown_seconds))
+            self.max_rotation_cooldown_seconds = float(sched.get("max_rotation_cooldown_seconds", self.max_rotation_cooldown_seconds))
             if "lane_c_catch_up_policy" in sched:
                 self.lane_c_catch_up_policy = str(sched["lane_c_catch_up_policy"]).upper()
             if "lane_c_catch_up_grace_minutes" in sched:
                 self.lane_c_catch_up_grace_minutes = int(sched["lane_c_catch_up_grace_minutes"])
 
     def get_rotation_cooldown(self) -> float:
-        """Returns cooldown delay in seconds. Respects testing overrides and simulation scaling."""
+        """Returns base cooldown delay in seconds. Respects testing overrides and simulation scaling."""
         if hasattr(self, "_override_cooldown") and self._override_cooldown is not None:
             return self._override_cooldown
         if CLOCK.simulation_mode:
             return 5.0
         return self.rotation_cooldown_seconds
+
+    def get_adaptive_rotation_cooldown(self, pass_number: Optional[int] = None) -> float:
+        """Returns progressive exponential backoff delay (B * 2^(n-1)) for consecutive starved queue passes, capped at max cooldown."""
+        base = self.get_rotation_cooldown()
+        n = max(1, pass_number if pass_number is not None else self._consecutive_starvation_passes)
+        raw_cooldown = base * (2 ** (n - 1))
+        if hasattr(self, "_override_max_cooldown") and self._override_max_cooldown is not None:
+            cap = float(self._override_max_cooldown)
+        elif hasattr(self, "_override_cooldown") and self._override_cooldown is not None:
+            cap = max(float(self.max_rotation_cooldown_seconds), base * 16.0)
+        elif CLOCK.simulation_mode:
+            cap = min(float(self.max_rotation_cooldown_seconds), base * 16.0)
+        else:
+            cap = float(self.max_rotation_cooldown_seconds)
+        return min(raw_cooldown, cap)
+
+    def wake_lane_a_queue(self, reset_pass: bool = True) -> None:
+        """Immediately clears adaptive starvation backoff and cooldown timer so Lane A evaluates on the next tick."""
+        with self._lock:
+            self._consecutive_starvation_passes = 0
+            self._rotation_cooldown_until = 0.0
+            if reset_pass:
+                self._cycle_seen_in_pass.clear()
+                self._cycle_skips_in_pass = 0
+                self._cycle_errors_in_pass = 0
+                if len(self.waitlist) > 1:
+                    self.waitlist = deque(sorted(self.waitlist, key=self._priority_rank))
+                self._cycle_pass_reports = set(self.waitlist) | set(self.current_runs.keys())
 
     def _priority_rank(self, report_name: str) -> int:
         """Returns numeric priority rank for a report: P0 -> 0, P1 -> 1, P2 -> 2 (default)."""
@@ -118,30 +149,41 @@ class IntradayService:
         items.insert(insert_idx, report_name)
         self.waitlist = deque(items)
 
-    def _evaluate_pass_completion(self, date: str, defer_seen_clear: bool = False):
-        """Checks if a full pass over all waiting reports has completed, engaging cooldown if all were skipped."""
-        if self._cycle_pass_reports and self._cycle_pass_reports.issubset(self._cycle_seen_in_pass):
-            # With multi-slot concurrency (max_concurrent_run > 1), wait for all in-flight jobs in the pass to finish
-            if len(self.current_runs) > 0:
-                return
+    def _evaluate_pass_completion(self, date: str):
+        """Checks if a full pass over all waiting reports has completed, engaging adaptive backoff cooldown if all were skipped."""
+        # With multi-slot concurrency (max_concurrent_run > 1), wait for all in-flight jobs in the pass to finish
+        if len(self.current_runs) > 0:
+            return
 
+        if not self._cycle_pass_reports:
+            self._cycle_pass_reports = set(self.waitlist)
+            self._cycle_seen_in_pass.clear()
+            self._cycle_completions_in_pass = 0
+            self._cycle_skips_in_pass = 0
+            self._cycle_errors_in_pass = 0
+            self._consecutive_starvation_passes = 0
+            return
+
+        if self._cycle_pass_reports.issubset(self._cycle_seen_in_pass):
             # Starvation: Every item in the pass was skipped due to unready dependencies
             if self._cycle_skips_in_pass > 0 and self._cycle_completions_in_pass == 0 and self._cycle_errors_in_pass == 0 and len(self.waitlist) > 0:
-                cooldown = self.get_rotation_cooldown()
+                self._consecutive_starvation_passes += 1
+                cooldown = self.get_adaptive_rotation_cooldown(self._consecutive_starvation_passes)
                 self._rotation_cooldown_until = time.time() + cooldown
                 self.intraday_repo.add_timeline_event(
                     date=date,
                     title="Queue Cooldown",
-                    description=f"All {len(self._cycle_seen_in_pass)} pending report(s) waiting on dependencies. Queue paused for {int(cooldown)}s.",
+                    description=f"All {len(self._cycle_seen_in_pass)} pending report(s) waiting on dependencies (pass #{self._consecutive_starvation_passes}). Queue paused for {int(cooldown)}s.",
                     event_type="system"
                 )
+            else:
+                self._consecutive_starvation_passes = 0
             # Re-order waitlist by priority tier (P0 -> P1 -> P2, stable within tier) for the next pass
             if len(self.waitlist) > 1:
                 self.waitlist = deque(sorted(self.waitlist, key=self._priority_rank))
             # Reset pass tracking for the next pass
             self._cycle_pass_reports = set(self.waitlist)
-            if not defer_seen_clear:
-                self._cycle_seen_in_pass.clear()
+            self._cycle_seen_in_pass.clear()
             self._cycle_completions_in_pass = 0
             self._cycle_skips_in_pass = 0
             self._cycle_errors_in_pass = 0
@@ -272,13 +314,18 @@ class IntradayService:
             if result == "completed":
                 excluded.add(name)
             elif result == "failed":
-                is_cutoff_or_unstarted = (
-                    started_at == "--"
-                    or "cutoff" in str(reason).lower()
-                    or "finalized automatically" in str(reason).lower()
-                )
-                if not is_cutoff_or_unstarted:
+                reason_str = str(reason)
+                if reason_str.startswith("Exceeded max retries"):
                     excluded.add(name)
+                else:
+                    is_cutoff_or_unstarted = (
+                        started_at == "--"
+                        or reason_str.startswith("Not completed before ")
+                        or reason_str.startswith("Forcibly terminated: breached ")
+                        or "finalized automatically" in reason_str.lower()
+                    )
+                    if not is_cutoff_or_unstarted:
+                        excluded.add(name)
         return excluded
 
     def _get_or_init_day(self, today_date: str, status: str, force_open: bool = False, is_new_day: bool = False) -> IntradayDay:
@@ -295,6 +342,14 @@ class IntradayService:
                 if day.status == Intraday.CLOSED or len(day.reports_ran) > 0:
                     is_stale_or_premature = True
 
+        has_day_init = bool(day) and (
+            bool(day.expected_reports)
+            or any(
+                (getattr(e, "title", None) if not isinstance(e, dict) else e.get("title")) == "Day Initialized"
+                for e in (day.timeline or [])
+            )
+        )
+
         if not day or is_stale_or_premature:
             waiting = self.automation_service.set_waiting_all()
             effective_status = Intraday.OPEN if force_open else status
@@ -310,6 +365,23 @@ class IntradayService:
                     type="system"
                 )]
             )
+            self.intraday_repo.add_day(day)
+        elif not has_day_init:
+            waiting = self.automation_service.set_waiting_all()
+            for r_name, r_run in (day.reports_ran or {}).items():
+                r_res = getattr(r_run, "result", None) or (r_run.get("result") if isinstance(r_run, dict) else "")
+                if r_res == "completed":
+                    self.automation_service.update_status(name=r_name, status="Completed")
+            effective_status = Intraday.OPEN if force_open else status
+            day.status = effective_status
+            day.expected_reports = waiting
+            init_event = TimelineEvent(
+                timestamp=CLOCK.time_str(),
+                title="Day Initialized",
+                description=f"Paradiso day initialized for {today_date}",
+                type="system"
+            )
+            day.timeline = [init_event] + list(day.timeline or [])
             self.intraday_repo.add_day(day)
         else:
             if (force_open or status == Intraday.OPEN) and day.status != Intraday.OPEN:
@@ -351,6 +423,20 @@ class IntradayService:
                 self.force_open = True
             today_date = CLOCK.date_str()
             self._reconcile_past_days(today_date)
+
+            for r in self.automation_service.get_all():
+                if (
+                    r.status == "Running"
+                    and r.name not in self.current_runs
+                    and r.name not in self.active_runs_type_b
+                    and r.name not in self.active_runs_type_c
+                ):
+                    self.automation_service.update_status(
+                        name=r.name,
+                        status="Waiting",
+                        last_output="Reset from previous session shutdown/crash"
+                    )
+
             status = self.resolve_status()
             day = self._get_or_init_day(today_date, status, force_open=force_open)
 
@@ -361,9 +447,12 @@ class IntradayService:
                 queue_items = [r for r in pending if r not in already_ran and r not in self.current_runs]
                 self.waitlist = deque(queue_items)
                 self._rotation_cooldown_until = 0.0
+                self._consecutive_starvation_passes = 0
                 self._cycle_pass_reports = set(self.waitlist)
                 self._cycle_seen_in_pass.clear()
                 self._cycle_completions_in_pass = 0
+                self._cycle_skips_in_pass = 0
+                self._cycle_errors_in_pass = 0
                 self._last_rotation_logged.clear()
                 self.intraday_repo.add_timeline_event(
                     date=today_date,
@@ -399,9 +488,12 @@ class IntradayService:
                 self.lane_a_active = False
                 self.waitlist.clear()
                 self._rotation_cooldown_until = 0.0
+                self._consecutive_starvation_passes = 0
                 self._cycle_pass_reports.clear()
                 self._cycle_seen_in_pass.clear()
                 self._cycle_completions_in_pass = 0
+                self._cycle_skips_in_pass = 0
+                self._cycle_errors_in_pass = 0
                 self._last_rotation_logged.clear()
                 for report_name in list(self.current_runs.keys()):
                     self.execution_service.runner.kill_process(report_name)
@@ -490,9 +582,12 @@ class IntradayService:
             self.day_closed = False
             self.type_c_retry_after.clear()
             self._rotation_cooldown_until = 0.0
+            self._consecutive_starvation_passes = 0
             self._cycle_pass_reports = set(self.waitlist)
             self._cycle_seen_in_pass.clear()
             self._cycle_completions_in_pass = 0
+            self._cycle_skips_in_pass = 0
+            self._cycle_errors_in_pass = 0
             self._last_rotation_logged.clear()
             self.intraday_repo.add_timeline_event(
                 date=today_date,
@@ -526,9 +621,12 @@ class IntradayService:
             self.waitlist.clear()
             self.retry_counts.clear()
             self._rotation_cooldown_until = 0.0
+            self._consecutive_starvation_passes = 0
             self._cycle_pass_reports.clear()
             self._cycle_seen_in_pass.clear()
             self._cycle_completions_in_pass = 0
+            self._cycle_skips_in_pass = 0
+            self._cycle_errors_in_pass = 0
             self._last_rotation_logged.clear()
             self.type_b_last_run.clear()
             self.type_b_exhausted.clear()
@@ -589,6 +687,8 @@ class IntradayService:
 
                 self.retry_counts.clear()
                 self.waitlist.clear()
+                self._rotation_cooldown_until = 0.0
+                self._consecutive_starvation_passes = 0
                 self.type_b_last_run.clear()
                 self.type_b_exhausted.clear()
                 self.type_c_ran_today.clear()
@@ -601,6 +701,7 @@ class IntradayService:
                     pending_a = self.automation_service.get_pending_by_type("type_a")
                     self.waitlist = deque(pending_a)
                     self._rotation_cooldown_until = 0.0
+                    self._consecutive_starvation_passes = 0
                     self._cycle_pass_reports = set(self.waitlist)
                     self._cycle_seen_in_pass.clear()
                     self._cycle_completions_in_pass = 0
@@ -637,6 +738,8 @@ class IntradayService:
                     already_ran = self._get_completed_or_exhausted_reports(day)
                     pending_a = self.automation_service.get_pending_by_type("type_a")
                     uncompleted = [r for r in pending_a if r not in already_ran and r not in self.current_runs and r not in self.waitlist]
+                    if uncompleted:
+                        self.wake_lane_a_queue(reset_pass=False)
                     for r in uncompleted:
                         self._enqueue_lane_a_by_priority(r)
                         self._cycle_pass_reports.add(r)
@@ -857,7 +960,8 @@ class IntradayService:
                     # Terminal Success: record in intraday repo & remove from waitlist
                     self._cycle_completions_in_pass += 1
                     self._cycle_pass_reports.discard(name)
-                    self._rotation_cooldown_until = 0.0
+                    self._cycle_seen_in_pass.discard(name)
+                    self.wake_lane_a_queue()
 
                     self.intraday_repo.add_report_run(
                         date=date,
@@ -931,6 +1035,7 @@ class IntradayService:
                 self._evaluate_pass_completion(date)
             else:
                 self._cycle_pass_reports.discard(name)
+                self._cycle_seen_in_pass.discard(name)
                 self.automation_service.update_status(
                     name=name,
                     status="Failed",
@@ -1021,6 +1126,7 @@ class IntradayService:
                 if log.status == "Completed":
                     if name not in self.type_b_exhausted:
                         self.retry_counts[name] = 0
+                    self.wake_lane_a_queue()
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -1057,9 +1163,8 @@ class IntradayService:
         def _handle_failure(name: str, started_at: str, duration_str: str, error: str):
             attempts = self.retry_counts.get(name, 0) + 1
             self.retry_counts[name] = attempts
-            scheduler_is_active = self.lane_b_active or self.force_open
 
-            if attempts < self.max_retries and scheduler_is_active:
+            if attempts < self.max_retries:
                 self.type_b_last_run[name] = CLOCK.now()
                 self.automation_service.update_status(
                     name=name,
@@ -1145,6 +1250,7 @@ class IntradayService:
                     self.type_c_ran_today.add(name)
                     self.type_c_retry_after.pop(name, None)
                     self.retry_counts[name] = 0
+                    self.wake_lane_a_queue()
                     self.intraday_repo.add_report_run(
                         date=date,
                         report_name=name,
@@ -1182,9 +1288,8 @@ class IntradayService:
         def _handle_failure(name: str, started_at: str, duration_str: str, error: str):
             attempts = self.retry_counts.get(name, 0) + 1
             self.retry_counts[name] = attempts
-            scheduler_is_active = self.lane_c_active or self.force_open
 
-            if attempts < self.max_retries and scheduler_is_active:
+            if attempts < self.max_retries:
                 self.type_c_retry_after[name] = CLOCK.now() + timedelta(seconds=300)
                 self.automation_service.update_status(
                     name=name,
@@ -1283,6 +1388,7 @@ class IntradayService:
     def get_lanes_status(self) -> Dict[str, Any]:
         """Returns runtime execution metrics across all three scheduling lanes."""
         with self._lock:
+            cooldown_rem = max(0.0, round(self._rotation_cooldown_until - time.time(), 1))
             return {
                 "type_a": {
                     "active": self.lane_a_active,
@@ -1290,7 +1396,9 @@ class IntradayService:
                     "running_reports": list(self.current_runs.keys()),
                     "pending_count": len(self.waitlist),
                     "max_concurrent_run": self.max_concurrent_run,
-                    "max_retries": self.max_retries
+                    "max_retries": self.max_retries,
+                    "consecutive_starvation_passes": self._consecutive_starvation_passes,
+                    "cooldown_remaining_seconds": cooldown_rem
                 },
                 "type_b": {
                     "active": self.lane_b_active,
@@ -1307,18 +1415,55 @@ class IntradayService:
                 }
             }
 
+    def get_available_dates(self) -> List[str]:
+        """Returns all recorded YYYYMMDD date keys (always including today), sorted newest first."""
+        with self._lock:
+            data = self.intraday_repo._read_json()
+            dates = set(data.keys())
+            dates.add(CLOCK.date_str())
+            return sorted(dates, reverse=True)
+
     def get_today_timeline(self) -> List[Dict]:
         day = self.intraday_repo.get_day(CLOCK.date_str())
         if day:
             return [t.to_dict() for t in day.timeline]
         return []
 
-    def get_all_execution_history(self) -> List[Dict]:
-        """Retrieves all historical execution run records across all dates, newest first."""
+    def get_timeline_by_date(self, date_str: Optional[str] = None) -> List[Dict]:
+        """Retrieves timeline events for today, a specific YYYYMMDD date, or ALL dates in chronological order."""
+        with self._lock:
+            if not date_str or date_str.upper() == "TODAY":
+                target_date = CLOCK.date_str()
+                return [{**t, "date": t.get("date", target_date)} for t in self.get_today_timeline()]
+
+            if date_str.upper() == "ALL":
+                data = self.intraday_repo._read_json()
+                events: List[Dict] = []
+                for d in sorted(data.keys()):
+                    day_data = data.get(d, {})
+                    for raw_evt in day_data.get("timeline", []):
+                        evt_dict = TimelineEvent.from_dict(raw_evt).to_dict()
+                        evt_dict["date"] = d
+                        events.append(evt_dict)
+                return events
+
+            day = self.intraday_repo.get_day(date_str)
+            if day:
+                return [{**t.to_dict(), "date": date_str} for t in day.timeline]
+            return []
+
+    def get_all_execution_history(self, date_str: Optional[str] = None) -> List[Dict]:
+        """Retrieves historical execution run records across all dates (or a specific date), newest first."""
         with self._lock:
             data = self.intraday_repo._read_json()
+            target_date: Optional[str] = None
+            if date_str and date_str.upper() not in ("ALL", ""):
+                target_date = CLOCK.date_str() if date_str.upper() == "TODAY" else date_str
+
             history = []
             for date, day_data in data.items():
+                if target_date is not None and date != target_date:
+                    continue
                 reports_ran = day_data.get("reports_ran", {})
                 for report_name, run_data in reports_ran.items():
                     result = run_data.get("result", "completed")
@@ -1335,4 +1480,5 @@ class IntradayService:
                     })
             history.sort(key=lambda x: (x["date"], x["started_at"]), reverse=True)
             return history
+
 

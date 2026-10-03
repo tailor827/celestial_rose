@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    syncThemeUI();
     fetchDashboardStats();
     fetchAutomations();
     fetchTimeline();
@@ -1535,17 +1536,251 @@ async function deleteReport(name) {
     }
 }
 
+function formatDateKey(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return '';
+    if (/^\d{8}$/.test(dateStr)) {
+        return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    }
+    return dateStr;
+}
+
+window._calendarState = {
+    timeline: { availableDates: new Set(), todayDate: '', viewYear: null, viewMonth: null },
+    exec: { availableDates: new Set(), todayDate: '', viewYear: null, viewMonth: null }
+};
+
+function _parseYearMonth(dateKey, fallbackDateKey) {
+    const candidate = (/^\d{8}$/.test(dateKey) ? dateKey : (/^\d{8}$/.test(fallbackDateKey) ? fallbackDateKey : ''));
+    if (candidate) {
+        return {
+            year: parseInt(candidate.slice(0, 4), 10),
+            month: parseInt(candidate.slice(4, 6), 10) - 1
+        };
+    }
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+}
+
+function updateCalendarTriggerLabel(target) {
+    const state = window._calendarState[target];
+    const inputEl = document.getElementById(`${target}-date-filter`);
+    const labelEl = document.getElementById(`${target}-calendar-btn-label`);
+    if (!inputEl || !labelEl) return;
+
+    const val = inputEl.value || (target === 'timeline' ? 'TODAY' : 'ALL');
+    if (val === 'TODAY') {
+        const suffix = state.todayDate ? ` (${formatDateKey(state.todayDate)})` : '';
+        labelEl.textContent = `Today${suffix}`;
+    } else if (val === 'ALL') {
+        labelEl.textContent = 'All Dates';
+    } else {
+        labelEl.textContent = formatDateKey(val);
+    }
+}
+
+function populateTimelineDateDropdown(availableDates, todayDate) {
+    const state = window._calendarState.timeline;
+    state.availableDates = new Set(Array.isArray(availableDates) ? availableDates : []);
+    if (todayDate) state.todayDate = todayDate;
+
+    if (state.viewYear === null || state.viewMonth === null) {
+        const ym = _parseYearMonth('', state.todayDate);
+        state.viewYear = ym.year;
+        state.viewMonth = ym.month;
+    }
+
+    updateCalendarTriggerLabel('timeline');
+    const pop = document.getElementById('timeline-calendar-popover');
+    if (pop && pop.classList.contains('open')) {
+        renderCalendarPopover('timeline');
+    }
+}
+
+function populateExecDateDropdown(availableDates, todayDate) {
+    const state = window._calendarState.exec;
+    state.availableDates = new Set(Array.isArray(availableDates) ? availableDates : []);
+    if (todayDate) state.todayDate = todayDate;
+
+    if (state.viewYear === null || state.viewMonth === null) {
+        const ym = _parseYearMonth('', state.todayDate);
+        state.viewYear = ym.year;
+        state.viewMonth = ym.month;
+    }
+
+    updateCalendarTriggerLabel('exec');
+    const pop = document.getElementById('exec-calendar-popover');
+    if (pop && pop.classList.contains('open')) {
+        renderCalendarPopover('exec');
+    }
+}
+
+function closeAllCalendarPopovers() {
+    ['timeline', 'exec'].forEach(t => {
+        const pop = document.getElementById(`${t}-calendar-popover`);
+        const btn = document.getElementById(`${t}-calendar-btn`);
+        if (pop) pop.classList.remove('open');
+        if (btn) btn.classList.remove('active');
+    });
+}
+
+function toggleCalendarPopover(target, event) {
+    if (event && event.stopPropagation) {
+        event.stopPropagation();
+    }
+    const pop = document.getElementById(`${target}-calendar-popover`);
+    const btn = document.getElementById(`${target}-calendar-btn`);
+    if (!pop) return;
+
+    const isOpen = pop.classList.contains('open');
+    closeAllCalendarPopovers();
+
+    if (!isOpen) {
+        const state = window._calendarState[target];
+        const inputEl = document.getElementById(`${target}-date-filter`);
+        const currentVal = inputEl ? inputEl.value : '';
+        const ym = _parseYearMonth(currentVal, state.todayDate);
+        state.viewYear = ym.year;
+        state.viewMonth = ym.month;
+
+        renderCalendarPopover(target);
+        pop.classList.add('open');
+        if (btn) btn.classList.add('active');
+    }
+}
+
+function changeCalendarMonth(target, delta) {
+    const state = window._calendarState[target];
+    if (state.viewYear === null || state.viewMonth === null) {
+        const ym = _parseYearMonth('', state.todayDate);
+        state.viewYear = ym.year;
+        state.viewMonth = ym.month;
+    }
+    const d = new Date(state.viewYear, state.viewMonth + delta, 1);
+    state.viewYear = d.getFullYear();
+    state.viewMonth = d.getMonth();
+    renderCalendarPopover(target);
+}
+
+function selectCalendarDate(target, value) {
+    const inputEl = document.getElementById(`${target}-date-filter`);
+    if (inputEl) {
+        inputEl.value = value;
+    }
+    updateCalendarTriggerLabel(target);
+    closeAllCalendarPopovers();
+
+    if (target === 'timeline') {
+        onTimelineDateChange();
+    } else {
+        onExecDateChange();
+    }
+}
+
+function renderCalendarPopover(target) {
+    const pop = document.getElementById(`${target}-calendar-popover`);
+    const inputEl = document.getElementById(`${target}-date-filter`);
+    if (!pop) return;
+
+    const state = window._calendarState[target];
+    const currentVal = inputEl ? inputEl.value : (target === 'timeline' ? 'TODAY' : 'ALL');
+    const year = state.viewYear !== null ? state.viewYear : new Date().getFullYear();
+    const month = state.viewMonth !== null ? state.viewMonth : new Date().getMonth();
+
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const isTodayQuickActive = currentVal === 'TODAY';
+    const isAllQuickActive = currentVal === 'ALL';
+
+    let cellsHtml = '';
+    for (let i = 0; i < firstDayOfWeek; i++) {
+        cellsHtml += `<div class="calendar-day-cell empty"></div>`;
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const yyyy = String(year);
+        const mm = String(month + 1).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        const dateKey = `${yyyy}${mm}${dd}`;
+
+        const isToday = dateKey === state.todayDate;
+        const isSelected = (currentVal === dateKey) || (currentVal === 'TODAY' && isToday);
+        const hasData = state.availableDates.has(dateKey);
+
+        const classes = [
+            'calendar-day-cell',
+            isToday ? 'is-today' : '',
+            isSelected ? 'selected' : ''
+        ].filter(Boolean).join(' ');
+
+        cellsHtml += `
+            <button type="button" class="${classes}" onclick="selectCalendarDate('${target}', '${dateKey}')" title="${yyyy}-${mm}-${dd}${hasData ? ' (Recorded logs available)' : ''}">
+                <span>${day}</span>
+                ${hasData ? '<span class="calendar-day-dot"></span>' : ''}
+            </button>
+        `;
+    }
+
+    pop.innerHTML = `
+        <div class="calendar-quick-actions">
+            <button type="button" class="btn-cal-quick ${isTodayQuickActive ? 'active' : ''}" onclick="selectCalendarDate('${target}', 'TODAY')">Today</button>
+            <button type="button" class="btn-cal-quick ${isAllQuickActive ? 'active' : ''}" onclick="selectCalendarDate('${target}', 'ALL')">All Dates</button>
+        </div>
+        <div class="calendar-nav-header">
+            <button type="button" class="btn-cal-nav" onclick="changeCalendarMonth('${target}', -1)" title="Previous Month">‹</button>
+            <span class="calendar-month-label">${monthNames[month]} ${year}</span>
+            <button type="button" class="btn-cal-nav" onclick="changeCalendarMonth('${target}', 1)" title="Next Month">›</button>
+        </div>
+        <div class="calendar-weekdays">
+            ${weekdays.map(w => `<span>${w}</span>`).join('')}
+        </div>
+        <div class="calendar-days-grid">
+            ${cellsHtml}
+        </div>
+        <div class="calendar-legend">
+            <span class="calendar-legend-item"><span class="calendar-day-dot" style="margin-top: 0;"></span> Recorded activity</span>
+            <span class="calendar-legend-item" style="color: #34d399;">□ Today</span>
+        </div>
+    `;
+}
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.calendar-filter-wrapper')) {
+        closeAllCalendarPopovers();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeAllCalendarPopovers();
+    }
+});
+
+function onTimelineDateChange() {
+    timelineCurrentPage = 1;
+    fetchTimeline();
+}
+
+function onExecDateChange() {
+    filterExecutions();
+}
+
 async function fetchTimeline() {
     try {
         const res = await fetch('/api/dashboard/timeline?limit=50');
         const data = await res.json();
         if (!data.ok) return;
 
-        window.allTimelineEvents = data.timeline || [];
-
         const list = document.getElementById('timeline-list');
         const countLabel = document.getElementById('timeline-count-label');
-        if (countLabel) countLabel.innerText = `(${data.timeline.length})`;
+        const todayTotal = typeof data.total === 'number' ? data.total : data.timeline.length;
+        if (countLabel) countLabel.innerText = `(${todayTotal})`;
         
         if (list) {
             list.innerHTML = '';
@@ -1564,6 +1799,38 @@ async function fetchTimeline() {
                 `;
                 list.appendChild(div);
             });
+        }
+
+        // Populate available dates in the Timeline Date Filter dropdown
+        populateTimelineDateDropdown(data.available_dates || [], data.today_date || '');
+
+        const dateSelect = document.getElementById('timeline-date-filter');
+        const selectedDate = dateSelect ? dateSelect.value : 'TODAY';
+
+        // Update hero title based on selected date
+        const heroTitle = document.getElementById('timeline-hero-title');
+        if (heroTitle) {
+            if (selectedDate === 'TODAY') {
+                heroTitle.innerText = "Today's Event Timeline & Audit Log";
+            } else if (selectedDate === 'ALL') {
+                heroTitle.innerText = "All Dates — Event Timeline & Audit Log";
+            } else {
+                heroTitle.innerText = `Event Timeline & Audit Log — ${formatDateKey(selectedDate)}`;
+            }
+        }
+
+        // Fetch full timeline for the selected date when on the Timeline view or when non-TODAY/ >50 events exist
+        if (activeTab === 'timeline' || selectedDate !== 'TODAY' || todayTotal > 50) {
+            const fullRes = await fetch(`/api/dashboard/timeline?date=${encodeURIComponent(selectedDate)}`);
+            const fullData = await fullRes.json();
+            if (fullData && fullData.ok) {
+                window.allTimelineEvents = fullData.timeline || [];
+                populateTimelineDateDropdown(fullData.available_dates || data.available_dates || [], fullData.today_date || data.today_date || '');
+            } else {
+                window.allTimelineEvents = data.timeline || [];
+            }
+        } else {
+            window.allTimelineEvents = data.timeline || [];
         }
 
         // Always update expanded timeline if it exists
@@ -1673,7 +1940,15 @@ function filterTimelineEvents() {
             const title = (item.title || '').toLowerCase();
             const desc = (item.description || '').toLowerCase();
             const time = (item.timestamp || '').toLowerCase();
-            return title.includes(searchVal) || desc.includes(searchVal) || time.includes(searchVal);
+            const rawDate = (item.date || '').toLowerCase();
+            const prettyDate = formatDateKey(item.date || '').toLowerCase();
+            return (
+                title.includes(searchVal) ||
+                desc.includes(searchVal) ||
+                time.includes(searchVal) ||
+                rawDate.includes(searchVal) ||
+                prettyDate.includes(searchVal)
+            );
         }
         return true;
     });
@@ -1714,7 +1989,7 @@ function filterTimelineEvents() {
             <div class="timeline-empty-state">
                 <div style="font-size: 24px; margin-bottom: 8px;">🕊</div>
                 <div style="font-size: 14px; font-weight: 600; color: #cbd5e1;">No Timeline Events Found</div>
-                <div style="font-size: 12px; margin-top: 4px;">Try adjusting your search query or category filter.</div>
+                <div style="font-size: 12px; margin-top: 4px;">Try adjusting your date, search query, or category filter.</div>
             </div>
         `;
         renderTimelinePagination(0, 0, 0, 1);
@@ -1746,6 +2021,8 @@ function filterTimelineEvents() {
             badgeLabel = 'Waiting';
         }
 
+        const datePrefix = t.date ? `📅 ${escapeHtml(formatDateKey(t.date))} · ` : '';
+
         card.innerHTML = `
             <div class="expanded-timeline-accent"></div>
             <div class="expanded-timeline-body">
@@ -1756,7 +2033,7 @@ function filterTimelineEvents() {
                     </div>
                     <div class="expanded-timeline-meta">
                         <span class="expanded-timeline-badge badge-${safeType}">${badgeLabel}</span>
-                        <span class="expanded-timeline-time">⏱ ${escapeHtml(t.timestamp)}</span>
+                        <span class="expanded-timeline-time">${datePrefix}⏱ ${escapeHtml(t.timestamp)}</span>
                     </div>
                 </div>
                 <div class="expanded-timeline-desc">${escapeHtml(t.description)}</div>
@@ -1844,6 +2121,8 @@ async function fetchExecutionHistory() {
         if (!data.ok) return;
 
         window.allExecutions = data.history || [];
+        window.execTodayDate = data.today_date || '';
+        populateExecDateDropdown(data.available_dates || [], data.today_date || '');
         filterExecutions();
     } catch (e) {
         console.error('Failed to fetch execution history:', e);
@@ -1852,19 +2131,29 @@ async function fetchExecutionHistory() {
 
 function filterExecutions() {
     const searchInput = document.getElementById('exec-search');
+    const dateSelect = document.getElementById('exec-date-filter');
     const statusSelect = document.getElementById('exec-status-filter');
     const searchVal = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const dateVal = dateSelect ? dateSelect.value : 'ALL';
     const statusVal = statusSelect ? statusSelect.value : 'ALL';
 
-    const filtered = window.allExecutions.filter(item => {
-        const matchesName = item.report_name.toLowerCase().includes(searchVal);
+    const filtered = (window.allExecutions || []).filter(item => {
+        const matchesName = (item.report_name || '').toLowerCase().includes(searchVal);
+
+        let matchesDate = true;
+        if (dateVal === 'TODAY') {
+            matchesDate = !window.execTodayDate || item.date === window.execTodayDate;
+        } else if (dateVal && dateVal !== 'ALL') {
+            matchesDate = item.date === dateVal;
+        }
+
         let matchesStatus = true;
         if (statusVal === 'Completed') matchesStatus = item.status === 'Completed';
         else if (statusVal === 'Retrial') matchesStatus = item.status === 'Retrial';
         else if (statusVal === 'Failed') matchesStatus = item.status === 'Failed';
         else if (statusVal === 'Skipped') matchesStatus = (item.status === 'Skipped' || item.status === 'Rotated');
         
-        return matchesName && matchesStatus;
+        return matchesName && matchesDate && matchesStatus;
     });
 
     renderExecutionsTable(filtered);
@@ -1899,7 +2188,7 @@ function renderExecutionsTable(items) {
 
         tr.innerHTML = `
             <td>${index + 1}</td>
-            <td>${escapeHtml(item.date)}</td>
+            <td title="${escapeHtml(item.date)}">${escapeHtml(formatDateKey(item.date))}</td>
             <td><strong>${escapeHtml(item.report_name)}</strong></td>
             <td>${escapeHtml(item.started_at)}</td>
             <td>${escapeHtml(item.finished_at)}</td>
@@ -2353,4 +2642,88 @@ function updateTestingBadge() {
         badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
     }
 }
+
+// ==========================================================================
+// 5-Theme Engine & Appearance Controller
+// ==========================================================================
+
+const PARADISO_THEMES = [
+    { id: 'dark',   icon: '🌙', shortLabel: 'Midnight',  fullName: 'Empyrean Midnight' },
+    { id: 'light',  icon: '☀️', shortLabel: 'Alabaster', fullName: 'Morning Alabaster' },
+    { id: 'sepia',  icon: '📜', shortLabel: 'Parchment', fullName: 'Florentine Parchment' },
+    { id: 'nordic', icon: '❄️', shortLabel: 'Nordic',    fullName: 'Nordic Frost' },
+    { id: 'rose',   icon: '🌹', shortLabel: 'Rose',      fullName: 'Celestial Rose' }
+];
+
+function getActiveTheme() {
+    try {
+        const saved = localStorage.getItem('paradiso_theme');
+        if (saved && PARADISO_THEMES.some(t => t.id === saved)) {
+            return saved;
+        }
+    } catch (e) {}
+    const attr = document.documentElement.getAttribute('data-theme');
+    if (attr && PARADISO_THEMES.some(t => t.id === attr)) {
+        return attr;
+    }
+    return 'dark';
+}
+
+function setTheme(themeId) {
+    const valid = PARADISO_THEMES.find(t => t.id === themeId) || PARADISO_THEMES[0];
+    document.documentElement.setAttribute('data-theme', valid.id);
+    try {
+        localStorage.setItem('paradiso_theme', valid.id);
+    } catch (e) {}
+    syncThemeUI();
+    if (activeTab === 'settings' && typeof showSettingsToast === 'function') {
+        showSettingsToast(`Theme switched to ${valid.icon} ${valid.fullName}`, 'success');
+    }
+}
+
+function cycleTheme() {
+    const current = getActiveTheme();
+    const idx = PARADISO_THEMES.findIndex(t => t.id === current);
+    const next = PARADISO_THEMES[(idx + 1) % PARADISO_THEMES.length];
+    setTheme(next.id);
+}
+
+function syncThemeUI() {
+    const current = getActiveTheme();
+    document.documentElement.setAttribute('data-theme', current);
+    const meta = PARADISO_THEMES.find(t => t.id === current) || PARADISO_THEMES[0];
+
+    const topIcon = document.getElementById('top-theme-icon');
+    const topLabel = document.getElementById('top-theme-label');
+    if (topIcon) topIcon.textContent = meta.icon;
+    if (topLabel) topLabel.textContent = meta.shortLabel;
+
+    const isDaylight = (current === 'light' || current === 'sepia');
+    const gabrielImg = document.getElementById('gabriel-banner-img');
+    if (gabrielImg) {
+        const targetSrc = isDaylight ? '/static/images/gabriel_light.png' : '/static/images/gabriel.png';
+        if (gabrielImg.getAttribute('src') !== targetSrc) {
+            gabrielImg.setAttribute('src', targetSrc);
+        }
+    }
+
+    const cathedralImg = document.getElementById('cathedral-sidebar-img');
+    if (cathedralImg) {
+        const targetCathedralSrc = isDaylight ? '/static/images/cathedral_light.png' : '/static/images/cathedral.png';
+        if (cathedralImg.getAttribute('src') !== targetCathedralSrc) {
+            cathedralImg.setAttribute('src', targetCathedralSrc);
+        }
+    }
+
+    document.querySelectorAll('.theme-option-card').forEach(card => {
+        const cardTheme = card.getAttribute('data-theme-id');
+        if (cardTheme === current) {
+            card.classList.add('active');
+        } else {
+            card.classList.remove('active');
+        }
+    });
+}
+
+
 
